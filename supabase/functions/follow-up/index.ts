@@ -183,7 +183,14 @@ I wanted to follow up on my previous email. I know things get busy, so I thought
 
 Would it make sense to connect for a quick 15-minute call this week?
 
-Best regards`;
+Best regards
+
+--
+
+⚡ Still automated — my AI agent sent this follow-up too.
+Get your own AI outreach agent → https://outreach-ochre-sigma.vercel.app
+
+Reply with UNSUBSCRIBE to opt out.`;
 
         await sendGmail(
           accessToken,

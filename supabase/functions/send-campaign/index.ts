@@ -120,7 +120,7 @@ Rules for body:
 - Max 5 sentences
 - Sound human, not salesy
 - Reference their specific role
-- Include ONE short transparent sentence mentioning that this email was found, written and sent automatically by your AI agent
+- Include ONE short transparent sentence mentioning that this email was found, written and sent automatically by your AI agent (keep it fun and confident, e.g. "Fun fact: my AI agent found you, wrote this, and hit send")
 - End with a simple question
 - Sign off with "Best regards"
 - No subject line in body`,
@@ -217,12 +217,22 @@ serve(async (req) => {
 
     for (const lead of leads) {
       try {
-        const { subject, body } = await generateEmail(
+        const { subject, body: aiBody } = await generateEmail(
           lead.name ?? "there",
           lead.company ?? "your company",
           lead.job_title ?? "professional",
           profile.offer ?? "our service"
         );
+
+        // Killer feature: every email is a live demo of the product
+        const body = `${aiBody}
+
+--
+
+⚡ Fun fact: this email was found, written and sent automatically by an AI agent.
+Want an AI agent doing this for YOUR sales pipeline? → https://outreach-ochre-sigma.vercel.app
+
+Reply with UNSUBSCRIBE to opt out.`;
 
         await sendGmail(accessToken, buildRawEmail(lead.email, subject, body, profile.gmail_email ?? ""));
 
