@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: outreachai
+    runtime: node
+    buildCommand: npm run build
+    startCommand: node dist/server/server.js
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_PROJECT_ID
+        sync: false

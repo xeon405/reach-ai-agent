@@ -1,0 +1,2 @@
+ALTER TABLE public.leads
+ADD COLUMN IF NOT EXISTS unsubscribed BOOLEAN NOT NULL DEFAULT false;

@@ -1,0 +1,76 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function getAuthedUserId(req: Request): Promise<string> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) throw new Error("Not authenticated");
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+  const { data, error } = await admin.auth.getUser(authHeader.replace("Bearer ", ""));
+  if (error || !data.user) throw new Error("Invalid or expired session");
+  return data.user.id;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  try {
+    await getAuthedUserId(req);
+
+    const { leadName, leadCompany, leadJobTitle, yourCompany, yourOffer } = await req.json();
+    if (!leadName || !leadCompany || !leadJobTitle) {
+      throw new Error("leadName, leadCompany and leadJobTitle are required");
+    }
+
+    const keys = (Deno.env.get("GROQ_API_KEYS") ?? Deno.env.get("GROQ_API_KEY") ?? "")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    if (keys.length === 0) throw new Error("No GROQ API keys configured");
+    const apiKey = keys[Math.floor(Math.random() * keys.length)];
+
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile",
+        max_tokens: 500,
+        messages: [{
+          role: "user",
+          content: `Write a short, personalized cold email from ${yourCompany ?? "our company"} to ${leadName} who is a ${leadJobTitle} at ${leadCompany}.
+Our offer: ${yourOffer ?? "our service"}
+Rules:
+- Maximum 5 sentences
+- Sound human and genuine, not salesy
+- Reference their specific role
+- End with a simple question
+- No subject line, just the email body
+- Sign off with "Best regards"`,
+        }],
+      }),
+    });
+
+    if (!res.ok) throw new Error("AI generation failed: " + (await res.text()));
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content ?? "";
+    return json({ content });
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
