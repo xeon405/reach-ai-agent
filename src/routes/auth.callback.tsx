@@ -16,6 +16,37 @@ function GmailCallbackPage() {
     const code = params.get("code");
     const error = params.get("error");
 
+    // Email confirmation / magic-link flow (token hash or implicit hash tokens)
+    const tokenHash = params.get("token_hash");
+    const type = params.get("type");
+
+    async function confirmEmail() {
+      try {
+        if (tokenHash && type) {
+          const { error: otpError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type as "signup" | "recovery" | "email_change",
+          });
+          if (otpError) throw otpError;
+        } else {
+          // Implicit/PKCE tokens are auto-detected by the client on load
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("no session from link");
+        }
+        toast.success("Email confirmed! Welcome to OutreachAI.");
+        const redirectTo = params.get("redirect_to") || params.get("next");
+        navigate({ to: redirectTo && redirectTo.startsWith("/") ? redirectTo : "/" });
+      } catch {
+        toast.error("This confirmation link is invalid or has expired.");
+        navigate({ to: "/auth" });
+      }
+    }
+
+    if (tokenHash || window.location.hash.includes("access_token")) {
+      void confirmEmail();
+      return;
+    }
+
     if (error) {
       toast.error("Gmail connection cancelled.");
       navigate({ to: "/settings" });
