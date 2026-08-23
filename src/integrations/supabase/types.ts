@@ -50,6 +50,7 @@ export type Database = {
           id: string
           lead_id: string | null
           opened: boolean
+          reply_sentiment: string | null
           replied: boolean
           sent_at: string
           sequence: number
@@ -199,6 +200,8 @@ export type Database = {
           icp: Json | null
           id: string
           name: string | null
+          booking_link: string | null
+          last_digest_date: string | null
           notify_replies: boolean
           offer: string | null
           onboarded: boolean
@@ -217,6 +220,8 @@ export type Database = {
           icp?: Json | null
           id: string
           name?: string | null
+          booking_link?: string | null
+          last_digest_date?: string | null
           notify_replies?: boolean
           offer?: string | null
           onboarded?: boolean
@@ -235,6 +240,8 @@ export type Database = {
           icp?: Json | null
           id?: string
           name?: string | null
+          booking_link?: string | null
+          last_digest_date?: string | null
           notify_replies?: boolean
           offer?: string | null
           onboarded?: boolean

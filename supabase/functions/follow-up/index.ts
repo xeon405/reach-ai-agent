@@ -139,6 +139,61 @@ serve(async (req) => {
         await supabase.from("emails_sent").update({ replied: true }).eq("id", email.id);
         await supabase.from("leads").update({ status: "replied" }).eq("id", lead.id);
 
+        // Fetch subject + snippet, then let AI classify the reply
+        let sentiment = "";
+        let replySubject = "";
+        try {
+          const msgRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=metadata&metadataHeaders=Subject`,
+            { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
+          );
+          if (msgRes.ok) {
+            const msgData = await msgRes.json();
+            replySubject = msgData?.payload?.headers?.find((h: { name: string }) => h.name === "Subject")?.value ?? "";
+            const snippet: string = msgData?.snippet ?? "";
+
+            // Check for opt-out request first (keyword match beats AI)
+            if (/unsubscribe|opt.?out|remove me|stop emailing/i.test(replySubject)) {
+              unsubscribes++;
+              sentiment = "NOT_INTERESTED";
+              await supabase.from("leads").update({ unsubscribed: true, status: "unsubscribed" }).eq("id", lead.id);
+            } else {
+              const keys = (Deno.env.get("GROQ_API_KEYS") ?? Deno.env.get("GROQ_API_KEY") ?? "")
+                .split(",").map((s: string) => s.trim()).filter(Boolean);
+              if (keys.length > 0 && (replySubject || snippet)) {
+                const model = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
+                const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${keys[Math.floor(Math.random() * keys.length)]}` },
+                  body: JSON.stringify({
+                    model,
+                    messages: [
+                      { role: "system", content: "Classify this cold-email reply into exactly one word: INTERESTED, MAYBE, or NOT_INTERESTED. Reply with only that word." },
+                      { role: "user", content: `Subject: ${replySubject}\nPreview: ${snippet}` },
+                    ],
+                    temperature: 0,
+                    max_tokens: 5,
+                  }),
+                });
+                if (aiRes.ok) {
+                  const aiData = await aiRes.json();
+                  const raw: string = String(aiData?.choices?.[0]?.message?.content ?? "").trim().toUpperCase();
+                  if (raw.includes("INTERESTED") && !raw.includes("NOT")) sentiment = "INTERESTED";
+                  else if (raw.includes("MAYBE")) sentiment = "MAYBE";
+                  else if (raw.includes("NOT_INTERESTED") || raw.includes("NOT INTERESTED")) sentiment = "NOT_INTERESTED";
+                }
+              }
+              if (!sentiment) sentiment = "MAYBE";
+            }
+            await supabase.from("emails_sent").update({ reply_sentiment: sentiment }).eq("id", email.id);
+          }
+        } catch (classErr) {
+          console.error("[follow-up] Reply classification failed:", classErr instanceof Error ? classErr.message : classErr);
+          sentiment = sentiment || "MAYBE";
+        }
+
+        const tag = sentiment === "INTERESTED" ? "🔥 INTERESTED" : sentiment === "NOT_INTERESTED" ? "❌ Not interested" : "😴 Maybe later";
+
         // Alert the user from their own inbox (free, no SMTP needed)
         if (profile.notify_replies !== false) {
           try {
@@ -148,28 +203,14 @@ serve(async (req) => {
                 await refreshGmailToken(refreshToken),
                 buildRawEmail(
                   selfEmail,
-                  `New reply from ${lead.name ?? lead.email}`,
-                  `${lead.name ?? lead.email} (${lead.email}) just replied to your outreach email.\n\nOpen Gmail and search: from:${lead.email}\n\n— OutreachAI Agent`,
+                  `${tag} — New reply from ${lead.name ?? lead.email}`,
+                  `${lead.name ?? lead.email} (${lead.email}) just replied to your outreach email.\n\nAI verdict: ${tag}\nSubject: ${replySubject || "(see Gmail)"}\n\nOpen Gmail and search: from:${lead.email}\n\n— OutreachAI Agent`,
                   selfEmail
                 )
               );
             }
           } catch (notifyErr) {
             console.error("[follow-up] Reply alert failed:", notifyErr instanceof Error ? notifyErr.message : notifyErr);
-          }
-        }
-
-        // Check subject for an opt-out request
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=metadata&metadataHeaders=Subject`,
-          { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
-        );
-        if (msgRes.ok) {
-          const msgData = await msgRes.json();
-          const subject = msgData?.payload?.headers?.find((h: { name: string }) => h.name === "Subject")?.value ?? "";
-          if (/unsubscribe|opt.?out|remove me|stop emailing/i.test(subject)) {
-            unsubscribes++;
-            await supabase.from("leads").update({ unsubscribed: true, status: "unsubscribed" }).eq("id", lead.id);
           }
         }
       }
@@ -179,6 +220,48 @@ serve(async (req) => {
 
     // Find all first-touch emails that are due for a follow-up
     const now = new Date().toISOString();
+
+    // ☀️ Morning digest: once a day (~10:30am IST / 04:00 UTC) email each active
+    // sender a summary of their agent's yesterday. Runs inline with the hourly cron.
+    if (new Date().getUTCHours() === 4) {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const { data: digestProfiles } = await supabase
+          .from("profiles")
+          .select("id, email, gmail_email, created_at, last_digest_date")
+          .neq("last_digest_date", today);
+        for (const dp of digestProfiles ?? []) {
+          const { data: sentRows } = await supabase
+            .from("emails_sent")
+            .select("id, replied, reply_sentiment")
+            .eq("user_id", dp.id)
+            .gte("sent_at", new Date(Date.now() - 86400000).toISOString())
+            .limit(500);
+          if (!sentRows || sentRows.length === 0) continue;
+          const replies = sentRows.filter((r: { replied: boolean }) => r.replied);
+          const hot = replies.filter((r: { reply_sentiment?: string }) => r.reply_sentiment === "INTERESTED").length;
+          const self = dp.gmail_email || dp.email;
+          if (!self) continue;
+          try {
+            await sendGmail(
+              await refreshGmailToken((await fetchTokenMap(supabase, [dp.id]))[dp.id]),
+              buildRawEmail(
+                self,
+                `☀️ Your agent's last 24h: ${sentRows.length} emails · ${replies.length} replies · ${hot} hot 🔥`,
+                `Morning report from your OutreachAI agent:\n\n• Emails sent (24h): ${sentRows.length}\n• Replies detected: ${replies.length}\n• 🔥 Interested: ${hot}\n• 😴 Maybe later: ${replies.filter((r: { reply_sentiment?: string }) => r.reply_sentiment === "MAYBE").length}\n• ❌ Not interested: ${replies.filter((r: { reply_sentiment?: string }) => r.reply_sentiment === "NOT_INTERESTED").length}\n\n${hot > 0 ? "You have interested leads waiting — check Gmail now!" : "Keep the pipeline full — import fresh leads today."}\n\n— OutreachAI Agent`,
+                self
+              )
+            );
+            await supabase.from("profiles").update({ last_digest_date: today }).eq("id", dp.id);
+          } catch (digestErr) {
+            console.error("[follow-up] Digest failed:", digestErr instanceof Error ? digestErr.message : digestErr);
+          }
+        }
+      } catch (outerErr) {
+        console.error("[follow-up] Digest pass failed:", outerErr instanceof Error ? outerErr.message : outerErr);
+      }
+    }
+
     const { data: emails } = await supabase
       .from("emails_sent")
       .select("*, lead:leads(*)")
@@ -226,7 +309,7 @@ Best regards
 ⚡ Still automated — my AI agent sent this follow-up too.
 Get your own AI outreach agent → https://outreach-ochre-sigma.vercel.app
 
-Reply with UNSUBSCRIBE to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
+Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
         await sendGmail(
           accessToken,

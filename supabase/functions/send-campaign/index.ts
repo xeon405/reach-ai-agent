@@ -157,10 +157,15 @@ function isBusinessMorning(country: string | null | undefined): boolean {
   const tz = COUNTRY_TZ[country.toUpperCase()];
   if (!tz) return true;
   try {
-    const hour = Number(
-      new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz })
-        .format(new Date())
-    );
+    const parts = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hour12: false,
+      weekday: "short",
+      timeZone: tz,
+    }).formatToParts(new Date());
+    const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 12);
+    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+    if (weekday === "Sat" || weekday === "Sun") return false; // nobody reads cold email on weekends
     return hour >= 9 && hour <= 17;
   } catch {
     return true;
@@ -212,6 +217,14 @@ serve(async (req) => {
     const plan = profile.plan ?? "starter";
     const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.starter;
 
+    // Auto warm-up: fresh Gmail accounts ramp 5/day, +5 each day, up to the plan cap.
+    // Keeps new senders out of spam while they build reputation.
+    const daysWarm = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000)
+    );
+    const dailyCap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
+
     // Reset daily counter if new day
     const today = new Date().toISOString().split("T")[0];
     let sentToday: number = profile.emails_sent_today ?? 0;
@@ -223,14 +236,14 @@ serve(async (req) => {
       }).eq("id", userId);
     }
 
-    const remainingToday = limits.dailyEmails - sentToday;
+    const remainingToday = dailyCap - sentToday;
     if (remainingToday <= 0) {
       return json({
         sent: 0,
         sentToday,
         remainingToday: 0,
         continue: false,
-        error: `Daily limit reached. Your ${plan} plan allows ${limits.dailyEmails} emails/day.`,
+        error: `Daily limit reached (warm-up cap: ${dailyCap}/day while your sender builds reputation).`,
       }, 429);
     }
 
@@ -288,7 +301,7 @@ serve(async (req) => {
 ⚡ Fun fact: this email was found, written and sent automatically by an AI agent.
 Want an AI agent doing this for YOUR sales pipeline? → https://outreach-ochre-sigma.vercel.app
 
-Reply with UNSUBSCRIBE to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
+Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
         await sendGmail(accessToken, buildRawEmail(lead.email, subject, body, profile.gmail_email ?? ""));
 
@@ -325,7 +338,7 @@ Reply with UNSUBSCRIBE to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.e
     }
 
     // Decide whether another batch should be requested
-    const stillRemainingToday = limits.dailyEmails - sentToday;
+    const stillRemainingToday = dailyCap - sentToday;
     const { count: leadsLeft } = await supabase
       .from("leads")
       .select("id", { count: "exact", head: true })

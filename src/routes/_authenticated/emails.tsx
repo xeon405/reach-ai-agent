@@ -8,15 +8,21 @@ export const Route = createFileRoute("/_authenticated/emails")({
 
 type Email = {
   id: string; subject: string | null; body: string | null; sent_at: string;
-  opened: boolean; replied: boolean;
+  opened: boolean; replied: boolean; reply_sentiment: string | null;
   lead?: { name: string | null; email: string | null } | null;
+};
+
+const SENTIMENT_STYLE: Record<string, { label: string; cls: string }> = {
+  INTERESTED: { label: "🔥 Interested", cls: "bg-green-500/10 text-green-500 border-green-500/30" },
+  MAYBE: { label: "😴 Maybe later", cls: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30" },
+  NOT_INTERESTED: { label: "❌ Not interested", cls: "bg-red-500/10 text-red-500 border-red-500/30" },
 };
 
 function EmailsPage() {
   const [emails, setEmails] = useState<Email[]>([]);
   useEffect(() => {
     supabase.from("emails_sent")
-      .select("id, subject, body, sent_at, opened, replied, lead:leads(name,email)")
+      .select("id, subject, body, sent_at, opened, replied, reply_sentiment, lead:leads(name,email)")
       .order("sent_at", { ascending: false })
       .limit(200)
       .then(({ data }) => setEmails((data as Email[]) ?? []));
@@ -44,6 +50,11 @@ function EmailsPage() {
               To {e.lead?.name ?? e.lead?.email ?? "lead"}
               {e.opened && <span className="ml-2 text-primary">· Opened</span>}
               {e.replied && <span className="ml-2 text-success">· Replied</span>}
+              {e.reply_sentiment && SENTIMENT_STYLE[e.reply_sentiment] && (
+                <span className={`ml-2 inline-block rounded-full border px-2 py-0.5 font-medium ${SENTIMENT_STYLE[e.reply_sentiment].cls}`}>
+                  {SENTIMENT_STYLE[e.reply_sentiment].label}
+                </span>
+              )}
             </div>
             {e.body && <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">{e.body}</p>}
           </div>

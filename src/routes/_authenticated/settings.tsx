@@ -21,6 +21,7 @@ function SettingsPage() {
   const [gmail, setGmail] = useState(false);
   const [gmailEmail, setGmailEmail] = useState("");
   const [notify, setNotify] = useState(true);
+  const [booking, setBooking] = useState("");
   const [saving, setSaving] = useState(false);
   const [referral, setReferral] = useState<string | null>(null);
   const [invited, setInvited] = useState(0);
@@ -39,6 +40,7 @@ function SettingsPage() {
         setGmail(p.gmail_connected ?? false);
         setGmailEmail(p.gmail_email ?? "");
         setNotify(p.notify_replies ?? true);
+        setBooking(p.booking_link ?? "");
         if (p.referral_code) {
           setReferral(p.referral_code);
           const { count } = await supabase.rpc("referral_count").single();
@@ -76,6 +78,7 @@ function SettingsPage() {
       .update({
         name,
         notify_replies: notify,
+        booking_link: booking.trim() || null,
       })
       .eq("id", u.user.id);
     setSaving(false);
@@ -156,6 +159,18 @@ function SettingsPage() {
             </div>
           </div>
           <Switch checked={notify} onCheckedChange={setNotify} />
+        </div>
+        <div className="space-y-1.5 rounded-xl border border-border bg-background/40 p-4">
+          <Label htmlFor="booking">Booking link (optional)</Label>
+          <Input
+            id="booking"
+            placeholder="https://cal.com/you/15min"
+            value={booking}
+            onChange={(e) => setBooking(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Added to every email — interested leads can book a meeting with one click.
+          </p>
         </div>
       </Section>
 
