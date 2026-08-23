@@ -52,7 +52,7 @@ function LeadsPage() {
   useEffect(() => { void load(); }, []);
 
   async function load() {
-    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(500);
     setLeads((data as Lead[]) ?? []);
     const { data: camps } = await supabase.from("campaigns").select("id, name");
     setCampaigns((camps as Campaign[]) ?? []);

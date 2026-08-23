@@ -252,17 +252,20 @@ Reply with UNSUBSCRIBE to opt out.`;
         sent++;
         sentToday++;
 
-        await supabase.from("profiles").update({
-          emails_sent_today: sentToday,
-          emails_sent_date: today,
-        }).eq("id", userId);
-
         if (sent < leads.length) {
           await new Promise((r) => setTimeout(r, DELAY_MS));
         }
       } catch (e) {
         console.error(`Failed to send to ${lead.email}:`, e instanceof Error ? e.message : e);
       }
+    }
+
+    // Single counter update per batch (not per email)
+    if (sent > 0) {
+      await supabase.from("profiles").update({
+        emails_sent_today: sentToday,
+        emails_sent_date: today,
+      }).eq("id", userId);
     }
 
     // Decide whether another batch should be requested

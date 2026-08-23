@@ -18,6 +18,7 @@ function EmailsPage() {
     supabase.from("emails_sent")
       .select("id, subject, body, sent_at, opened, replied, lead:leads(name,email)")
       .order("sent_at", { ascending: false })
+      .limit(200)
       .then(({ data }) => setEmails((data as Email[]) ?? []));
   }, []);
 
