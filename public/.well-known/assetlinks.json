@@ -1,0 +1,16 @@
+{
+  "statements": [
+    {
+      "relation": [
+        "delegate_permission/common.handle_all_urls"
+      ],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.outreachai.app",
+        "sha256_cert_fingerprints": [
+          "6C:35:7C:88:08:DF:E9:EE:10:96:D8:E3:8E:BA:27:5E:F8:5F:B9:6C:D7:7D:1A:9E:E6:56:6D:EF:5C:1C:F8:00"
+        ]
+      }
+    }
+  ]
+}
