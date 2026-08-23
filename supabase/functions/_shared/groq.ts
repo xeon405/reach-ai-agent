@@ -56,3 +56,13 @@ export function extractJson<T>(text: string): T | null {
     return null;
   }
 }
+
+/** Neutralizes newlines/braces/length so lead data can't hijack a prompt. */
+export function sanitizeForPrompt(input: unknown, maxLen = 200): string {
+  return String(input ?? "")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/[`{}]/g, "'")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}

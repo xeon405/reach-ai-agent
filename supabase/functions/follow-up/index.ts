@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
-import { groqChat, groqKeys } from "../_shared/groq.ts";
+import { groqChat, groqKeys, sanitizeForPrompt } from "../_shared/groq.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,7 +207,7 @@ serve(async (req) => {
                 try {
                   const raw = (await groqChat([
                     { role: "system", content: "Classify this cold-email reply into exactly one word: INTERESTED, MAYBE, or NOT_INTERESTED. Reply with only that word." },
-                    { role: "user", content: `Subject: ${replySubject}\nPreview: ${snippet}` },
+                    { role: "user", content: `Subject: ${sanitizeForPrompt(replySubject, 150)}\nPreview: ${sanitizeForPrompt(snippet, 300)}` },
                   ], { maxTokens: 200, temperature: 0 })).toUpperCase();
                   if (raw.includes("INTERESTED") && !raw.includes("NOT")) sentiment = "INTERESTED";
                   else if (raw.includes("MAYBE")) sentiment = "MAYBE";
@@ -232,10 +232,10 @@ serve(async (req) => {
             draft = await groqChat([{
               role: "user",
               content: `A cold outreach reply arrived.
-Sender: ${lead.name ?? lead.email} at ${lead.company ?? "their company"}
-Their subject: ${replySubject}
-Preview: ${msgSnippet}
-What was offered: ${profile.offer ?? "our services"}
+Sender: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} at ${sanitizeForPrompt(lead.company, 120)}
+Their subject: ${sanitizeForPrompt(replySubject, 150)}
+Preview: ${sanitizeForPrompt(msgSnippet, 300)}
+What was offered: ${sanitizeForPrompt(profile.offer ?? "our services")}
 ${profile.booking_link ? `The sender's booking link is ${profile.booking_link} — invite them to book there.` : ""}
 
 Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero fluff.${sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."} Sign off as "Best regards". Return only the reply text.`,

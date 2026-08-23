@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { groqChat, groqKeys } from "../_shared/groq.ts";
+import { groqChat, groqKeys, sanitizeForPrompt } from "../_shared/groq.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,8 +55,8 @@ serve(async (req) => {
 
     const content = await groqChat([{
       role: "user",
-      content: `Write a short, personalized cold email from ${yourCompany ?? "our company"} to ${leadName} who is a ${leadJobTitle} at ${leadCompany}.
-Our offer: ${yourOffer ?? "our service"}
+      content: `Write a short, personalized cold email from ${sanitizeForPrompt(yourCompany ?? "our company", 120)} to ${sanitizeForPrompt(leadName, 80)} who is a ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
+Our offer: ${sanitizeForPrompt(yourOffer ?? "our service")}
 Rules:
 - Maximum 5 sentences
 - Sound human and genuine, not salesy

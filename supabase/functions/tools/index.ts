@@ -1,10 +1,49 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { groqChat, groqKeys, extractJson } from "../_shared/groq.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { groqChat, groqKeys, extractJson, sanitizeForPrompt } from "../_shared/groq.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const admin = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+);
+
+function clientIp(req: Request): string {
+  // Platform APPENDS the real client IP — attacker-controlled entries come first
+  const parts = (req.headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return parts[parts.length - 1] || req.headers.get("x-real-ip") || "anon";
+}
+
+// Durable rate limiting (DB-backed — survives multi-instance load balancing)
+async function throttled(ip: string): Promise<boolean> {
+  const since = new Date(Date.now() - 60_000).toISOString();
+  const { count } = await admin
+    .from("tools_rate_limit")
+    .select("*", { count: "exact", head: true })
+    .eq("ip", ip)
+    .gte("created_at", since);
+  if ((count ?? 0) >= 10) return true;
+  await admin.from("tools_rate_limit").insert({ ip });
+  if (Math.random() < 0.02) {
+    await admin.from("tools_rate_limit").delete().lt("created_at", new Date(Date.now() - 3_600_000).toISOString());
+  }
+  return false;
+}
+
+// Global AI-cost cap per hour across ALL instances
+async function aiBudgetExhausted(): Promise<boolean> {
+  const since = new Date(Date.now() - 3_600_000).toISOString();
+  const { count } = await admin
+    .from("tools_rate_limit")
+    .select("*", { count: "exact", head: true })
+    .eq("action", "ai")
+    .gte("created_at", since);
+  return (count ?? 0) >= 150;
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -13,9 +52,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Lightweight per-instance throttle (resets on cold start — fine for free tools)
+// Lightweight per-instance throttle (kept as a fast pre-filter on top of the DB limit)
 const hits = new Map<string, number[]>();
-function throttled(ip: string): boolean {
+
+function throttledLocal(ip: string): boolean {
   const now = Date.now();
   const arr = (hits.get(ip) ?? []).filter((t) => now - t < 60_000);
   if (arr.length >= 10) return true;
@@ -35,8 +75,10 @@ async function checkMx(domain: string): Promise<boolean> {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "anon";
-  if (throttled(ip)) return json({ error: "Slow down a little — try again in a minute." }, 429);
+  const ip = clientIp(req);
+  if (throttledLocal(ip) || (await throttled(ip))) {
+    return json({ error: "Slow down a little — try again in a minute." }, 429);
+  }
 
   try {
     const body = await req.json();
@@ -70,10 +112,15 @@ serve(async (req) => {
       const audience = body.audience;
       if (!offer || !audience) return json({ error: "offer and audience are required" }, 400);
       if (groqKeys().length === 0) return json({ error: "Generator is warming up — try again soon." }, 503);
+      // Global cost backstop: even with IP rotation, AI spend is capped per hour
+      if (await aiBudgetExhausted()) {
+        return json({ error: "Free generator is very busy right now — please try again later." }, 429);
+      }
+      await admin.from("tools_rate_limit").insert({ ip, action: "ai" });
       try {
         const text = await groqChat([{
           role: "user",
-          content: `Generate 5 cold-email subject lines offering "${String(offer).slice(0, 200)}" to ${String(audience).slice(0, 100)}.
+          content: `Generate 5 cold-email subject lines offering "${sanitizeForPrompt(offer)}" to ${sanitizeForPrompt(audience, 100)}.
 Rules: max 7 words each, personal, curiosity-driven, lowercase style ok. NEVER use the words opportunity, proposal, or "quick question".
 Return ONLY a JSON array of strings.`,
         }], { maxTokens: 500, temperature: 0.9 });

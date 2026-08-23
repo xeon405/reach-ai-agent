@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { groqChat, groqKeys, extractJson } from "../_shared/groq.ts";
+import { groqChat, groqKeys, extractJson, sanitizeForPrompt } from "../_shared/groq.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -98,8 +98,8 @@ async function generateEmail(
 ): Promise<{ subject: string; body: string }> {
   const text = await groqChat([{
     role: "user",
-    content: `Write a short cold email to ${leadName}, ${leadJobTitle} at ${leadCompany}.
-Our offer: ${userOffer}
+    content: `Write a short cold email to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
+Our offer: ${sanitizeForPrompt(userOffer)}
 
 Return ONLY a JSON object with this exact format:
 {"subject": "...", "body": "..."}
