@@ -125,6 +125,26 @@ serve(async (req) => {
         await supabase.from("emails_sent").update({ replied: true }).eq("id", email.id);
         await supabase.from("leads").update({ status: "replied" }).eq("id", lead.id);
 
+        // Alert the user from their own inbox (free, no SMTP needed)
+        if (profile.notify_replies !== false) {
+          try {
+            const selfEmail = profile.gmail_email || profile.email;
+            if (selfEmail) {
+              await sendGmail(
+                await refreshGmailToken(profile.gmail_refresh_token),
+                buildRawEmail(
+                  selfEmail,
+                  `New reply from ${lead.name ?? lead.email}`,
+                  `${lead.name ?? lead.email} (${lead.email}) just replied to your outreach email.\n\nOpen Gmail and search: from:${lead.email}\n\n— OutreachAI Agent`,
+                  selfEmail
+                )
+              );
+            }
+          } catch (notifyErr) {
+            console.error("[follow-up] Reply alert failed:", notifyErr instanceof Error ? notifyErr.message : notifyErr);
+          }
+        }
+
         // Check subject for an opt-out request
         const msgRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=metadata&metadataHeaders=Subject`,
