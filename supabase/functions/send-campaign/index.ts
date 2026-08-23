@@ -176,8 +176,20 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const userId = await getAuthedUserId(req);
-    const { campaignId } = await req.json();
+    const body = await req.json();
+    let userId: string;
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (
+      cronSecret &&
+      req.headers.get("x-cron-secret") === cronSecret &&
+      typeof body.user_id === "string"
+    ) {
+      // Trusted autopilot path (cron robot) — same secret gate as follow-up
+      userId = body.user_id;
+    } else {
+      userId = await getAuthedUserId(req);
+    }
+    const { campaignId } = body;
     if (!campaignId) throw new Error("campaignId is required");
 
     const supabase = createClient(
@@ -269,8 +281,48 @@ serve(async (req) => {
       return json({ sent: 0, sentToday, remainingToday, continue: false, message: "No new leads to email" });
     }
 
+    // 🚫 Global dedupe: never email the same person twice — across ALL campaigns
+    const batchEmails = leads.map((l: { email?: string | null }) => String(l.email ?? "").toLowerCase()).filter(Boolean);
+    const dupeIds = new Set<string>();
+    if (batchEmails.length > 0) {
+      const { data: sameEmailLeads } = await supabase
+        .from("leads")
+        .select("id, email")
+        .eq("user_id", userId)
+        .in("email", batchEmails)
+        .limit(2000);
+      const emailToLeadIds = new Map<string, string[]>();
+      for (const l of sameEmailLeads ?? []) {
+        const key = String(l.email).toLowerCase();
+        emailToLeadIds.set(key, [...(emailToLeadIds.get(key) ?? []), l.id]);
+      }
+      const allRelated = [...emailToLeadIds.values()].flat();
+      if (allRelated.length > 0) {
+        const { data: emailed } = await supabase
+          .from("emails_sent")
+          .select("lead_id")
+          .in("lead_id", allRelated)
+          .limit(5000);
+        const emailedSet = new Set((emailed ?? []).map((r: { lead_id: string }) => r.lead_id));
+        for (const l of leads) {
+          const key = String(l.email ?? "").toLowerCase();
+          const related = emailToLeadIds.get(key) ?? [];
+          if (related.some((id) => emailedSet.has(id))) dupeIds.add(l.id);
+        }
+        if (dupeIds.size > 0) {
+          await supabase.from("leads").update({ status: "skipped" }).in("id", [...dupeIds]);
+        }
+      }
+    }
+    const freshLeads = (leads as Array<{ id: string; country?: string | null }>).filter(
+      (l) => !dupeIds.has(l.id)
+    );
+    if (freshLeads.length === 0) {
+      return json({ sent: 0, sentToday, remainingToday, continue: true, message: `${dupeIds.size} duplicates skipped` });
+    }
+
     // Only send into the lead's local business hours — the rest wait for their morning
-    const eligible = leads.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
+    const eligible = freshLeads.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
     const waiting = leads.length - eligible.length;
     if (eligible.length === 0) {
       return json({

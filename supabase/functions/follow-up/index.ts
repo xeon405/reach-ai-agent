@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,6 +222,89 @@ serve(async (req) => {
     // Find all first-touch emails that are due for a follow-up
     const now = new Date().toISOString();
 
+    // 🤖 AUTOPILOT: once a day (~05:00 UTC) top up campaigns and trigger sends
+    // for every user who flipped the switch. They do nothing; the agent works.
+    if (new Date().getUTCHours() === 5) {
+      try {
+        const { data: pilots } = await supabase
+          .from("profiles")
+          .select("id, autopilot_country, autopilot_niche, gmail_email")
+          .eq("autopilot", true);
+        for (const pilot of pilots ?? []) {
+          try {
+            const tokens = await fetchTokenMap(supabase, [pilot.id]);
+            if (!tokens[pilot.id]) continue; // Gmail not connected → skip
+
+            // Find (or create) their most recent campaign
+            let { data: camp } = await supabase
+              .from("campaigns")
+              .select("id")
+              .eq("user_id", pilot.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (!camp) {
+              const { data: created } = await supabase
+                .from("campaigns")
+                .insert({ user_id: pilot.id, name: "Autopilot campaign", status: "active" })
+                .select("id")
+                .single();
+              camp = created;
+            }
+            if (!camp) continue;
+
+            // Top up: keep at least 15 fresh leads queued
+            const { count: freshCount } = await supabase
+              .from("leads")
+              .select("id", { count: "exact", head: true })
+              .eq("campaign_id", camp.id)
+              .eq("status", "new");
+            if ((freshCount ?? 0) < 15 && pilot.autopilot_country && pilot.autopilot_niche) {
+              const iso =
+                COUNTRY_ISO[String(pilot.autopilot_country).toLowerCase().trim()] ??
+                String(pilot.autopilot_country || "").toUpperCase().slice(0, 2);
+              if (iso && iso.length === 2) {
+                const niche = nicheFor(String(pilot.autopilot_niche));
+                const found = await searchDirectory(niche, iso, 25 - Math.min(15, freshCount ?? 0));
+                const existing = new Set(
+                  (await supabase.from("leads").select("email").eq("user_id", pilot.id)).data?.map(
+                    (l: { email: string }) => String(l.email || "").toLowerCase()
+                  ) ?? []
+                );
+                const rows = found
+                  .filter((l: { email?: string }) => l.email && !existing.has(String(l.email).toLowerCase()))
+                  .map((l: { name?: string; email?: string; company?: string; job_title?: string }) => ({
+                    user_id: pilot.id,
+                    campaign_id: camp.id,
+                    name: l.name ?? null,
+                    email: l.email,
+                    company: l.company ?? null,
+                    job_title: l.job_title ?? null,
+                    country: pilot.autopilot_country,
+                    status: "new",
+                  }));
+                if (rows.length > 0) await supabase.from("leads").insert(rows);
+              }
+            }
+
+            // Trigger a send batch through send-campaign's cron path
+            await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-campaign`, {
+              method: "POST",
+              headers: {
+                "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ campaign_id: camp.id, user_id: pilot.id }),
+            });
+          } catch (pilotErr) {
+            console.error("[autopilot] pilot failed:", pilotErr instanceof Error ? pilotErr.message : pilotErr);
+          }
+        }
+      } catch (apErr) {
+        console.error("[autopilot] pass failed:", apErr instanceof Error ? apErr.message : apErr);
+      }
+    }
+
     // ☀️ Morning digest: once a day (~10:30am IST / 04:00 UTC) email each active
     // sender a summary of their agent's yesterday. Runs inline with the hourly cron.
     if (new Date().getUTCHours() === 4) {
@@ -267,7 +351,7 @@ serve(async (req) => {
       .select("*, lead:leads(*)")
       .eq("follow_up_sent", false)
       .eq("replied", false)
-      .eq("sequence", 1)
+      .in("sequence", [1, 3])
       .lte("follow_up_at", now);
 
     if (!emails || emails.length === 0) {
@@ -295,12 +379,33 @@ serve(async (req) => {
 
         const accessToken = await refreshGmailToken(refreshToken);
 
-        const subject = `Re: ${email.subject}`;
-        const body = `Hi ${lead.name ?? "there"},
+        // Multi-step sequence: step 2 = gentle nudge (+3d), step 3 = breakup (+4d more)
+        const step = email.sequence === 1 ? 2 : 3;
+        const firstName = (lead.name ?? "there").split(" ")[0];
+        const subject = String(email.subject ?? "").startsWith("Re: ")
+          ? String(email.subject)
+          : `Re: ${email.subject}`;
+        const body =
+          step === 2
+            ? `Hi ${firstName},
 
-I wanted to follow up on my previous email. I know things get busy, so I thought I'd check in.
+Just floating this back up — I know inboxes get busy.
 
-Would it make sense to connect for a quick 15-minute call this week?
+Worth a quick 15-minute chat about ${lead.company ?? "your team"}? Happy to work around your schedule.
+
+Best regards
+
+--
+
+⚡ Still automated — my AI agent sent this follow-up too.
+Get your own AI outreach agent → https://outreach-ochre-sigma.vercel.app
+
+Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`
+            : `Hi ${firstName},
+
+I'll stop reaching out after this one 🙂
+
+If ${lead.company ?? "your team"} ever needs help turning cold outreach into booked meetings, my door is open. Otherwise, wishing you a great quarter.
 
 Best regards
 
@@ -322,9 +427,23 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
           campaign_id: email.campaign_id,
           subject,
           body,
-          sequence: 2,
+          sequence: step,
           follow_up_sent: true,
         });
+
+        if (step === 2) {
+          // Schedule the final breakup step
+          await supabase.from("emails_sent").insert({
+            user_id: email.user_id,
+            lead_id: lead.id,
+            campaign_id: email.campaign_id,
+            subject,
+            body: "(scheduled step 3)",
+            sequence: 3,
+            follow_up_sent: false,
+            follow_up_at: new Date(Date.now() + 4 * 86400000).toISOString(),
+          });
+        }
 
         await supabase.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
 

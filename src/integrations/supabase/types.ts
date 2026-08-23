@@ -202,6 +202,9 @@ export type Database = {
           name: string | null
           booking_link: string | null
           last_digest_date: string | null
+          autopilot: boolean | null
+          autopilot_country: string | null
+          autopilot_niche: string | null
           notify_replies: boolean
           offer: string | null
           onboarded: boolean
@@ -222,6 +225,9 @@ export type Database = {
           name?: string | null
           booking_link?: string | null
           last_digest_date?: string | null
+          autopilot?: boolean | null
+          autopilot_country?: string | null
+          autopilot_niche?: string | null
           notify_replies?: boolean
           offer?: string | null
           onboarded?: boolean
@@ -242,6 +248,9 @@ export type Database = {
           name?: string | null
           booking_link?: string | null
           last_digest_date?: string | null
+          autopilot?: boolean | null
+          autopilot_country?: string | null
+          autopilot_niche?: string | null
           notify_replies?: boolean
           offer?: string | null
           onboarded?: boolean

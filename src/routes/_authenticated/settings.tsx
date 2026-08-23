@@ -22,6 +22,9 @@ function SettingsPage() {
   const [gmailEmail, setGmailEmail] = useState("");
   const [notify, setNotify] = useState(true);
   const [booking, setBooking] = useState("");
+  const [autopilot, setAutopilot] = useState(false);
+  const [apCountry, setApCountry] = useState("");
+  const [apNiche, setApNiche] = useState("");
   const [saving, setSaving] = useState(false);
   const [referral, setReferral] = useState<string | null>(null);
   const [invited, setInvited] = useState(0);
@@ -41,6 +44,9 @@ function SettingsPage() {
         setGmailEmail(p.gmail_email ?? "");
         setNotify(p.notify_replies ?? true);
         setBooking(p.booking_link ?? "");
+        setAutopilot(p.autopilot ?? false);
+        setApCountry(p.autopilot_country ?? "");
+        setApNiche(p.autopilot_niche ?? "");
         if (p.referral_code) {
           setReferral(p.referral_code);
           const { count } = await supabase.rpc("referral_count").single();
@@ -79,6 +85,9 @@ function SettingsPage() {
         name,
         notify_replies: notify,
         booking_link: booking.trim() || null,
+        autopilot: autopilot && apCountry.trim().length > 0 && apNiche.trim().length > 0,
+        autopilot_country: apCountry.trim() || null,
+        autopilot_niche: apNiche.trim() || null,
       })
       .eq("id", u.user.id);
     setSaving(false);
@@ -179,6 +188,45 @@ function SettingsPage() {
           Save changes
         </Button>
       </div>
+
+      <Section title="Autopilot 🤖">
+        <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">Fully autonomous outreach</div>
+              <div className="text-xs text-muted-foreground">
+                The agent finds fresh leads daily, tops up your campaign, and sends within safe limits. You just read replies.
+              </div>
+            </div>
+            <Switch checked={autopilot} onCheckedChange={setAutopilot} />
+          </div>
+          {autopilot && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="ap-country">Target country</Label>
+                <Input
+                  id="ap-country"
+                  placeholder="united states"
+                  value={apCountry}
+                  onChange={(e) => setApCountry(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ap-niche">Target niche</Label>
+                <Input
+                  id="ap-niche"
+                  placeholder="marketing agency"
+                  value={apNiche}
+                  onChange={(e) => setApNiche(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Saved when you press Save changes. Runs daily while Gmail stays connected.
+              </p>
+            </div>
+          )}
+        </div>
+      </Section>
 
       <Section title="Invite & earn">
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
