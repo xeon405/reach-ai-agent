@@ -5,11 +5,12 @@
  *  - /assets/* (hashed, immutable): cache-first.
  *  - Supabase REST/auth/functions + cross-origin: network only (never cached).
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const SHELL_URL = "/";
 const OFFLINE_URL = "/offline.html";
+const NAV_TIMEOUT_MS = 3000;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -53,18 +54,26 @@ self.addEventListener("fetch", (event) => {
   if (isDynamic(url)) return;
   if (url.origin !== self.location.origin && !url.hostname.includes("fonts.")) return;
 
-  // App shell navigations: serve cached instantly, refresh in background.
+  // App shell navigations: network-first (fresh deploys always win),
+  // fall back to cached shell, then offline page.
   if (req.mode === "navigate") {
     event.respondWith(
       caches.open(SHELL_CACHE).then(async (cache) => {
-        const cached = await cache.match(SHELL_URL);
-        const fetchPromise = fetch(req)
-          .then((res) => {
-            if (res.ok) cache.put(SHELL_URL, res.clone());
-            return res;
-          })
-          .catch(() => cached || caches.match(OFFLINE_URL));
-        return cached || fetchPromise;
+        const timeout = new Promise((resolve) =>
+          setTimeout(() => resolve(null), NAV_TIMEOUT_MS)
+        );
+        try {
+          const fresh = await Promise.race([fetch(req), timeout]);
+          if (fresh && fresh.ok) {
+            cache.put(SHELL_URL, fresh.clone());
+            return fresh;
+          }
+          if (fresh) return fresh;
+        } catch {
+          /* offline — fall through to cache */
+        }
+        const cached = (await cache.match(req)) || (await cache.match(SHELL_URL));
+        return cached || caches.match(OFFLINE_URL);
       })
     );
     return;
