@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
+import { groqChat, groqKeys } from "../_shared/groq.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,6 +195,7 @@ serve(async (req) => {
             const msgData = await msgRes.json();
             replySubject = msgData?.payload?.headers?.find((h: { name: string }) => h.name === "Subject")?.value ?? "";
             const snippet: string = msgData?.snippet ?? "";
+            const msgSnippet = snippet;
 
             // Check for opt-out request first (keyword match beats AI)
             if (/unsubscribe|opt.?out|remove me|stop emailing/i.test(replySubject)) {
@@ -201,30 +203,16 @@ serve(async (req) => {
               sentiment = "NOT_INTERESTED";
               await supabase.from("leads").update({ unsubscribed: true, status: "unsubscribed" }).eq("id", lead.id);
             } else {
-              const keys = (Deno.env.get("GROQ_API_KEYS") ?? Deno.env.get("GROQ_API_KEY") ?? "")
-                .split(",").map((s: string) => s.trim()).filter(Boolean);
-              if (keys.length > 0 && (replySubject || snippet)) {
-                const model = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
-                const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${keys[Math.floor(Math.random() * keys.length)]}` },
-                  body: JSON.stringify({
-                    model,
-                    messages: [
-                      { role: "system", content: "Classify this cold-email reply into exactly one word: INTERESTED, MAYBE, or NOT_INTERESTED. Reply with only that word." },
-                      { role: "user", content: `Subject: ${replySubject}\nPreview: ${snippet}` },
-                    ],
-                    temperature: 0,
-                    max_tokens: 5,
-                  }),
-                });
-                if (aiRes.ok) {
-                  const aiData = await aiRes.json();
-                  const raw: string = String(aiData?.choices?.[0]?.message?.content ?? "").trim().toUpperCase();
+              if (groqKeys().length > 0 && (replySubject || snippet)) {
+                try {
+                  const raw = (await groqChat([
+                    { role: "system", content: "Classify this cold-email reply into exactly one word: INTERESTED, MAYBE, or NOT_INTERESTED. Reply with only that word." },
+                    { role: "user", content: `Subject: ${replySubject}\nPreview: ${snippet}` },
+                  ], { maxTokens: 200, temperature: 0 })).toUpperCase();
                   if (raw.includes("INTERESTED") && !raw.includes("NOT")) sentiment = "INTERESTED";
                   else if (raw.includes("MAYBE")) sentiment = "MAYBE";
                   else if (raw.includes("NOT_INTERESTED") || raw.includes("NOT INTERESTED")) sentiment = "NOT_INTERESTED";
-                }
+                } catch (_e) { /* fall through to MAYBE */ }
               }
               if (!sentiment) sentiment = "MAYBE";
             }
@@ -237,6 +225,26 @@ serve(async (req) => {
 
         const tag = sentiment === "INTERESTED" ? "🔥 INTERESTED" : sentiment === "NOT_INTERESTED" ? "❌ Not interested" : "😴 Maybe later";
 
+        // 🧠 Draft the reply for the user when the lead looks warm
+        let draft = "";
+        if (sentiment === "INTERESTED" || sentiment === "MAYBE") {
+          try {
+            draft = await groqChat([{
+              role: "user",
+              content: `A cold outreach reply arrived.
+Sender: ${lead.name ?? lead.email} at ${lead.company ?? "their company"}
+Their subject: ${replySubject}
+Preview: ${msgSnippet}
+What was offered: ${profile.offer ?? "our services"}
+${profile.booking_link ? `The sender's booking link is ${profile.booking_link} — invite them to book there.` : ""}
+
+Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero fluff.${sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."} Sign off as "Best regards". Return only the reply text.`,
+            }], { maxTokens: 600, temperature: 0.7 });
+          } catch (draftErr) {
+            console.error("[follow-up] Draft failed:", draftErr instanceof Error ? draftErr.message : draftErr);
+          }
+        }
+
         // Alert the user from their own inbox (free, no SMTP needed)
         if (profile.notify_replies !== false) {
           try {
@@ -247,7 +255,7 @@ serve(async (req) => {
                 buildRawEmail(
                   selfEmail,
                   `${tag} — New reply from ${lead.name ?? lead.email}`,
-                  `${lead.name ?? lead.email} (${lead.email}) just replied to your outreach email.\n\nAI verdict: ${tag}\nSubject: ${replySubject || "(see Gmail)"}\n\nOpen Gmail and search: from:${lead.email}\n\n— OutreachAI Agent`,
+                  `${lead.name ?? lead.email} (${lead.email}) just replied to your outreach email.\n\nAI verdict: ${tag}\nSubject: ${replySubject || "(see Gmail)"}\n\nOpen Gmail and search: from:${lead.email}\n${draft ? `\n✍️ Suggested reply (copy, tweak, send):\n\n"""\n${draft}\n"""\n` : ""}\n— OutreachAI Agent`,
                   selfEmail
                 )
               );

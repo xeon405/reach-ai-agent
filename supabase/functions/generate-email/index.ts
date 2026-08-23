@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { groqChat, groqKeys } from "../_shared/groq.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,24 +51,11 @@ serve(async (req) => {
     if (!leadName || !leadCompany || !leadJobTitle) {
       throw new Error("leadName, leadCompany and leadJobTitle are required");
     }
+    if (groqKeys().length === 0) throw new Error("No GROQ API keys configured");
 
-    const keys = (Deno.env.get("GROQ_API_KEYS") ?? Deno.env.get("GROQ_API_KEY") ?? "")
-      .split(",").map((s) => s.trim()).filter(Boolean);
-    if (keys.length === 0) throw new Error("No GROQ API keys configured");
-    const apiKey = keys[Math.floor(Math.random() * keys.length)];
-
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile",
-        max_tokens: 500,
-        messages: [{
-          role: "user",
-          content: `Write a short, personalized cold email from ${yourCompany ?? "our company"} to ${leadName} who is a ${leadJobTitle} at ${leadCompany}.
+    const content = await groqChat([{
+      role: "user",
+      content: `Write a short, personalized cold email from ${yourCompany ?? "our company"} to ${leadName} who is a ${leadJobTitle} at ${leadCompany}.
 Our offer: ${yourOffer ?? "our service"}
 Rules:
 - Maximum 5 sentences
@@ -76,17 +64,8 @@ Rules:
 - End with a simple question
 - No subject line, just the email body
 - Sign off with "Best regards"`,
-        }],
-      }),
-    });
+    }], { maxTokens: 800 });
 
-    if (!res.ok) {
-      console.error("[generate-email] Groq error:", await res.text());
-      throw new Error("Email generation is temporarily unavailable — please try again.");
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content ?? "";
     return json({ content });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame } from "lucide-react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +76,8 @@ function Landing() {
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#features" className="hover:text-foreground">Features</a>
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
+            <Link to="/tools" className="hover:text-foreground">Free tools</Link>
+            <Link to="/stats" className="hover:text-foreground">Live stats</Link>
           </nav>
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm">
@@ -119,7 +121,15 @@ function Landing() {
               <a href="#pricing">See pricing</a>
             </Button>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">No credit card required · Cancel anytime</p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> Your data stays yours</span>
+            <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> No credit card</span>
+            <span className="flex items-center gap-1.5"><Trash2 className="h-4 w-4 text-primary" /> Delete anytime, for real</span>
+            <span className="flex items-center gap-1.5"><MailX className="h-4 w-4 text-primary" /> Unsubscribe always honored</span>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            See our <Link to="/stats" className="underline hover:text-foreground">live numbers</Link> — we hide nothing.
+          </p>
         </div>
       </section>
 

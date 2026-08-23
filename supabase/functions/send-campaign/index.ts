@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { groqChat, groqKeys, extractJson } from "../_shared/groq.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -95,22 +96,9 @@ async function generateEmail(
   leadJobTitle: string,
   userOffer: string
 ): Promise<{ subject: string; body: string }> {
-  const keys = (Deno.env.get("GROQ_API_KEYS") ?? Deno.env.get("GROQ_API_KEY") ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
-  if (keys.length === 0) throw new Error("No GROQ API keys configured");
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${keys[Math.floor(Math.random() * keys.length)]}`,
-    },
-    body: JSON.stringify({
-      model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile",
-      max_tokens: 600,
-      messages: [{
-        role: "user",
-        content: `Write a short cold email to ${leadName}, ${leadJobTitle} at ${leadCompany}.
+  const text = await groqChat([{
+    role: "user",
+    content: `Write a short cold email to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${userOffer}
 
 Return ONLY a JSON object with this exact format:
@@ -130,17 +118,10 @@ Rules for body:
 - End with a simple question
 - Sign off with "Best regards"
 - No subject line in body`,
-      }],
-    }),
-  });
-  if (!res.ok) {
-    console.error("[send-campaign] Groq error:", await res.text());
-    throw new Error("Email generation is temporarily unavailable — please try again.");
-  }
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content ?? "";
-  const clean = text.replace(/```json|```/g, "").trim();
-  const parsed = JSON.parse(clean);
+  }], { maxTokens: 900 });
+
+  const parsed = extractJson<{ subject?: unknown; body?: unknown }>(text);
+  if (!parsed || !parsed.subject || !parsed.body) throw new Error("AI returned a malformed email");
   return { subject: String(parsed.subject), body: String(parsed.body) };
 }
 
