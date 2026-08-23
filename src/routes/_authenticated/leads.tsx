@@ -195,12 +195,15 @@ function LeadsPage() {
             <DialogContent>
               <DialogHeader><DialogTitle>✨ AI Lead Finder</DialogTitle></DialogHeader>
               <p className="text-sm text-muted-foreground">
-                Our AI will search Apollo's database of 220M+ contacts to find your ideal customers.
+                Searches open business directories for real businesses with public email
+                addresses — 100% free, no credits needed. Best niches: dentists, doctors,
+                gyms, restaurants, salons, lawyers, real estate, insurance, accountants,
+                vets, schools, car services, construction, photographers, IT agencies.
               </p>
-              <div className="space-y-3">
+              <div className="space-y-3 py-2">
                 <div>
-                  <label className="text-sm font-medium">Job Title *</label>
-                  <Input placeholder="e.g. Marketing Manager, VP of Sales" value={findForm.jobTitle}
+                  <label className="text-sm font-medium">Business Type *</label>
+                  <Input placeholder="e.g. dentist, gym, restaurant, salon, lawyer" value={findForm.jobTitle}
                     onChange={(e) => setFindForm({ ...findForm, jobTitle: e.target.value })} />
                 </div>
                 <div>
