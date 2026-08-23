@@ -112,7 +112,7 @@ function Landing() {
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <Button asChild size="lg" className="bg-gradient-primary shadow-glow text-base h-12 px-7">
               <Link to="/auth">
-                Start Free 14-Day Trial <ArrowRight className="ml-2 h-4 w-4" />
+                Start Free — No Card Needed <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-12 px-7">
@@ -156,7 +156,7 @@ function Landing() {
           <div className="mb-16 text-center">
             <h2 className="text-4xl font-bold tracking-tight md:text-5xl">Simple, scalable pricing</h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-              Start free for 14 days. Upgrade when you're booking meetings.
+              Free while in launch phase. Upgrade when you are booking meetings.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
@@ -193,7 +193,7 @@ function Landing() {
                   className={`mt-8 w-full ${p.featured ? "bg-gradient-primary shadow-glow" : ""}`}
                   variant={p.featured ? "default" : "outline"}
                 >
-                  <Link to="/auth">Start trial</Link>
+                  <Link to="/auth">Start free</Link>
                 </Button>
               </div>
             ))}

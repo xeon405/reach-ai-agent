@@ -43,3 +43,8 @@ supabase.tar.gz
 # Local secrets & CLI temp
 .cron-secret.txt
 supabase/.temp/
+
+.new-token.txt
+
+.new-token
+.new-token.txt

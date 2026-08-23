@@ -93,21 +93,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot",
       },
       {
-        name: "description",
-        content:
-          "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach.",
-      },
-      {
-        property: "og:description",
-        content:
-          "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach.",
-      },
-      {
-        name: "twitter:description",
-        content:
-          "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach.",
-      },
-      {
         property: "og:image",
         content:
           "/og.png",
