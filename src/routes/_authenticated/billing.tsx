@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, Zap } from "lucide-react";
@@ -62,7 +63,7 @@ const PLANS = [
 ];
 
 function BillingPage() {
-  const [plan, setPlan] = useState("free");
+  const [plan, setPlan] = useState("starter");
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -75,6 +76,11 @@ function BillingPage() {
       if (p?.plan) setPlan(p.plan);
     });
   }, []);
+
+  async function handleCheckout(checkoutUrl: string) {
+    // Payments go live soon — collect interested users instead of dead checkout
+    toast.info("💳 Payments are launching very soon! You're on the Starter plan meanwhile — enjoy higher limits on us.");
+  }
 
   return (
     <div className="space-y-8">

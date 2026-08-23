@@ -191,6 +191,8 @@ function Landing() {
           <div className="flex gap-6 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground">Features</a>
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
+            <Link to="/terms" className="hover:text-foreground">Terms</Link>
+            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
             <Link to="/auth" className="hover:text-foreground">Log in</Link>
           </div>
           <p className="text-xs text-muted-foreground">© 2026 OutreachAI</p>
