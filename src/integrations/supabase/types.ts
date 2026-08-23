@@ -192,10 +192,8 @@ export type Database = {
           company: string | null
           created_at: string
           email: string | null
-          gmail_access_token: string | null
           gmail_connected: boolean
           gmail_email: string | null
-          gmail_refresh_token: string | null
           emails_sent_today: number
           emails_sent_date: string | null
           icp: Json | null
@@ -210,10 +208,8 @@ export type Database = {
           company?: string | null
           created_at?: string
           email?: string | null
-          gmail_access_token?: string | null
           gmail_connected?: boolean
           gmail_email?: string | null
-          gmail_refresh_token?: string | null
           emails_sent_today?: number
           emails_sent_date?: string | null
           icp?: Json | null
@@ -228,10 +224,8 @@ export type Database = {
           company?: string | null
           created_at?: string
           email?: string | null
-          gmail_access_token?: string | null
           gmail_connected?: boolean
           gmail_email?: string | null
-          gmail_refresh_token?: string | null
           emails_sent_today?: number
           emails_sent_date?: string | null
           icp?: Json | null

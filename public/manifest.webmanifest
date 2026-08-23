@@ -1,0 +1,25 @@
+{
+  "name": "OutreachAI — AI Cold Email Agent",
+  "short_name": "OutreachAI",
+  "description": "Find your ideal customers worldwide, write personalized cold emails with AI, follow up automatically, and book meetings.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

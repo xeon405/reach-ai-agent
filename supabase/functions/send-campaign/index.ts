@@ -127,7 +127,10 @@ Rules for body:
       }],
     }),
   });
-  if (!res.ok) throw new Error("AI generation failed: " + (await res.text()));
+  if (!res.ok) {
+    console.error("[send-campaign] Groq error:", await res.text());
+    throw new Error("Email generation is temporarily unavailable — please try again.");
+  }
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content ?? "";
   const clean = text.replace(/```json|```/g, "").trim();
@@ -166,7 +169,13 @@ serve(async (req) => {
       .single();
 
     if (!profile) throw new Error("Profile not found");
-    if (!profile.gmail_connected || !profile.gmail_refresh_token) {
+
+    const { data: tokenRow } = await supabase
+      .from("gmail_tokens")
+      .select("refresh_token")
+      .eq("profile_id", userId)
+      .single();
+    if (!profile.gmail_connected || !tokenRow?.refresh_token) {
       throw new Error("Gmail not connected. Connect it in Settings first.");
     }
 
@@ -196,9 +205,14 @@ serve(async (req) => {
       }, 429);
     }
 
-    // Refresh Gmail token once per batch
-    const accessToken = await refreshGmailToken(profile.gmail_refresh_token);
-    await supabase.from("profiles").update({ gmail_access_token: accessToken }).eq("id", userId);
+    // Refresh Gmail token once per batch; persist rotated access token in the vault
+    const accessToken = await refreshGmailToken(tokenRow.refresh_token);
+    await supabase.from("gmail_tokens").upsert({
+      profile_id: userId,
+      refresh_token: tokenRow.refresh_token,
+      access_token: accessToken,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "profile_id" });
 
     // Fetch next batch of un-emailed leads (never email unsubscribed leads)
     const { data: leads } = await supabase

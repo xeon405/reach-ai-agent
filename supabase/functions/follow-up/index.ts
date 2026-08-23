@@ -66,6 +66,18 @@ async function sendGmail(accessToken: string, raw: string): Promise<void> {
   }
 }
 
+async function fetchTokenMap(
+  supabase: ReturnType<typeof createClient>,
+  ids: string[]
+): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+  const { data } = await supabase
+    .from("gmail_tokens")
+    .select("profile_id, refresh_token")
+    .in("profile_id", ids);
+  return Object.fromEntries((data ?? []).map((r) => [r.profile_id, r.refresh_token]));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -104,17 +116,19 @@ serve(async (req) => {
         ? await supabase.from("profiles").select("*").in("id", scanUserIds)
         : { data: [] };
       const scanProfileMap = Object.fromEntries((scanProfiles ?? []).map((p) => [p.id, p]));
+      const scanTokens = await fetchTokenMap(supabase, scanUserIds);
 
       for (const email of openEmails ?? []) {
         const profile = scanProfileMap[email.user_id];
         const lead = Array.isArray(email.lead) ? email.lead[0] : email.lead;
-        if (!profile?.gmail_refresh_token || !lead?.email || lead.unsubscribed) continue;
+        const refreshToken = scanTokens[email.user_id];
+        if (!profile || !refreshToken || !lead?.email || lead.unsubscribed) continue;
 
         const afterEpoch = Math.floor(new Date(email.sent_at).getTime() / 1000);
         const q = `from:${lead.email} is:inbox after:${afterEpoch}`;
         const searchRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
-          { headers: { Authorization: `Bearer ${await refreshGmailToken(profile.gmail_refresh_token)}` } }
+          { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
         );
         if (!searchRes.ok) continue;
         const searchData = await searchRes.json();
@@ -131,7 +145,7 @@ serve(async (req) => {
             const selfEmail = profile.gmail_email || profile.email;
             if (selfEmail) {
               await sendGmail(
-                await refreshGmailToken(profile.gmail_refresh_token),
+                await refreshGmailToken(refreshToken),
                 buildRawEmail(
                   selfEmail,
                   `New reply from ${lead.name ?? lead.email}`,
@@ -148,7 +162,7 @@ serve(async (req) => {
         // Check subject for an opt-out request
         const msgRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=metadata&metadataHeaders=Subject`,
-          { headers: { Authorization: `Bearer ${await refreshGmailToken(profile.gmail_refresh_token)}` } }
+          { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
         );
         if (msgRes.ok) {
           const msgData = await msgRes.json();
@@ -184,6 +198,7 @@ serve(async (req) => {
       .select("*")
       .in("id", userIds);
     const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
+    const fuTokens = await fetchTokenMap(supabase, userIds);
 
     let sent = 0;
 
@@ -191,10 +206,11 @@ serve(async (req) => {
       try {
         const profile = profileMap[email.user_id];
         const lead = email.lead;
+        const refreshToken = fuTokens[email.user_id];
 
-        if (!profile?.gmail_refresh_token || !lead?.email) continue;
+        if (!profile || !refreshToken || !lead?.email) continue;
 
-        const accessToken = await refreshGmailToken(profile.gmail_refresh_token);
+        const accessToken = await refreshGmailToken(refreshToken);
 
         const subject = `Re: ${email.subject}`;
         const body = `Hi ${lead.name ?? "there"},

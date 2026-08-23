@@ -29,7 +29,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    await getAuthedUserId(req);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const userId = await getAuthedUserId(req);
+
+    // M2: atomic daily AI quota (default cap 200/day, env-overridable)
+    const cap = Number(Deno.env.get("AI_DAILY_CAP") ?? 200);
+    const { data: allowed, error: quotaError } = await supabase.rpc("consume_ai_quota", {
+      uid: userId,
+      cap,
+    });
+    if (quotaError) throw new Error(quotaError.message);
+    if (!allowed) {
+      return json({ error: "Daily AI limit reached. Try again tomorrow or upgrade your plan." }, 429);
+    }
 
     const { leadName, leadCompany, leadJobTitle, yourCompany, yourOffer } = await req.json();
     if (!leadName || !leadCompany || !leadJobTitle) {
@@ -65,7 +80,10 @@ Rules:
       }),
     });
 
-    if (!res.ok) throw new Error("AI generation failed: " + (await res.text()));
+    if (!res.ok) {
+      console.error("[generate-email] Groq error:", await res.text());
+      throw new Error("Email generation is temporarily unavailable — please try again.");
+    }
 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content ?? "";

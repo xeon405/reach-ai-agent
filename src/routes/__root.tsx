@@ -81,7 +81,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "OutreachAI finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
       },
-      { property: "og:title", content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot" },
+      {
+        property: "og:title",
+        content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot",
+      },
       {
         property: "og:description",
         content:
@@ -89,15 +92,42 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot" },
-      { name: "description", content: "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach." },
-      { property: "og:description", content: "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach." },
-      { name: "twitter:description", content: "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ebadb47f-9a60-4d61-87da-cbed324bb99c/id-preview-30732879--97b800de-78bc-40ba-b52b-d4c173bff274.lovable.app-1780276361442.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ebadb47f-9a60-4d61-87da-cbed324bb99c/id-preview-30732879--97b800de-78bc-40ba-b52b-d4c173bff274.lovable.app-1780276361442.png" },
+      {
+        name: "twitter:title",
+        content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot",
+      },
+      {
+        name: "description",
+        content:
+          "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach.",
+      },
+      {
+        property: "og:description",
+        content:
+          "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "AI Outreach Partner is an automated cold email agent that finds B2B customers and sends personalized outreach.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ebadb47f-9a60-4d61-87da-cbed324bb99c/id-preview-30732879--97b800de-78bc-40ba-b52b-d4c173bff274.lovable.app-1780276361442.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ebadb47f-9a60-4d61-87da-cbed324bb99c/id-preview-30732879--97b800de-78bc-40ba-b52b-d4c173bff274.lovable.app-1780276361442.png",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", href: "/icon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/icon.svg" },
+      { name: "theme-color", content: "#7c3aed" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -130,12 +160,28 @@ function AuthListener() {
   const router = useRouter();
   const queryClient = useQueryClient();
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       router.invalidate();
       queryClient.invalidateQueries();
     });
     return () => subscription.unsubscribe();
   }, [router, queryClient]);
+  return null;
+}
+
+function ServiceWorkerRegistrar() {
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !import.meta.env.PROD) return;
+    const register = () => {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.warn("Service worker registration failed:", err);
+      });
+    };
+    if (document.readyState === "complete") register();
+    else window.addEventListener("load", register, { once: true });
+  }, []);
   return null;
 }
 
@@ -145,6 +191,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthListener />
+      <ServiceWorkerRegistrar />
       <Outlet />
       <Toaster />
     </QueryClientProvider>

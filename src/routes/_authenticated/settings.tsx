@@ -27,7 +27,11 @@ function SettingsPage() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       setEmail(data.user.email ?? "");
-      const { data: p } = await supabase.from("profiles").select("*").eq("id", data.user.id).single();
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user.id)
+        .single();
       if (p) {
         setName(p.name ?? "");
         setGmail(p.gmail_connected ?? false);
@@ -44,12 +48,13 @@ function SettingsPage() {
   async function disconnectGmail() {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    await supabase.from("profiles").update({
-      gmail_connected: false,
-      gmail_access_token: null,
-      gmail_refresh_token: null,
-      gmail_email: null,
-    }).eq("id", u.user.id);
+    const { error } = await supabase.functions.invoke("gmail-oauth", {
+      body: { action: "disconnect" },
+    });
+    if (error) {
+      toast.error("Could not disconnect Gmail. Try again.");
+      return;
+    }
     setGmail(false);
     setGmailEmail("");
     toast.success("Gmail disconnected");
@@ -59,16 +64,21 @@ function SettingsPage() {
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { error } = await supabase.from("profiles").update({
-      name, notify_replies: notify,
-    }).eq("id", u.user.id);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        name,
+        notify_replies: notify,
+      })
+      .eq("id", u.user.id);
     setSaving(false);
     if (error) toast.error(error.message);
     else toast.success("Settings saved");
   }
 
   async function deleteAccount() {
-    if (!confirm("Permanently delete your account and ALL your data? This cannot be undone.")) return;
+    if (!confirm("Permanently delete your account and ALL your data? This cannot be undone."))
+      return;
     try {
       const { error } = await supabase.functions.invoke("delete-account", { body: {} });
       if (error) throw error;
@@ -103,7 +113,9 @@ function SettingsPage() {
           <div>
             <div className="font-medium">Gmail</div>
             <div className="text-xs text-muted-foreground">
-              {gmail && gmailEmail ? `Connected as ${gmailEmail}` : "Send cold emails from your inbox."}
+              {gmail && gmailEmail
+                ? `Connected as ${gmailEmail}`
+                : "Send cold emails from your inbox."}
             </div>
           </div>
           {gmail ? (
@@ -111,7 +123,12 @@ function SettingsPage() {
               <Badge className="bg-success/15 text-success" variant="secondary">
                 <Check className="mr-1 h-3 w-3" /> Connected
               </Badge>
-              <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={disconnectGmail}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive text-xs"
+                onClick={disconnectGmail}
+              >
                 Disconnect
               </Button>
             </div>
@@ -127,14 +144,18 @@ function SettingsPage() {
         <div className="flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
           <div>
             <div className="font-medium">Email alerts for replies</div>
-            <div className="text-xs text-muted-foreground">Get notified the moment a lead responds.</div>
+            <div className="text-xs text-muted-foreground">
+              Get notified the moment a lead responds.
+            </div>
           </div>
           <Switch checked={notify} onCheckedChange={setNotify} />
         </div>
       </Section>
 
       <div className="flex gap-2">
-        <Button onClick={save} disabled={saving} className="bg-gradient-primary shadow-glow">Save changes</Button>
+        <Button onClick={save} disabled={saving} className="bg-gradient-primary shadow-glow">
+          Save changes
+        </Button>
       </div>
 
       <Section title="Danger zone">
@@ -143,10 +164,14 @@ function SettingsPage() {
             <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
             <div>
               <div className="font-medium">Delete account</div>
-              <div className="text-xs text-muted-foreground">Permanent. We cannot recover your data.</div>
+              <div className="text-xs text-muted-foreground">
+                Permanent. We cannot recover your data.
+              </div>
             </div>
           </div>
-          <Button variant="destructive" size="sm" onClick={deleteAccount}>Delete</Button>
+          <Button variant="destructive" size="sm" onClick={deleteAccount}>
+            Delete
+          </Button>
         </div>
       </Section>
     </div>

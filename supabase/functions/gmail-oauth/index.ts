@@ -30,7 +30,8 @@ serve(async (req) => {
 
   try {
     const userId = await getAuthedUserId(req);
-    const { code } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { code } = body ?? {};
     if (!code) throw new Error("Missing authorization code");
 
     const redirectUri =
@@ -67,14 +68,30 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Disconnect action: wipe vault row + clear profile flags
+    if (body?.action === "disconnect") {
+      await supabase.from("gmail_tokens").delete().eq("profile_id", userId);
+      await supabase.from("profiles").update({
+        gmail_connected: false,
+        gmail_email: null,
+      }).eq("id", userId);
+      return json({ disconnected: true });
+    }
+
     const { error: updateError } = await supabase.from("profiles").update({
-      gmail_access_token: tokens.access_token,
-      gmail_refresh_token: tokens.refresh_token,
       gmail_connected: true,
       gmail_email: googleProfile.email,
     }).eq("id", userId);
 
     if (updateError) throw new Error(updateError.message);
+
+    // Store OAuth tokens in the service-role-only vault (never readable by users)
+    await supabase.from("gmail_tokens").upsert({
+      profile_id: userId,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "profile_id" });
 
     return json({ email: googleProfile.email });
   } catch (err) {
