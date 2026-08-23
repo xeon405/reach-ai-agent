@@ -42,7 +42,7 @@ function Privacy() {
               <li><strong>Supabase</strong> — database, authentication, and serverless functions.</li>
               <li><strong>Google</strong> — Gmail API for sending emails from your account.</li>
               <li><strong>Apollo</strong> — business contact database used when you search for leads.</li>
-              <li><strong>Groq</strong> — AI model provider used to draft emails.</li>
+              <li><strong>Groq</strong> — AI model provider used to draft emails, generate subject lines, and classify incoming replies (reply subject/preview only — never full message bodies).</li>
               <li><strong>Lemon Squeezy</strong> — payment processing as merchant of record.</li>
             </ul>
             <p className="mt-2">
