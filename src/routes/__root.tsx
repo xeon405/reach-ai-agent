@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
+import { IosInstallBanner } from "@/components/ios-install-banner";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -70,7 +71,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover",
+      },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      {
+        name: "apple-mobile-web-app-status-bar-style",
+        content: "black-translucent",
+      },
+      { name: "apple-mobile-web-app-title", content: "OutreachAI" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { title: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot" },
       {
         name: "description",
@@ -107,7 +119,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "icon", href: "/icon.svg", type: "image/svg+xml" },
-      { rel: "apple-touch-icon", href: "/icon.svg" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
       { name: "theme-color", content: "#7c3aed" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
@@ -174,6 +186,7 @@ function RootComponent() {
       <AuthListener />
       <ServiceWorkerRegistrar />
       <Outlet />
+      <IosInstallBanner />
       <Toaster />
     </QueryClientProvider>
   );
