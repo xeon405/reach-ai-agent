@@ -116,6 +116,12 @@ Our offer: ${userOffer}
 Return ONLY a JSON object with this exact format:
 {"subject": "...", "body": "..."}
 
+Rules for subject:
+- Max 7 words
+- Personal and curiosity-driven — mention their company, role, or a specific benefit
+- NEVER use words like "opportunity", "business proposal", or "quick question"
+- Lowercase style is fine (e.g. "quick idea for acme's pipeline")
+
 Rules for body:
 - Max 5 sentences
 - Sound human, not salesy
@@ -314,15 +320,39 @@ serve(async (req) => {
         }
       }
     }
-    const freshLeads = (leads as Array<{ id: string; country?: string | null }>).filter(
+    const freshLeads = (leads as Array<{ id: string; email?: string | null; country?: string | null }>).filter(
       (l) => !dupeIds.has(l.id)
     );
     if (freshLeads.length === 0) {
       return json({ sent: 0, sentToday, remainingToday, continue: true, message: `${dupeIds.size} duplicates skipped` });
     }
 
+    // 📡 MX validation: verify each domain can actually receive mail before spending a send
+    const invalidLeadIds: string[] = [];
+    const domainCache = new Map<string, boolean>();
+    for (const l of freshLeads) {
+      const domain = String(l.email ?? "").split("@")[1]?.toLowerCase().trim();
+      if (!domain) { invalidLeadIds.push(l.id); continue; }
+      if (!domainCache.has(domain)) {
+        try {
+          const mx = await Deno.resolveDns(domain, "MX");
+          domainCache.set(domain, Array.isArray(mx) && mx.length > 0);
+        } catch {
+          domainCache.set(domain, false);
+        }
+      }
+      if (!domainCache.get(domain)) invalidLeadIds.push(l.id);
+    }
+    if (invalidLeadIds.length > 0) {
+      await supabase.from("leads").update({ status: "invalid" }).in("id", invalidLeadIds);
+    }
+    const deliverable = freshLeads.filter((l) => !invalidLeadIds.includes(l.id));
+    if (deliverable.length === 0) {
+      return json({ sent: 0, sentToday, remainingToday, continue: true, message: `${invalidLeadIds.length} undeliverable emails skipped` });
+    }
+
     // Only send into the lead's local business hours — the rest wait for their morning
-    const eligible = freshLeads.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
+    const eligible = deliverable.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
     const waiting = leads.length - eligible.length;
     if (eligible.length === 0) {
       return json({

@@ -119,6 +119,48 @@ serve(async (req) => {
       const scanProfileMap = Object.fromEntries((scanProfiles ?? []).map((p) => [p.id, p]));
       const scanTokens = await fetchTokenMap(supabase, scanUserIds);
 
+      // 💥 Bounce sweep: delivery failures from mailer-daemon/postmaster mean dead
+      // addresses. Mark those leads bounced (unsubscribed=true reuses all suppression).
+      for (const uid of scanUserIds) {
+        const rt = scanTokens[uid];
+        if (!rt) continue;
+        try {
+          const bRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(
+              "{from:mailer-daemon from:postmaster} newer_than:7d"
+            )}&maxResults=10`,
+            { headers: { Authorization: `Bearer ${await refreshGmailToken(rt)}` } }
+          );
+          if (!bRes.ok) continue;
+          const bData = await bRes.json();
+          for (const msg of bData.messages ?? []) {
+            const mRes = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=To&metadataHeaders=Delivered-To`,
+              { headers: { Authorization: `Bearer ${await refreshGmailToken(rt)}` } }
+            );
+            if (!mRes.ok) continue;
+            const mData = await mRes.json();
+            const toHeader = (mData?.payload?.headers ?? [])
+              .filter((h: { name: string }) => /to/i.test(h.name))
+              .map((h: { value: string }) => h.value)
+              .join(" ");
+            const failedAddr = toHeader.match(/[\w.+-]+@[\w.-]+/)?.[0]?.toLowerCase();
+            if (!failedAddr) continue;
+            const { data: badLead } = await supabase
+              .from("leads")
+              .select("id")
+              .eq("user_id", uid)
+              .eq("email", failedAddr)
+              .maybeSingle();
+            if (badLead) {
+              await supabase.from("leads").update({ status: "bounced", unsubscribed: true }).eq("id", badLead.id);
+            }
+          }
+        } catch (bErr) {
+          console.error("[follow-up] Bounce sweep failed:", bErr instanceof Error ? bErr.message : bErr);
+        }
+      }
+
       for (const email of openEmails ?? []) {
         const profile = scanProfileMap[email.user_id];
         const lead = Array.isArray(email.lead) ? email.lead[0] : email.lead;
