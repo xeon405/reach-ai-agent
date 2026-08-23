@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,6 +60,14 @@ const plans = [
 ];
 
 function Landing() {
+  const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
+
+  useEffect(() => {
+    supabase.rpc("public_stats").then(({ data }) => {
+      if (data && data.length > 0) setStats(data[0]);
+    });
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
@@ -83,8 +93,14 @@ function Landing() {
         <div className="mx-auto max-w-5xl px-6 pt-24 pb-32 text-center">
           <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
             <Sparkles className="h-3.5 w-3.5" />
-            Powered by Claude AI — built for B2B teams worldwide
+            Powered by advanced AI — built for B2B teams worldwide
           </div>
+          {stats && stats.emails_sent > 0 && (
+            <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400">
+              <Flame className="h-3.5 w-3.5" />
+              {stats.emails_sent.toLocaleString()} cold emails already sent by OutreachAI agents
+            </div>
+          )}
           <h1 className="text-balance text-5xl font-bold tracking-tight md:text-7xl">
             AI Agent That Finds Your Customers &amp;{" "}
             <span className="text-gradient">Emails Them Automatically</span> — While You Sleep

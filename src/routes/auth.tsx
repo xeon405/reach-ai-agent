@@ -54,14 +54,32 @@ function AuthPage() {
     const parsed = schema.safeParse({ email, password });
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: `${window.location.origin}/onboarding` },
     });
     setLoading(false);
     if (error) return toast.error(error.message);
+    await creditReferral(data?.user?.id);
     toast.success("Check your email to confirm your account.");
+  }
+
+  // Attribute signup to the referral link (?ref=CODE) if present
+  async function creditReferral(userId?: string | null) {
+    const ref = new URLSearchParams(window.location.search).get("ref")
+      ?? localStorage.getItem("referral_code");
+    if (!userId || !ref) return;
+    localStorage.setItem("referral_code", ref);
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("referred_by, referral_code")
+      .eq("id", userId)
+      .single();
+    if (prof && !prof.referred_by && prof.referral_code !== ref) {
+      await supabase.from("profiles").update({ referred_by: ref }).eq("id", userId);
+      localStorage.removeItem("referral_code");
+    }
   }
 
   async function handleGoogle() {

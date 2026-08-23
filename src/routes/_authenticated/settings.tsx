@@ -22,6 +22,8 @@ function SettingsPage() {
   const [gmailEmail, setGmailEmail] = useState("");
   const [notify, setNotify] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [referral, setReferral] = useState<string | null>(null);
+  const [invited, setInvited] = useState(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -37,6 +39,11 @@ function SettingsPage() {
         setGmail(p.gmail_connected ?? false);
         setGmailEmail(p.gmail_email ?? "");
         setNotify(p.notify_replies ?? true);
+        if (p.referral_code) {
+          setReferral(p.referral_code);
+          const { count } = await supabase.rpc("referral_count").single();
+          setInvited(Number(count) || 0);
+        }
       }
     });
   }, []);
@@ -157,6 +164,37 @@ function SettingsPage() {
           Save changes
         </Button>
       </div>
+
+      <Section title="Invite & earn">
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="font-medium">Your invite link</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Every friend who signs up through it is tracked here. Free marketing for you.
+          </div>
+          {referral && (
+            <>
+              <div className="mt-3 flex items-center gap-2">
+                <code className="flex-1 truncate rounded-md border bg-background px-3 py-2 text-xs">
+                  {typeof window !== "undefined" ? `${window.location.origin}/auth?ref=${referral}` : ""}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/auth?ref=${referral}`);
+                    toast.success("Invite link copied!");
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+              <div className="mt-2 text-xs font-medium text-primary">
+                {invited} {invited === 1 ? "person" : "people"} joined with your link
+              </div>
+            </>
+          )}
+        </div>
+      </Section>
 
       <Section title="Danger zone">
         <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/5 p-4">

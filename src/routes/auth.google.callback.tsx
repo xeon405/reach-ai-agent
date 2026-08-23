@@ -18,6 +18,19 @@ function GoogleCallbackPage() {
       if (event === "SIGNED_IN") {
         supabase.auth.getUser().then(async ({ data }) => {
           if (!data.user) return navigate({ to: "/auth" });
+          // Credit referral if this Google signup came via an invite link
+          const ref = localStorage.getItem("referral_code");
+          if (ref) {
+            const { data: pr } = await supabase
+              .from("profiles")
+              .select("referred_by, referral_code")
+              .eq("id", data.user.id)
+              .single();
+            if (pr && !pr.referred_by && pr.referral_code !== ref) {
+              await supabase.from("profiles").update({ referred_by: ref }).eq("id", data.user.id);
+              localStorage.removeItem("referral_code");
+            }
+          }
           const { data: p } = await supabase
             .from("profiles")
             .select("onboarded")

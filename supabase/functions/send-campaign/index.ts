@@ -138,6 +138,35 @@ Rules for body:
   return { subject: String(parsed.subject), body: String(parsed.body) };
 }
 
+// Smart send-time: deliver into each lead's local business morning
+const COUNTRY_TZ: Record<string, string> = {
+  US: "America/New_York", CA: "America/Toronto", GB: "Europe/London", IE: "Europe/Dublin",
+  IN: "Asia/Kolkata", AE: "Asia/Dubai", SA: "Asia/Riyadh", SG: "Asia/Singapore",
+  AU: "Australia/Sydney", NZ: "Pacific/Auckland", DE: "Europe/Berlin", FR: "Europe/Paris",
+  NL: "Europe/Amsterdam", ES: "Europe/Madrid", IT: "Europe/Rome", CH: "Europe/Zurich",
+  SE: "Europe/Stockholm", NO: "Europe/Oslo", DK: "Europe/Copenhagen", FI: "Europe/Helsinki",
+  PL: "Europe/Warsaw", PT: "Europe/Lisbon", BR: "America/Sao_Paulo", MX: "America/Mexico_City",
+  ZA: "Africa/Johannesburg", NG: "Africa/Lagos", KE: "Africa/Nairobi", EG: "Africa/Cairo",
+  JP: "Asia/Tokyo", KR: "Asia/Seoul", HK: "Asia/Hong_Kong", MY: "Asia/Kuala_Lumpur",
+  ID: "Asia/Jakarta", TH: "Asia/Bangkok", PH: "Asia/Manila", PK: "Asia/Karachi",
+  BD: "Asia/Dhaka", LK: "Asia/Colombo", IL: "Asia/Jerusalem", TR: "Europe/Istanbul",
+};
+
+function isBusinessMorning(country: string | null | undefined): boolean {
+  if (!country) return true; // unknown origin → send immediately
+  const tz = COUNTRY_TZ[country.toUpperCase()];
+  if (!tz) return true;
+  try {
+    const hour = Number(
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: tz })
+        .format(new Date())
+    );
+    return hour >= 9 && hour <= 17;
+  } catch {
+    return true;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -227,9 +256,22 @@ serve(async (req) => {
       return json({ sent: 0, sentToday, remainingToday, continue: false, message: "No new leads to email" });
     }
 
+    // Only send into the lead's local business hours — the rest wait for their morning
+    const eligible = leads.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
+    const waiting = leads.length - eligible.length;
+    if (eligible.length === 0) {
+      return json({
+        sent: 0,
+        sentToday,
+        remainingToday,
+        continue: true,
+        message: `Smart timing: ${waiting} lead${waiting === 1 ? "" : "s"} wait for their local business hours`,
+      });
+    }
+
     let sent = 0;
 
-    for (const lead of leads) {
+    for (const lead of eligible) {
       try {
         const { subject, body: aiBody } = await generateEmail(
           lead.name ?? "there",

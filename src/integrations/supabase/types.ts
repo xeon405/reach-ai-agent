@@ -203,6 +203,8 @@ export type Database = {
           offer: string | null
           onboarded: boolean
           plan: string
+          referral_code: string | null
+          referred_by: string | null
         }
         Insert: {
           company?: string | null
@@ -219,6 +221,8 @@ export type Database = {
           offer?: string | null
           onboarded?: boolean
           plan?: string
+          referral_code?: string | null
+          referred_by?: string | null
         }
         Update: {
           company?: string | null
@@ -235,6 +239,8 @@ export type Database = {
           offer?: string | null
           onboarded?: boolean
           plan?: string
+          referral_code?: string | null
+          referred_by?: string | null
         }
         Relationships: []
       }
@@ -243,7 +249,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      consume_ai_quota: { Args: { uid: string; cap: number }; Returns: boolean }
+      public_stats: {
+        Args: Record<string, never>
+        Returns: { agents: number; emails_sent: number }[]
+      }
+      referral_count: { Args: Record<string, never>; Returns: number }
     }
     Enums: {
       [_ in never]: never
