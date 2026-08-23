@@ -226,7 +226,7 @@ Best regards
 ⚡ Still automated — my AI agent sent this follow-up too.
 Get your own AI outreach agent → https://outreach-ochre-sigma.vercel.app
 
-Reply with UNSUBSCRIBE to opt out.`;
+Reply with UNSUBSCRIBE to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
         await sendGmail(
           accessToken,
