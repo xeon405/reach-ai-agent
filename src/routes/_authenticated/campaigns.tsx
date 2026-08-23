@@ -57,6 +57,14 @@ function CampaignsPage() {
     else { toast.success("Campaign created"); setName(""); setOpen(false); load(); }
   }
 
+  async function renameCampaign(c: Campaign) {
+    const name = window.prompt("Rename campaign", c.name)?.trim();
+    if (!name || name === c.name) return;
+    const { error } = await supabase.from("campaigns").update({ name }).eq("id", c.id);
+    if (error) toast.error(error.message);
+    else { toast.success("Campaign renamed"); load(); }
+  }
+
   async function toggle(c: Campaign) {
     const status = c.status === "active" ? "paused" : "active";
     await supabase.from("campaigns").update({ status }).eq("id", c.id);
@@ -244,7 +252,7 @@ function CampaignsPage() {
                   <Button size="icon" variant="outline" onClick={() => toggle(c)}>
                     {c.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </Button>
-                  <Button size="icon" variant="outline"><Edit className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="outline" onClick={() => renameCampaign(c)} aria-label="Rename campaign"><Edit className="h-4 w-4" /></Button>
                   <Button size="icon" variant="outline" onClick={() => remove(c.id)} className="text-destructive">
                     <Trash2 className="h-4 w-4" />
                   </Button>

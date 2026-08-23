@@ -68,10 +68,16 @@ function SettingsPage() {
   }
 
   async function deleteAccount() {
-    if (!confirm("Permanently delete your account? This cannot be undone.")) return;
-    await supabase.auth.signOut();
-    toast.success("Account signed out — contact support to fully delete data.");
-    navigate({ to: "/" });
+    if (!confirm("Permanently delete your account and ALL your data? This cannot be undone.")) return;
+    try {
+      const { error } = await supabase.functions.invoke("delete-account", { body: {} });
+      if (error) throw error;
+      await supabase.auth.signOut();
+      toast.success("Account and all data permanently deleted.");
+      navigate({ to: "/" });
+    } catch {
+      toast.error("Could not delete account. Please contact support.");
+    }
   }
 
   return (
