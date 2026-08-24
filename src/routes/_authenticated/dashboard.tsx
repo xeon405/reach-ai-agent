@@ -20,14 +20,16 @@ function Dashboard() {
   const [stats, setStats] = useState<Stats>({ leads: 0, emails: 0, replies: 0, meetings: 0 });
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [bookingLink, setBookingLink] = useState(false);
 
   useEffect(() => { void load(); }, []);
 
   async function load() {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
-    const { data: profile } = await supabase.from("profiles").select("onboarded").eq("id", u.user.id).single();
+    const { data: profile } = await supabase.from("profiles").select("onboarded, booking_link").eq("id", u.user.id).single();
     if (profile && !profile.onboarded) { navigate({ to: "/onboarding" }); return; }
+    setBookingLink(Boolean(profile?.booking_link));
 
     const [leads, emails, replies, meetings, camps, act] = await Promise.all([
       supabase.from("leads").select("id", { count: "exact", head: true }),
@@ -84,7 +86,7 @@ function Dashboard() {
 
       {campaign && (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-sm text-muted-foreground">Active campaign</div>
               <div className="mt-1 text-xl font-semibold">{campaign.name}</div>
@@ -100,6 +102,44 @@ function Dashboard() {
               </div>
             </div>
           </div>
+
+          <h2 className="mb-4 text-lg font-semibold">❤️ Campaign health</h2>
+          {(() => {
+            const replyRate = stats.emails ? stats.replies / stats.emails : 0;
+            let score = 0; const tips: string[] = [];
+            if (stats.emails === 0) {
+              score = 20;
+              tips.push("No emails sent yet — activate your campaign and the agent starts working.");
+            } else {
+              score = Math.round(Math.min(85, 40 + replyRate * 500));
+              if (stats.meetings > 0) score = Math.min(100, score + 15);
+              if (stats.replies === 0 && stats.emails >= 20) tips.push("20+ emails but no replies — try a different offer angle in the AI Email Generator.");
+              else if (replyRate >= 0.08) tips.push("Reply rate is excellent — consider upgrading your plan to send more per day.");
+              if (!bookingLink) tips.push("Add your booking link in Settings so interested leads can schedule instantly.");
+              if (stats.leads < 25) tips.push("Lead list is thin — import more leads or use Find Leads to keep the agent busy.");
+            }
+            const grade = score >= 80 ? "Excellent" : score >= 60 ? "Good" : score >= 40 ? "Needs attention" : "Just starting";
+            return (
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-4">
+                  <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-extrabold ${
+                    score >= 80 ? "bg-success/15 text-success" : score >= 60 ? "bg-primary/10 text-primary" : score >= 40 ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground"
+                  }`}>{score}</div>
+                  <div>
+                    <div className="font-semibold">{grade}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {stats.replies} replies · {(replyRate * 100).toFixed(1)}% reply rate · {stats.meetings} won
+                    </div>
+                  </div>
+                </div>
+                {tips.length > 0 && (
+                  <ul className="min-w-0 flex-1 space-y-1.5 border-t border-border pt-3 text-sm text-muted-foreground sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                    {tips.map((tip) => <li key={tip} className="flex gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />{tip}</li>)}
+                  </ul>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

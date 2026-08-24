@@ -32,6 +32,29 @@ const STATUS_COLORS: Record<string, string> = {
 const PIPELINE_STATUSES = ["new", "emailed", "replied", "won"] as const;
 const SYSTEM_STATUSES = ["bounced", "unsubscribed", "invalid", "skipped"];
 
+function temperature(l: { status: string }): { label: string; cls: string } {
+  if (l.status === "won") return { label: "🏆 Closed", cls: "bg-success/15 text-success" };
+  if (l.status === "replied") return { label: "🔥 Hot", cls: "bg-destructive/10 text-destructive" };
+  if (l.status === "emailed" || l.status === "booked") return { label: "🌤 Warm", cls: "bg-warning/15 text-warning" };
+  if (SYSTEM_STATUSES.includes(l.status)) return { label: "—", cls: "text-muted-foreground" };
+  return { label: "❄️ Cold", cls: "bg-primary/10 text-primary" };
+}
+
+function burstConfetti() {
+  const EMOJI = ["🎉", "🎊", "✨", "🏆", "🥳"];
+  for (let i = 0; i < 36; i++) {
+    const el = document.createElement("span");
+    el.textContent = EMOJI[Math.floor(Math.random() * EMOJI.length)];
+    el.style.cssText = `position:fixed;left:${Math.random() * 100}vw;top:-40px;font-size:${14 + Math.random() * 18}px;z-index:9999;pointer-events:none;transition:transform ${1.6 + Math.random()}s cubic-bezier(.2,.6,.4,1),opacity 2.4s ease-in;will-change:transform`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.transform = `translateY(${window.innerHeight + 80}px) rotate(${Math.random() * 720 - 360}deg)`;
+      el.style.opacity = "0";
+    });
+    setTimeout(() => el.remove(), 2600);
+  }
+}
+
 function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -44,6 +67,7 @@ function LeadsPage() {
       toast.error("Could not update status");
       void load();
     } else if (next === "won") {
+      burstConfetti();
       toast.success("🏆 Marked as won — great job!");
     }
   }
@@ -367,6 +391,7 @@ function LeadsPage() {
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Temp</th>
               <th className="px-4 py-3">Company</th>
               <th className="px-4 py-3">Job Title</th>
               <th className="px-4 py-3">Country</th>
@@ -383,6 +408,11 @@ function LeadsPage() {
             ) : filtered.map((l) => (
               <tr key={l.id} className="border-t border-border hover:bg-muted/20">
                 <td className="px-4 py-3 font-medium">{l.name ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${temperature(l).cls}`}>
+                    {temperature(l).label}
+                  </span>
+                </td>
                 <td className="px-4 py-3">{l.company ?? "—"}</td>
                 <td className="px-4 py-3">{l.job_title ?? "—"}</td>
                 <td className="px-4 py-3">{l.country ?? "—"}</td>

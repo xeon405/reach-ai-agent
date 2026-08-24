@@ -21,6 +21,7 @@ function SettingsPage() {
   const [gmailEmail, setGmailEmail] = useState("");
   const [notify, setNotify] = useState(true);
   const [booking, setBooking] = useState("");
+  const [signature, setSignature] = useState("");
   const [autopilot, setAutopilot] = useState(false);
   const [apCountry, setApCountry] = useState("");
   const [apNiche, setApNiche] = useState("");
@@ -80,6 +81,7 @@ function SettingsPage() {
         setGmailEmail(p.gmail_email ?? "");
         setNotify(p.notify_replies ?? true);
         setBooking(p.booking_link ?? "");
+        setSignature(p.signature ?? "");
         setAutopilot(p.autopilot ?? false);
         setApCountry(p.autopilot_country ?? "");
         setApNiche(p.autopilot_niche ?? "");
@@ -121,6 +123,7 @@ function SettingsPage() {
         name,
         notify_replies: notify,
         booking_link: booking.trim() || null,
+        signature: signature.trim() || null,
         autopilot: autopilot && apCountry.trim().length > 0 && apNiche.trim().length > 0,
         autopilot_country: apCountry.trim() || null,
         autopilot_niche: apNiche.trim() || null,
@@ -215,6 +218,18 @@ function SettingsPage() {
           />
           <p className="text-xs text-muted-foreground">
             Added to every email — interested leads can book a meeting with one click.
+          </p>
+          <Label htmlFor="signature" className="pt-2">Email signature (optional)</Label>
+          <textarea
+            id="signature"
+            rows={3}
+            placeholder={"Alex Rivera\nFounder, Rivera Consulting\n+1 555 010 2030"}
+            value={signature}
+            onChange={(e) => setSignature(e.target.value)}
+            className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+          <p className="text-xs text-muted-foreground">
+            Appended at the end of every email your agent sends — looks professional and builds recognition.
           </p>
         </div>
       </Section>

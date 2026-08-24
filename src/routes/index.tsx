@@ -227,6 +227,58 @@ function Landing() {
       </section>
 
       <section className="border-t border-border/50">
+        <div className="mx-auto max-w-4xl px-6 py-24">
+          {(() => {
+            const [leads, setLeads] = useState(50);
+            const [replyPct, setReplyPct] = useState(5);
+            const [closePct, setClosePct] = useState(20);
+            const [deal, setDeal] = useState(1000);
+            const monthlyMeetings = Math.round(leads * 30 * (replyPct / 100) * (closePct / 100));
+            const revenue = monthlyMeetings * deal;
+            const Slider = ({ label, value, set, min, max, suffix }: { label: string; value: number; set: (n: number) => void; min: number; max: number; suffix: string }) => (
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-semibold text-primary">{value}{suffix}</span>
+                </div>
+                <input type="range" min={min} max={max} value={value}
+                  onChange={(e) => set(Number(e.target.value))}
+                  className="w-full accent-primary" />
+              </div>
+            );
+            return (
+              <>
+                <div className="mb-10 text-center">
+                  <h2 className="text-3xl font-bold tracking-tight md:text-4xl">🧮 What could this do for YOU?</h2>
+                  <p className="mx-auto mt-3 max-w-xl text-muted-foreground">Drag the sliders — see your potential pipeline in real numbers.</p>
+                </div>
+                <div className="grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2">
+                  <div className="space-y-6">
+                    <Slider label="Leads contacted per day" value={leads} set={setLeads} min={10} max={200} suffix="" />
+                    <Slider label="Expected reply rate" value={replyPct} set={setReplyPct} min={1} max={15} suffix="%" />
+                    <Slider label="Replies that become meetings" value={closePct} set={setClosePct} min={5} max={60} suffix="%" />
+                    <Slider label="Average deal value" value={deal} set={setDeal} min={100} max={10000} suffix="$" />
+                  </div>
+                  <div className="flex flex-col justify-center rounded-2xl bg-gradient-primary p-8 text-center text-primary-foreground">
+                    <div className="text-sm font-medium opacity-80">Your projected results</div>
+                    <div className="mt-4 text-5xl font-extrabold tracking-tight">{monthlyMeetings}</div>
+                    <div className="text-sm opacity-90">meetings booked / month</div>
+                    <div className="mt-6 border-t border-white/20 pt-5">
+                      <div className="text-2xl font-bold">${revenue.toLocaleString()}</div>
+                      <div className="text-xs opacity-80">new monthly revenue potential</div>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-6 text-center text-xs text-muted-foreground">
+                  Estimates based on typical cold-email performance. Your agent works daily to beat these numbers.
+                </p>
+              </>
+            );
+          })()}
+        </div>
+      </section>
+
+      <section className="border-t border-border/50">
         <div className="mx-auto max-w-3xl px-6 py-24 text-center">
           <p className="text-2xl font-medium leading-relaxed tracking-tight md:text-3xl">
             {t("founder_quote")}

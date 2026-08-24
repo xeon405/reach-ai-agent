@@ -430,7 +430,7 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
         }
 
         // Killer feature: every email is a live demo of the product
-        const body = `${aiBody}
+        const body = `${aiBody}${profile.signature ? `\n\n${sanitizeForPrompt(profile.signature, 400)}` : ""}
 
 --
 
