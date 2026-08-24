@@ -312,7 +312,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           }
         }
 
-        // Alert the user from their own inbox (free, no SMTP needed)
+        // Alert the user from their own inbox (free, no SMTP needed) — ONE time per reply
         if (profile.notify_replies !== false) {
           try {
             const selfEmail = profile.gmail_email || profile.email;
@@ -322,7 +322,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                 buildRawEmail(
                   selfEmail,
                   `${tag} — New reply from ${lead.name ?? lead.email}`,
-                  `${lead.name ?? lead.email} (${lead.email}) just replied to your outreach email.\n\nAI verdict: ${tag}\nSubject: ${replySubject || "(see Gmail)"}\n\nOpen Gmail and search: from:${lead.email}\n${draft ? `\n✍️ Suggested reply (copy, tweak, send):\n\n"""\n${draft}\n"""\n` : ""}\n— OutreachAI Agent`,
+                  `${lead.name ?? lead.email} replied to your outreach.\n\nVerdict: ${tag}\nTheir message: "${(fullReplyText || "").slice(0, 150)}"\n\nThe AI already drafted a personal response for you.\nReview & send it in one click:\n→ https://outreach-ochre-sigma.vercel.app/emails\n\n— OutreachAI Agent`,
                   selfEmail
                 )
               );
@@ -483,7 +483,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                 await sendGmail(await refreshGmailToken(rt), buildRawEmail(
                   profile.gmail_email,
                   `🤝 AI stepped back — you're talking with ${lead.name ?? lead.email}`,
-                  `You replied to ${lead.email} yourself, so the AI has stopped auto-answering this thread.\nThe conversation is all yours now.`,
+                  `You replied to ${lead.email} yourself, so the AI has stopped auto-answering this thread.\nThe conversation is all yours now.\n→ https://outreach-ochre-sigma.vercel.app/emails`,
                   profile.gmail_email || profile.email
                 ));
               }
@@ -509,10 +509,10 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
 
           if (/unsubscribe|opt.?out|remove me|stop emailing|do not email/i.test(low)) {
             await supabase.from("leads").update({ unsubscribed: true, status: "unsubscribed" }).eq("id", lead.id);
-            ownerNote = `🚫 ${lead.name ?? lead.email} asked to stop — suppressed permanently.`;
+            ownerNote = `🚫 ${lead.name ?? lead.email} asked to stop — suppressed permanently.\n→ https://outreach-ochre-sigma.vercel.app/leads`;
           } else if (/calendar|book(ing)? a? ?call|schedule a|zoom|google meet|teams link|available (at|on|tomorrow|mon|tue|wed|thu|fri)|what time works/i.test(low)) {
             await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
-            ownerNote = `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nTheir words: "${theirWords.slice(0, 200)}"\nReply from your Gmail now — AI has stepped back so you can close.`;
+            ownerNote = `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.\n→ https://outreach-ochre-sigma.vercel.app/emails`;
           } else {
             aiReply = await groqChat([{
               role: "user",
@@ -542,13 +542,18 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
               sendOk = true;
             } catch (_se) { /* send failed */ }
             if (sendOk) {
+              const newTurns = (t.ai_turns ?? 0) + 1;
               await supabase.from("emails_sent").update({
-                ai_turns: (t.ai_turns ?? 0) + 1,
+                ai_turns: newTurns,
                 last_ai_msg_at: new Date().toISOString(),
                 last_lead_msg_at: new Date(msgDateMs).toISOString(),
                 autoreplied: true,
               }).eq("id", t.id);
-              ownerNote = `💬 AI replied to ${lead.name ?? lead.email} (turn ${(t.ai_turns ?? 0) + 1}/3).\nTheir message: "${theirWords.slice(0, 200)}"\nAI's answer: "${aiReply.trim().slice(0, 250)}"\nReply from your Gmail anytime to take over — the AI will step back instantly.`;
+              // Routine turns stay SILENT — only alert at final handoff
+              if (newTurns >= 3) {
+                await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
+                ownerNote = `🤝 ${lead.name ?? lead.email}: the AI has used its 3 conversation turns, so the thread is now yours.\nContinue from your Gmail, or track it here:\n→ https://outreach-ochre-sigma.vercel.app/emails`;
+              }
             }
           } else if (!ownerNote) {
             await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
