@@ -485,13 +485,8 @@ Deno.serve(async (req) => {
 
     const bodyText = `${gen.body}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
 
---
-
-⚡ Fun fact: this email was found, written and sent automatically by an AI agent.
-Want an AI agent doing this for YOUR sales pipeline? → ${SITE}
-
-Reply with UNSUBSCRIBE to opt out.
-One click: ${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}${ctx.profile.booking_link ? `\n📅 Book time with me directly: ${ctx.profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
+PS: I use an AI assistant (OutreachAI) to help manage my outreach — this note was drafted with its help.
+Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
     const { data: emailRow, error: insertErr } = await supabase
       .from("emails_sent")
