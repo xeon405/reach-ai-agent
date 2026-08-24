@@ -287,13 +287,13 @@ function CampaignsPage() {
                       {c.status}
                     </Badge>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-6 text-sm">
+                  <div className="mt-3 grid grid-cols-3 gap-3 text-sm sm:gap-6">
                     <Stat label="Leads targeted" value={s.leads} />
                     <Stat label="Emails sent" value={s.emails} />
                     <Stat label="Reply rate" value={`${replyRate}%`} />
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     className="bg-gradient-primary"
