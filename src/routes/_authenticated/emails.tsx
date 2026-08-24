@@ -39,17 +39,18 @@ function EmailsPage() {
   }
 
   async function sendReply(e: Email) {
-    const text = editing[e.id] ?? e.ai_draft ?? "";
-    if (!text.trim()) return;
+    const text = editing[e.id] ?? "";
+    const usingCustom = text.trim().length > 0;
     setSending(e.id);
     try {
-      const { error } = await supabase.functions.invoke("send-reply", {
-        body: { emailId: e.id, body: text },
+      const { data, error } = await supabase.functions.invoke("send-reply", {
+        body: usingCustom ? { emailId: e.id, body: text } : { emailId: e.id, regenerate: true },
       });
       if (error) throw new Error(error.message);
       toast.success(`Reply sent to ${e.lead?.email ?? "lead"} ✅`);
       setEditing((p) => ({ ...p, [e.id]: "" }));
       await load();
+      return data;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send reply");
     } finally {

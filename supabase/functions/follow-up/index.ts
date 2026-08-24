@@ -22,6 +22,26 @@ function toBase64Url(str: string): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function extractGmailBody(payload: unknown, depth = 0): string {
+  if (!payload || depth > 6) return "";
+  const p = payload as { mimeType?: string; body?: { data?: string }; parts?: unknown[] };
+  if (p.body?.data) {
+    try {
+      const b64 = p.body.data.replace(/-/g, "+").replace(/_/g, "/");
+      let text = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+      if ((p.mimeType ?? "").includes("html")) {
+        text = text.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+      }
+      if (text.trim()) return text.trim();
+    } catch (_e) { /* skip malformed */ }
+  }
+  for (const part of p.parts ?? []) {
+    const inner = extractGmailBody(part, depth + 1);
+    if (inner) return inner;
+  }
+  return "";
+}
+
 async function refreshGmailToken(refreshToken: string): Promise<string> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -108,7 +128,7 @@ serve(async (req) => {
     try {
       const { data: openEmails } = await supabase
         .from("emails_sent")
-        .select("id, user_id, sent_at, lead:leads(id, email, unsubscribed)")
+        .select("id, user_id, sent_at, lead:leads(id, email, unsubscribed, name, company, job_title, country)")
         .eq("replied", false)
         .order("sent_at", { ascending: false })
         .limit(60);
@@ -186,6 +206,7 @@ serve(async (req) => {
         // Fetch subject + snippet, then let AI classify the reply
         let sentiment = "";
         let replySubject = "";
+        let fullReplyText = "";
         try {
           const msgRes = await fetch(
             `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=metadata&metadataHeaders=Subject`,
@@ -196,6 +217,18 @@ serve(async (req) => {
             replySubject = msgData?.payload?.headers?.find((h: { name: string }) => h.name === "Subject")?.value ?? "";
             const snippet: string = msgData?.snippet ?? "";
             const msgSnippet = snippet;
+
+            // Pull the full reply body so the AI can respond to specifics
+            try {
+              const fullRes = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
+                { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
+              );
+              if (fullRes.ok) {
+                const fullData = await fullRes.json();
+                fullReplyText = extractGmailBody(fullData?.payload).slice(0, 900);
+              }
+            } catch (_be) { /* fall back to snippet */ }
 
             // Check for opt-out request first (keyword match beats AI)
             if (/unsubscribe|opt.?out|remove me|stop emailing/i.test(replySubject)) {
@@ -231,15 +264,15 @@ serve(async (req) => {
           try {
             draft = await groqChat([{
               role: "user",
-              content: `A cold outreach reply arrived.
-Sender: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} at ${sanitizeForPrompt(lead.company, 120)}
-Their subject: ${sanitizeForPrompt(replySubject, 150)}
-Preview: ${sanitizeForPrompt(msgSnippet, 300)}
-What was offered: ${sanitizeForPrompt(profile.offer ?? "our services")}
-${profile.booking_link ? `The sender's booking link is ${profile.booking_link} — invite them to book there.` : ""}
+              content: `A reply arrived to a cold email you sent.
+Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
+Their exact words: "${sanitizeForPrompt(fullReplyText || msgSnippet, 900)}"
+You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${profile.booking_link ? `
+Their booking link: ${profile.booking_link} — invite them to book there.` : ""}
 
-Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero fluff.${sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."} Sign off as "Best regards". Return only the reply text.`,
-            }], { maxTokens: 600, temperature: 0.7 });
+Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero fluff.${sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."}
+Rules: respond to something SPECIFIC they actually said (quote or reference it). Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+            }], { maxTokens: 600, temperature: 0.9 });
           } catch (draftErr) {
             console.error("[follow-up] Draft failed:", draftErr instanceof Error ? draftErr.message : draftErr);
           }

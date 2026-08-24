@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,26 @@ function toBase64Url(s: string): string {
   let bin = "";
   bytes.forEach((b) => (bin += String.fromCharCode(b)));
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function extractGmailBody(payload: unknown, depth = 0): string {
+  if (!payload || depth > 6) return "";
+  const p = payload as { mimeType?: string; body?: { data?: string }; parts?: unknown[] };
+  if (p.body?.data) {
+    try {
+      const b64 = p.body.data.replace(/-/g, "+").replace(/_/g, "/");
+      let text = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+      if ((p.mimeType ?? "").includes("html")) {
+        text = text.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+      }
+      if (text.trim()) return text.trim();
+    } catch (_e) { /* skip malformed */ }
+  }
+  for (const part of p.parts ?? []) {
+    const inner = extractGmailBody(part, depth + 1);
+    if (inner) return inner;
+  }
+  return "";
 }
 
 serve(async (req) => {
@@ -40,17 +61,18 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const emailId = body?.emailId;
     const customBody = typeof body?.body === "string" ? body.body.trim() : "";
+    const regenerate = body?.regenerate === true;
     if (!emailId) throw new Error("Missing emailId");
 
     // Load the outreach email + lead, verifying ownership via join
     const { data: row, error: rowErr } = await admin
       .from("emails_sent")
-      .select("id, user_id, subject, ai_draft, lead:leads(email, name)")
+      .select("id, user_id, subject, ai_draft, sent_at, lead:leads(email, name, company, job_title, country)")
       .eq("id", emailId)
       .single();
     if (rowErr || !row) throw new Error("Email not found");
     if (row.user_id !== userId) return json({ error: "Forbidden" }, 403);
-    if (!row.ai_draft && !customBody) throw new Error("No AI draft available for this email");
+    if (!row.ai_draft && !customBody && !regenerate) throw new Error("No AI draft available for this email");
 
     const leadRow = Array.isArray(row.lead) ? row.lead[0] : row.lead;
     const toEmail = leadRow?.email;
@@ -84,7 +106,46 @@ serve(async (req) => {
     const tokenData = await tokenRes.json();
     if (tokenData.error) throw new Error("Token refresh failed: " + tokenData.error);
 
-    const replyBody = customBody || row.ai_draft!;
+    // ✨ Regenerate: write a FRESH reply from the lead's latest actual message
+    let replyBody = customBody;
+    if (!replyBody && regenerate) {
+      const { data: prof } = await admin.from("profiles").select("offer, booking_link, name").eq("id", userId).maybeSingle();
+      const afterEpoch = Math.floor(new Date(row.sent_at ?? Date.now()).getTime() / 1000);
+      const q = `from:${toEmail} is:inbox after:${afterEpoch}`;
+      const searchRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
+        { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+      );
+      let theirWords = "";
+      if (searchRes.ok) {
+        const hits = (await searchRes.json()).messages ?? [];
+        if (hits[0]?.id) {
+          const mRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
+            { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+          );
+          if (mRes.ok) theirWords = extractGmailBody((await mRes.json())?.payload).slice(0, 900);
+        }
+      }
+      const fresh = await groqChat([{
+        role: "user",
+        content: `A reply arrived to a cold email you sent.
+Lead: ${sanitizeForPrompt(leadRow?.name ?? toEmail, 80)} (${sanitizeForPrompt(leadRow?.job_title, 80) || "professional"}) at ${sanitizeForPrompt(leadRow?.company, 120)}${leadRow?.country ? `, ${sanitizeForPrompt(String(leadRow.country), 40)}` : ""}
+Their exact words: "${theirWords || "(no newer message found — write a gentle nudge referencing the original outreach)"}"
+You originally offered: ${sanitizeForPrompt(prof?.offer ?? "our services")}${prof?.booking_link ? `
+Their booking link: ${prof.booking_link} — invite them to book there.` : ""}
+
+Write a 3-4 sentence human reply on behalf of ${prof?.name || "the sender"}. Warm, confident, zero fluff.
+Rules: respond to something SPECIFIC they said. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Sign off as "Best regards". Return only the reply text.`,
+      }], { maxTokens: 600, temperature: 0.9 });
+      if (fresh?.trim()) {
+        replyBody = fresh.trim();
+        await admin.from("emails_sent").update({ ai_draft: replyBody }).eq("id", emailId);
+      }
+    }
+
+    if (!replyBody && !row.ai_draft) throw new Error("No AI draft available for this email");
+    if (!replyBody) replyBody = row.ai_draft!;
     const origSubject = row.subject ?? "";
     const subject = origSubject.toLowerCase().startsWith("re:") ? origSubject : `Re: ${origSubject}`;
 
