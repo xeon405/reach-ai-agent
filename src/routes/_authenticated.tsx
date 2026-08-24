@@ -8,6 +8,7 @@ import {
 import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut, Loader2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
+import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -52,8 +53,9 @@ function AuthenticatedLayout() {
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
         <Sidebar collapsible="icon">
-          <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
+          <SidebarHeader className="flex flex-row items-center justify-between border-b border-sidebar-border px-4 py-4">
             <Logo />
+            <ThemeToggle />
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>

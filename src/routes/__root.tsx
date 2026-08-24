@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { IosInstallBanner } from "@/components/ios-install-banner";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -139,6 +140,7 @@ function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -183,11 +185,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthListener />
-      <ServiceWorkerRegistrar />
-      <Outlet />
-      <IosInstallBanner />
-      <Toaster />
+      <ThemeProvider>
+        <AuthListener />
+        <ServiceWorkerRegistrar />
+        <Outlet />
+        <IosInstallBanner />
+        <Toaster />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

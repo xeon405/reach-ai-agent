@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -81,6 +82,7 @@ function Landing() {
             <Link to="/stats" className="hover:text-foreground">Live stats</Link>
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button asChild variant="ghost" size="sm">
               <Link to="/auth">Log in</Link>
             </Button>

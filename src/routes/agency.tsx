@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/agency")({
@@ -19,9 +20,12 @@ function AgencyPage() {
     <div className="min-h-screen bg-background">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Link to="/" className="text-lg font-bold">Outreach<span className="text-primary">AI</span></Link>
-        <Link to="/auth">
-          <Button variant="outline" size="sm">Open app</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link to="/auth">
+            <Button variant="outline" size="sm">Open app</Button>
+          </Link>
+        </div>
       </header>
 
       <section className="mx-auto max-w-4xl px-4 pb-16 pt-10 text-center">
