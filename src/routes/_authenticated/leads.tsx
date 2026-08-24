@@ -336,8 +336,30 @@ function LeadsPage() {
                   onChange={(e) => setForm({ ...form, company: e.target.value })} />
                 <Input placeholder="Job title" value={form.job_title}
                   onChange={(e) => setForm({ ...form, job_title: e.target.value })} />
-                <Input placeholder="Country" value={form.country}
-                  onChange={(e) => setForm({ ...form, country: e.target.value })} />
+                <select
+                  value={form.country}
+                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Country (recommended)</option>
+                  <option value="United States">United States</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Australia">Australia</option>
+                  <option value="India">India</option>
+                  <option value="Germany">Germany</option>
+                  <option value="France">France</option>
+                  <option value="Spain">Spain</option>
+                  <option value="Italy">Italy</option>
+                  <option value="Netherlands">Netherlands</option>
+                  <option value="Saudi Arabia">Saudi Arabia 🇸🇦</option>
+                  <option value="UAE">UAE 🇦🇪</option>
+                  <option value="Egypt">Egypt</option>
+                  <option value="Pakistan">Pakistan</option>
+                  <option value="Singapore">Singapore</option>
+                  <option value="Brazil">Brazil</option>
+                  <option value="Turkey">Turkey</option>
+                </select>
                 <Select value={form.campaign_id} onValueChange={(v) => setForm({ ...form, campaign_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Assign to campaign (optional)" /></SelectTrigger>
                   <SelectContent>

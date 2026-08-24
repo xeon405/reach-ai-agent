@@ -1,4 +1,5 @@
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
+import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -138,9 +139,18 @@ const COUNTRY_TZ: Record<string, [number, number]> = {
   IL: [2, 2],
 };
 
+// Accepts "Germany", "DE", "de", " United States " … → ISO-2 code or null
+function normalizeCountry(country: string | null | undefined): string | null {
+  const raw = String(country ?? "").trim();
+  if (!raw) return null;
+  if (raw.length === 2) return raw.toUpperCase();
+  return COUNTRY_ISO[raw.toLowerCase()] ?? raw.toUpperCase().slice(0, 2);
+}
+
 function tzOffsetFor(country: string | null | undefined): number {
-  if (!country) return 0;
-  const range = COUNTRY_TZ[country.trim().toUpperCase()];
+  const iso = normalizeCountry(country);
+  if (!iso) return 0;
+  const range = COUNTRY_TZ[iso];
   if (!range) return 0;
   return range[0];
 }
@@ -152,8 +162,9 @@ function isBusinessMorning(country: string | null | undefined): boolean {
 }
 
 function isArabicLead(country: string | null | undefined): boolean {
-  if (!country) return false;
-  return ARAB_COUNTRIES.has(country.trim().toUpperCase());
+  const iso = normalizeCountry(country);
+  if (!iso) return false;
+  return ARAB_COUNTRIES.has(iso);
 }
 
 async function generateEmail(
