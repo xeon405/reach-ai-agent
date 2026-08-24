@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encryptSecret } from "../_shared/crypto.ts";
+import { insertAudit } from "../_shared/audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,13 +87,17 @@ serve(async (req) => {
 
     if (updateError) throw new Error(updateError.message);
 
-    // Store OAuth tokens in the service-role-only vault (never readable by users)
+    // Store OAuth credentials in the service-role-only vault, encrypted at rest
+    // (AES-GCM via GOOGLE_TOKEN_ENC_KEY). Plaintext fallback only if key absent.
+    const storedRefresh = await encryptSecret(tokens.refresh_token);
     await supabase.from("gmail_tokens").upsert({
       profile_id: userId,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
+      access_token: null,
+      refresh_token: storedRefresh,
       updated_at: new Date().toISOString(),
     }, { onConflict: "profile_id" });
+
+    await insertAudit(supabase, { user_id: userId, event: "gmail.connected", payload: { email: googleProfile.email, encrypted: storedRefresh.startsWith("v1:") } });
 
     return json({ email: googleProfile.email });
   } catch (err) {

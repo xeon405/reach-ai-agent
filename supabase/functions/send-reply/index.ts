@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
+import { getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
+import { nextLifecycle } from "../_shared/policy.ts";
+import { insertAudit } from "../_shared/audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,33 +81,17 @@ serve(async (req) => {
     const toEmail = leadRow?.email;
     if (!toEmail) throw new Error("Lead email missing");
 
-    // Load sender profile + Gmail token
+    // Load sender profile + Gmail credentials (decrypted transparently)
     const { data: profile } = await admin
       .from("profiles")
-      .select("gmail_connected, name")
+      .select("gmail_connected, name, email, gmail_email")
       .eq("id", userId)
       .single();
     if (!profile?.gmail_connected) throw new Error("Gmail not connected. Connect it in Settings first.");
 
-    const { data: tokenRow } = await admin
-      .from("gmail_tokens")
-      .select("refresh_token")
-      .eq("profile_id", userId)
-      .single();
-    if (!tokenRow?.refresh_token) throw new Error("Gmail not connected. Connect it in Settings first.");
-
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-        client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-        refresh_token: tokenRow.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    });
-    const tokenData = await tokenRes.json();
-    if (tokenData.error) throw new Error("Token refresh failed: " + tokenData.error);
+    const tok = await getAccessToken(admin, userId);
+    if (!tok) throw new Error("Gmail not connected. Connect it in Settings first.");
+    const accessToken = tok.accessToken;
 
     // ✨ Regenerate: write a FRESH reply from the lead's latest actual message
     let replyBody = customBody;
@@ -114,7 +101,7 @@ serve(async (req) => {
       const q = `from:${toEmail} is:inbox after:${afterEpoch}`;
       const searchRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
-        { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       let theirWords = "";
       if (searchRes.ok) {
@@ -122,7 +109,7 @@ serve(async (req) => {
         if (hits[0]?.id) {
           const mRes = await fetch(
             `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
-            { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+            { headers: { Authorization: `Bearer ${accessToken}` } }
           );
           if (mRes.ok) theirWords = extractGmailBody((await mRes.json())?.payload).slice(0, 900);
         }
@@ -150,29 +137,27 @@ IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft,
     const origSubject = row.subject ?? "";
     const subject = origSubject.toLowerCase().startsWith("re:") ? origSubject : `Re: ${origSubject}`;
 
-    const raw = [
-      `To: ${toEmail}`,
-      `Subject: ${subject}`,
-      `Content-Type: text/plain; charset=utf-8`,
-      ``,
-      replyBody,
-      ``,
-      `--`,
-      profile.name ?? "",
-    ].join("\n");
+    const ids = await sendGmailRaw(accessToken, toBase64Url(raw));
 
-    const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ raw: toBase64Url(raw) }),
-    });
-    const sendJson = await sendRes.json();
-    if (!sendRes.ok) throw new Error(sendJson.error?.message ?? "Gmail send failed");
+    await admin.from("emails_sent").update({ ai_draft: null, gmail_message_id: ids.id, gmail_thread_id: ids.threadId }).eq("id", emailId);
 
-    await admin.from("emails_sent").update({ ai_draft: null }).eq("id", emailId);
+    // A manual owner send is an explicit HUMAN takeover of this conversation
+    const { data: leadFull } = await admin.from("leads").select("id, lifecycle").eq("email", toEmail).eq("user_id", userId).maybeSingle();
+    if (leadFull) {
+      await admin.from("emails_sent").update({ ai_paused: true }).eq("lead_id", leadFull.id);
+      await admin.from("leads").update({
+        conv_mode: "HUMAN",
+        lifecycle: nextLifecycle(leadFull.lifecycle ?? "", "human.takeover"),
+      }).eq("id", leadFull.id);
+      await admin.from("owner_alerts").insert({
+        user_id: userId, lead_id: leadFull.id, kind: "takeover",
+        title: `🤝 You took over the conversation`,
+        body: "AI stood down on this thread.",
+        priority: "normal",
+      });
+      await insertAudit(admin, { user_id: userId, campaign_id: null, lead_id: leadFull.id, event: "human.takeover", payload: { trigger: "manual_reply_send" } });
+    }
+    await insertAudit(admin, { user_id: userId, event: "email.sent", payload: { email_id: emailId, kind: "manual_reply", gmail_message_id: ids.id } });
 
     return json({ sent: true, to: toEmail });
   } catch (err) {
