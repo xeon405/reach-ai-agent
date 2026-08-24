@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as StatusRouteImport } from './routes/status'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -37,6 +38,11 @@ const ToolsRoute = ToolsRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StatsRoute = StatsRouteImport.update({
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
+  '/status': typeof StatusRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/billing': typeof AuthenticatedBillingRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
+  '/status': typeof StatusRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/billing': typeof AuthenticatedBillingRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
+  '/status': typeof StatusRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/security'
     | '/stats'
+    | '/status'
     | '/terms'
     | '/tools'
     | '/billing'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/security'
     | '/stats'
+    | '/status'
     | '/terms'
     | '/tools'
     | '/billing'
@@ -236,6 +247,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/security'
     | '/stats'
+    | '/status'
     | '/terms'
     | '/tools'
     | '/_authenticated/billing'
@@ -258,6 +270,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   SecurityRoute: typeof SecurityRoute
   StatsRoute: typeof StatsRoute
+  StatusRoute: typeof StatusRoute
   TermsRoute: typeof TermsRoute
   ToolsRoute: typeof ToolsRoute
   GmailCallbackRoute: typeof GmailCallbackRoute
@@ -277,6 +290,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stats': {
@@ -445,6 +465,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   SecurityRoute: SecurityRoute,
   StatsRoute: StatsRoute,
+  StatusRoute: StatusRoute,
   TermsRoute: TermsRoute,
   ToolsRoute: ToolsRoute,
   GmailCallbackRoute: GmailCallbackRoute,

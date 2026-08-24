@@ -1,0 +1,110 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-provider";
+import { Activity, RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+
+export const Route = createFileRoute("/status")({
+  component: StatusPage,
+});
+
+type CheckState = "checking" | "up" | "down";
+
+const FN = "https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1";
+
+function StatusPage() {
+  const [rows, setRows] = useState<{ name: string; detail: string; state: CheckState; ms: number | null }[]>([
+    { name: "Website", detail: "Landing page & app shell", state: "checking", ms: null },
+    { name: "Authentication", detail: "Supabase GoTrue login service", state: "checking", ms: null },
+    { name: "Database", detail: "Campaigns, leads, email history", state: "checking", ms: null },
+    { name: "AI Sending Engine", detail: "send-campaign edge function", state: "checking", ms: null },
+    { name: "AI Reply Engine", detail: "reply classification & drafts", state: "checking", ms: null },
+    { name: "Follow-up Autopilot", detail: "scheduled follow-up runner", state: "checking", ms: null },
+  ]);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+
+  async function ping(index: number, fn: () => Promise<unknown>) {
+    const t0 = performance.now();
+    try {
+      await fn();
+      setRows((r) => r.map((x, i) => (i === index ? { ...x, state: "up", ms: Math.round(performance.now() - t0) } : x)));
+    } catch {
+      setRows((r) => r.map((x, i) => (i === index ? { ...x, state: "down", ms: null } : x)));
+    }
+  }
+
+  async function runAll() {
+    setRows((r) => r.map((x) => ({ ...x, state: "checking" as const, ms: null })));
+    const key = { apikey: "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM", Authorization: "Bearer sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM" };
+
+    await Promise.allSettled([
+      ping(0, () => fetch(window.location.origin).then((res) => { if (!res.ok) throw new Error(); })),
+      ping(1, () => fetch("https://zvohdvopmvzsujktrdmu.supabase.co/auth/v1/health", { headers: key }).then((res) => { if (!res.ok) throw new Error(); })),
+      ping(2, () => supabase.rpc("public_stats")),
+      ping(3, () => fetch(`${FN}/support-chat`, { method: "POST", headers: { ...key, "Content-Type": "application/json" }, body: "{}" })),
+      ping(4, () => fetch(`${FN}/follow-up`, { method: "POST", headers: { ...key, "Content-Type": "application/json" }, body: "{}" })),
+      ping(5, () => fetch(`${FN}/gmail-oauth`, { method: "POST", headers: { ...key, "Content-Type": "application/json" }, body: "{}" })),
+    ]);
+    setCheckedAt(new Date());
+  }
+
+  useEffect(() => {
+    void runAll();
+    const t = setInterval(() => void runAll(), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const allUp = rows.every((r) => r.state === "up");
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
+        <Link to="/" className="text-lg font-bold">Outreach<span className="text-primary">AI</span></Link>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link to="/auth"><Button variant="outline" size="sm">Open app</Button></Link>
+        </div>
+      </header>
+
+      <section className="mx-auto max-w-2xl px-4 pt-10 text-center">
+        <div
+          className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ${
+            allUp ? "bg-success/15" : checkedAt ? "bg-warning/15" : "bg-primary/10"
+          }`}
+        >
+          <Activity className={`h-8 w-8 ${allUp ? "text-success" : checkedAt ? "text-warning" : "text-primary"}`} />
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          {checkedAt === null ? "Checking systems…" : allUp ? "All systems operational" : "Partial degradation"}
+        </h1>
+        <p className="mt-3 text-sm text-muted-foreground">Live health checks · auto-refreshes every 60 seconds</p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => void runAll()}>
+          <RefreshCw className="mr-2 h-3.5 w-3.5" /> Refresh now
+        </Button>
+      </section>
+
+      <section className="mx-auto max-w-2xl space-y-3 px-4 pb-24 pt-10">
+        {rows.map((r) => (
+          <div key={r.name} className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4 shadow-card">
+            <div className="flex items-center gap-4">
+              {r.state === "up" && <CheckCircle2 className="h-5 w-5 text-success" />}
+              {r.state === "down" && <XCircle className="h-5 w-5 text-destructive" />}
+              {r.state === "checking" && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+              <div>
+                <div className="text-sm font-semibold">{r.name}</div>
+                <div className="text-xs text-muted-foreground">{r.detail}</div>
+              </div>
+            </div>
+            <div className="text-xs font-medium text-muted-foreground">
+              {r.state === "up" ? `Operational${r.ms !== null ? ` · ${r.ms}ms` : ""}` : r.state === "down" ? "Investigating" : "…"}
+            </div>
+          </div>
+        ))}
+        <p className="pt-4 text-center text-xs text-muted-foreground">
+          Questions? Write to us — a human replies within 24 hours.
+        </p>
+      </section>
+    </div>
+  );
+}

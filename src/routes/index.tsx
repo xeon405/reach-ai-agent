@@ -224,15 +224,32 @@ function Landing() {
         </div>
       </section>
 
+      <section className="border-t border-border/50">
+        <div className="mx-auto max-w-3xl px-6 py-24 text-center">
+          <p className="text-2xl font-medium leading-relaxed tracking-tight md:text-3xl">
+            "I built OutreachAI because small teams deserve the same outreach firepower as
+            companies with entire SDR departments — <span className="text-primary">without the headcount or the $500/mo tools.</span>"
+          </p>
+          <div className="mt-8 flex items-center justify-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-primary font-bold text-primary-foreground">O</div>
+            <div className="text-left">
+              <div className="text-sm font-semibold">Founder, OutreachAI</div>
+              <div className="text-xs text-muted-foreground">Answers every support email personally · usually within 24h</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <footer className="border-t border-border/50">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 md:flex-row">
           <Logo />
-          <div className="flex gap-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
             <a href="#features" className="hover:text-foreground">Features</a>
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
+            <Link to="/security" className="hover:text-foreground">Security</Link>
+            <Link to="/status" className="hover:text-foreground">Status</Link>
             <Link to="/terms" className="hover:text-foreground">Terms</Link>
             <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link to="/security" className="hover:text-foreground">Security</Link>
             <Link to="/auth" className="hover:text-foreground">Log in</Link>
           </div>
           <p className="text-xs text-muted-foreground">© 2026 OutreachAI</p>
