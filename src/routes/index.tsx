@@ -174,6 +174,7 @@ function Landing() {
             {t("sec_pricing_sub")}
             </p>
           </div>
+          <p className="mb-10 text-center text-lg font-semibold text-primary">{t("pricing_anchor")}</p>
           <div className="grid gap-6 md:grid-cols-3">
             {plans.map((p) => (
               <div
