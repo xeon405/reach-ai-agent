@@ -76,7 +76,17 @@ function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">8. Contact</h2>
+            <h2 className="text-lg font-semibold">8. Refund Policy (Right of Return)</h2>
+            <p className="mt-2">Every paid plan includes a <strong>14-day money-back guarantee</strong> — no questions asked and regardless of reason. To request a refund, email support within 14 days of your payment and it will be processed in full. Additionally, if a hidden defect is discovered that we cannot fix promptly, you are entitled to a full refund at any point during your subscription.</p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold">9. Honest Pricing &amp; Exact Limits</h2>
+            <p className="mt-2">The price displayed for each plan is the complete price — there are no hidden fees, no overage charges, and no automatic surprise renewals beyond the stated subscription. Each plan states its exact daily and monthly email caps; the sending agent hard-stops at those limits. We do not use artificial scarcity, fake discounts, or invented urgency in any of our marketing.</p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold">10. Contact</h2>
             <p className="mt-2">Questions? Contact us at support@outreachai.app.</p>
           </section>
         </div>

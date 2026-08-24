@@ -16,6 +16,7 @@ import { Route as StatusRouteImport } from './routes/status'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as HonestyRouteImport } from './routes/honesty'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AgencyRouteImport } from './routes/agency'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
@@ -64,6 +65,11 @@ const SecurityRoute = SecurityRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HonestyRoute = HonestyRouteImport.update({
+  id: '/honesty',
+  path: '/honesty',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -140,6 +146,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
+  '/honesty': typeof HonestyRoute
   '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
+  '/honesty': typeof HonestyRoute
   '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
+  '/honesty': typeof HonestyRoute
   '/privacy': typeof PrivacyRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agency'
     | '/auth'
+    | '/honesty'
     | '/privacy'
     | '/security'
     | '/stats'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agency'
     | '/auth'
+    | '/honesty'
     | '/privacy'
     | '/security'
     | '/stats'
@@ -255,6 +266,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/agency'
     | '/auth'
+    | '/honesty'
     | '/privacy'
     | '/security'
     | '/stats'
@@ -279,6 +291,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AgencyRoute: typeof AgencyRoute
   AuthRoute: typeof AuthRouteWithChildren
+  HonestyRoute: typeof HonestyRoute
   PrivacyRoute: typeof PrivacyRoute
   SecurityRoute: typeof SecurityRoute
   StatsRoute: typeof StatsRoute
@@ -338,6 +351,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/honesty': {
+      id: '/honesty'
+      path: '/honesty'
+      fullPath: '/honesty'
+      preLoaderRoute: typeof HonestyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -482,6 +502,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AgencyRoute: AgencyRoute,
   AuthRoute: AuthRouteWithChildren,
+  HonestyRoute: HonestyRoute,
   PrivacyRoute: PrivacyRoute,
   SecurityRoute: SecurityRoute,
   StatsRoute: StatsRoute,

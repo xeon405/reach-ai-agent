@@ -302,6 +302,7 @@ function Landing() {
             <a href="#pricing" className="hover:text-foreground">{t("nav_pricing")}</a>
             <Link to="/security" className="hover:text-foreground">{t("footer_security")}</Link>
             <Link to="/status" className="hover:text-foreground">{t("footer_status")}</Link>
+            <Link to="/honesty" className="hover:text-foreground">Honesty</Link>
             <Link to="/terms" className="hover:text-foreground">{t("footer_terms")}</Link>
             <Link to="/privacy" className="hover:text-foreground">{t("footer_privacy")}</Link>
             <Link to="/auth" className="hover:text-foreground">{t("nav_login")}</Link>
