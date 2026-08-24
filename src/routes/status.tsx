@@ -102,7 +102,7 @@ function StatusPage() {
           </div>
         ))}
         <p className="pt-4 text-center text-xs text-muted-foreground">
-          Questions? Write to us — a human replies within 24 hours.
+          Questions? Contact our team — we respond within 24 hours.
         </p>
       </section>
     </div>

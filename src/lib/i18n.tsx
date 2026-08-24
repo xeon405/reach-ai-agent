@@ -36,7 +36,7 @@ const DICT: Record<string, { en: string; ar: string }> = {
     ar: "\"بنيتُ OutreachAI لأن الفرق الصغيرة تستحق نفس قوة التواصل التي تملكها الشركات بأقسام مبيعات كاملة — دون توظيف إضافي أو أدوات بـ 500 دولار شهرياً.\"",
   },
   founder_role: { en: "Founder, OutreachAI", ar: "المؤسس، OutreachAI" },
-  founder_note: { en: "Answers every support email personally · usually within 24h", ar: "يرد على كل رسائل الدعم بنفسه · عادة خلال 24 ساعة" },
+  founder_note: { en: "Our support team responds within 24 hours", ar: "فريق الدعم يرد خلال 24 ساعة" },
   // Footer
   footer_terms: { en: "Terms", ar: "الشروط" },
   footer_privacy: { en: "Privacy", ar: "الخصوصية" },

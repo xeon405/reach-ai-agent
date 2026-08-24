@@ -55,7 +55,7 @@ function Terms() {
             <h2 className="text-lg font-semibold">5. Subscriptions &amp; billing</h2>
             <p className="mt-2">
               Paid plans renew monthly until cancelled. You can cancel at any time from the Billing
-              page. Payments are processed by our merchant of record, Lemon Squeezy.
+              page. Payments are processed securely by our payment provider; we never see or store your full card details.
             </p>
           </section>
 
@@ -87,7 +87,14 @@ function Terms() {
 
           <section>
             <h2 className="text-lg font-semibold">10. Contact</h2>
-            <p className="mt-2">Questions? Contact us at outreachai.team@gmail.comsupportoutreachai.team@gmail.com.</p>
+            <p className="mt-2">
+              For questions, support, refunds, or any concern about these Terms, contact our team
+              at{" "}
+              <a href="mailto:outreachai.team@gmail.com" className="text-primary underline underline-offset-4">
+                outreachai.team@gmail.com
+              </a>
+              . We respond within 24 hours.
+            </p>
           </section>
         </div>
       </div>

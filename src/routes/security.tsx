@@ -103,7 +103,7 @@ function SecurityPage() {
           <Trash2 className="mx-auto h-6 w-6 text-muted-foreground" />
           <h2 className="mt-3 text-lg font-semibold">Questions about your data?</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Write to us and a human answers — usually within 24 hours.
+            Write to us — our team responds within 24 hours.
           </p>
           <a href="mailto:outreachai.team@gmail.comsupportoutreachai.team@gmail.com?subject=Security%20question">
             <Button className="mt-5 bg-gradient-primary">Contact us</Button>

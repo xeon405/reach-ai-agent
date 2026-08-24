@@ -43,7 +43,7 @@ const CHARTER = [
   {
     rule: "Our pricing is fully upfront",
     detail:
-      "The price on the card is the entire price. Checkout happens through Lemon Squeezy as our merchant of record with taxes shown before payment. No hidden fees, no bait-and-switch.",
+      "The price on the card is the entire price. All taxes and fees are shown clearly before you confirm payment. No hidden charges, no bait-and-switch.",
     link: { to: "/billing", label: "See plans" },
   },
   {
@@ -75,7 +75,7 @@ const LIMITATIONS = [
   "Email opens are not tracked yet; replies, bounces and sentiment are tracked accurately.",
   "Inbox placement depends partly on your own domain reputation. Our warm-up ramp protects you, but no tool can guarantee 100% inbox delivery.",
   "The Arabic experience currently covers the marketing site and emails to Arab leads; the app interior is English-only for now.",
-  "Support is currently answered personally by the founder — usually within 24 hours, occasionally slower across time zones.",
+  "Support is handled by our team — we respond within 24 hours, occasionally slightly slower across time zones.",
   "Scheduled sending delivers into each lead's local business morning; exact minute-level timing cannot be controlled.",
   "This is a young product. Some rough edges exist. We fix reported issues fast and publicly credit reporters.",
 ];
@@ -140,7 +140,7 @@ function HonestyPage() {
         </div>
 
         <p className="pt-2 text-center text-xs text-muted-foreground">
-          Found us falling short of any rule? <a href="mailto:outreachai.team@gmail.comsupportoutreachai.team@gmail.com" className="underline hover:text-foreground">Tell us directly</a> — we answer personally.
+          Found us falling short of any rule? <a href="mailto:outreachai.team@gmail.com?subject=Falling%20short%20of%20the%20Charter" className="underline hover:text-foreground">contact our team</a> and we will make it right.
         </p>
       </section>
     </div>
