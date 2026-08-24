@@ -78,9 +78,10 @@ function AuthenticatedLayout() {
             </SidebarGroup>
           </SidebarContent>
           <SidebarFooter className="border-t border-sidebar-border p-3">
-            <div className="mb-2 truncate px-2 text-xs text-sidebar-foreground/70">{user.email}</div>
-            <Button variant="ghost" size="sm" onClick={signOut} className="justify-start">
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
+            <div className="mb-2 truncate px-2 text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">{user.email}</div>
+            <Button variant="ghost" size="sm" onClick={signOut} className="w-full justify-start group-data-[collapsible=icon]:justify-center">
+              <LogOut className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
+              <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
             </Button>
           </SidebarFooter>
         </Sidebar>
