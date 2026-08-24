@@ -32,11 +32,11 @@ const DICT: Record<string, { en: string; ar: string }> = {
   start_free: { en: "Start free", ar: "ابدأ مجاناً" },
   // Founder note
   founder_quote: {
-    en: "\"I built OutreachAI because small teams deserve the same outreach firepower as companies with entire SDR departments — without the headcount or the $500/mo tools.\"",
-    ar: "\"بنيتُ OutreachAI لأن الفرق الصغيرة تستحق نفس قوة التواصل التي تملكها الشركات بأقسام مبيعات كاملة — دون توظيف إضافي أو أدوات بـ 500 دولار شهرياً.\"",
+    en: "\"We built OutreachAI because small teams deserve the same outreach firepower as companies with entire SDR departments — without expensive tools or extra hires.\"",
+    ar: "\"بنينا OutreachAI لأن الفرق الصغيرة تستحق نفس قوة التواصل التي تملكها الشركات بأقسام مبيعات كاملة — دون أدوات باهظة أو توظيف إضافي.\"",
   },
-  founder_role: { en: "Founder, OutreachAI", ar: "المؤسس، OutreachAI" },
-  founder_note: { en: "Our support team responds within 24 hours", ar: "فريق الدعم يرد خلال 24 ساعة" },
+  founder_role: { en: "The OutreachAI Team", ar: "فريق OutreachAI" },
+  founder_note: { en: "Our team responds to every email within 24 hours", ar: "فريق الدعم يرد خلال 24 ساعة" },
   // Footer
   footer_terms: { en: "Terms", ar: "الشروط" },
   footer_privacy: { en: "Privacy", ar: "الخصوصية" },
