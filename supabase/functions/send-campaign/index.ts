@@ -94,13 +94,14 @@ async function generateEmail(
   leadName: string,
   leadCompany: string,
   leadJobTitle: string,
-  userOffer: string
+  userOffer: string,
+  avoidHint = ""
 ): Promise<{ subject: string; body: string }> {
   const text = await groqChat([{
     role: "user",
     content: `Write a short cold email to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
 Our offer: ${sanitizeForPrompt(userOffer)}
-
+${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
 Return ONLY a JSON object with this exact format:
 {"subject": "...", "body": "..."}
 
@@ -347,14 +348,59 @@ serve(async (req) => {
 
     let sent = 0;
 
+// Lightweight spam scoring (same rules as the /spam-check edge function).
+// If an AI draft scores below 60, we regenerate ONCE with corrective hints
+// before sending — protecting domain reputation automatically.
+function localSpamScore(subject: string, body: string): { score: number; hint: string } {
+  let s = 100;
+  const hints: string[] = [];
+  const subjLower = subject.toLowerCase();
+  const bodyLower = body.toLowerCase();
+  const capsWords = subject.match(/\b[A-Z]{4,}\b/g) ?? [];
+  if (capsWords.length > 0) { s -= Math.min(20, capsWords.length * 8); hints.push("Do not use ANY all-caps words in the subject."); }
+  if (/[!]{2,}|\$\$\$/.test(subject)) { s -= 12; hints.push('Remove "!!!" or "$$$" from the subject.'); }
+  if (subjLower.length > 60) { s -= 8; hints.push("Subject must be under 50 characters."); }
+  if (/^(re:|fwd:)/.test(subjLower)) { s -= 15; hints.push('Never start the subject with "Re:" or "Fwd:".'); }
+  const triggers = ["free", "guarantee", "act now", "limited time", "risk-free", "urgent", "buy now",
+    "cheap", "loan", "click here", "100%", "make money", "congratulations", "dear friend", "instant"];
+  const found = triggers.filter((w) => bodyLower.includes(w));
+  if (found.length > 0) { s -= Math.min(25, found.length * 7); hints.push(`Never use these words in the body: ${found.join(", ")}.`); }
+  if (/^dear (sir|madam|friend)/im.test(body)) { s -= 8; hints.push('Greet by first name only — never "Dear Sir/Madam".'); }
+  const links = (body.match(/https?:\/\//g) ?? []).length;
+  if (links > 3) { s -= (links - 3) * 6; hints.push("Use at most 1-2 links in a cold email."); }
+  return { score: Math.max(0, Math.min(100, s)), hint: hints.join(" ") };
+}
+
     for (const lead of eligible) {
       try {
-        const { subject, body: aiBody } = await generateEmail(
+        let { subject, body: aiBody } = await generateEmail(
           lead.name ?? "there",
           lead.company ?? "your company",
           lead.job_title ?? "professional",
           profile.offer ?? "our service"
         );
+
+        // 🛡️ Pre-send deliverability guard: regenerate once if draft looks spammy
+        let check = localSpamScore(subject, aiBody);
+        if (check.score < 60 && check.hint) {
+          try {
+            const retry = await generateEmail(
+              lead.name ?? "there",
+              lead.company ?? "your company",
+              lead.job_title ?? "professional",
+              profile.offer ?? "our service",
+              check.hint
+            );
+            const retryCheck = localSpamScore(retry.subject, retry.body);
+            if (retryCheck.score > check.score) {
+              subject = retry.subject;
+              aiBody = retry.body;
+              check = retryCheck;
+            }
+          } catch {
+            // keep original draft if retry fails
+          }
+        }
 
         // Killer feature: every email is a live demo of the product
         const body = `${aiBody}
@@ -364,7 +410,8 @@ serve(async (req) => {
 ⚡ Fun fact: this email was found, written and sent automatically by an AI agent.
 Want an AI agent doing this for YOUR sales pipeline? → https://outreach-ochre-sigma.vercel.app
 
-Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
+Reply with UNSUBSCRIBE to opt out.
+One click: https://outreach-ochre-sigma.vercel.app/unsubscribe?l=${lead.id}&c=${lead.campaign_id ?? ""}${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
         await sendGmail(accessToken, buildRawEmail(lead.email, subject, body, profile.gmail_email ?? ""));
 

@@ -23,6 +23,8 @@ function CampaignsPage() {
   const [name, setName] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatedEmail, setGeneratedEmail] = useState("");
+  const [spam, setSpam] = useState<{ score: number; grade: string; issues: { message: string }[]; good: string[] } | null>(null);
+  const [checkingSpam, setCheckingSpam] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
   const [aiForm, setAiForm] = useState({
     leadName: "", leadCompany: "", leadJobTitle: "",
@@ -210,10 +212,39 @@ function CampaignsPage() {
                   <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
                     <div className="mb-2 text-xs font-semibold uppercase text-primary">Generated Email</div>
                     <p className="whitespace-pre-wrap text-sm leading-relaxed">{generatedEmail}</p>
-                    <Button className="mt-3 w-full" variant="outline"
-                      onClick={() => { navigator.clipboard.writeText(generatedEmail); toast.success("Copied!"); }}>
-                      Copy Email
-                    </Button>
+                    {spam && (
+                      <div className={`mt-3 rounded-lg border p-3 text-xs ${
+                        spam.score >= 70 ? "border-success/30 bg-success/10" : spam.score >= 50 ? "border-warning/40 bg-warning/10" : "border-destructive/40 bg-destructive/10"
+                      }`}>
+                        <div className="font-bold">🛡️ Deliverability score: {spam.score}/100 — {spam.grade}</div>
+                        {spam.issues?.length > 0 && (
+                          <ul className="mt-2 list-disc space-y-1 pl-4">
+                            {spam.issues.map((i: { message: string }, k: number) => <li key={k}>{i.message}</li>)}
+                          </ul>
+                        )}
+                        {spam.good?.length > 0 && <div className="mt-2 opacity-80">✓ {spam.good.join(" · ")}</div>}
+                      </div>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <Button className="flex-1" variant="outline" disabled={checkingSpam}
+                        onClick={async () => {
+                          setCheckingSpam(true);
+                          try {
+                            const { data } = await supabase.functions.invoke("spam-check", {
+                              body: { subject: "", body: generatedEmail },
+                            });
+                            if (!data || data.error) throw new Error();
+                            setSpam(data);
+                          } catch { toast.error("Spam check failed"); }
+                          setCheckingSpam(false);
+                        }}>
+                        {checkingSpam ? "Checking…" : "🛡️ Check spam score"}
+                      </Button>
+                      <Button className="flex-1" variant="outline"
+                        onClick={() => { navigator.clipboard.writeText(generatedEmail); toast.success("Copied!"); }}>
+                        Copy Email
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

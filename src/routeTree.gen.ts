@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StatusRouteImport } from './routes/status'
@@ -30,6 +31,11 @@ import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
 
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ToolsRoute = ToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
@@ -140,6 +146,7 @@ export interface FileRoutesByFullPath {
   '/status': typeof StatusRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/status': typeof StatusRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/status': typeof StatusRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -207,6 +216,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/terms'
     | '/tools'
+    | '/unsubscribe'
     | '/billing'
     | '/campaigns'
     | '/dashboard'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/terms'
     | '/tools'
+    | '/unsubscribe'
     | '/billing'
     | '/campaigns'
     | '/dashboard'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/terms'
     | '/tools'
+    | '/unsubscribe'
     | '/_authenticated/billing'
     | '/_authenticated/campaigns'
     | '/_authenticated/dashboard'
@@ -273,11 +285,19 @@ export interface RootRouteChildren {
   StatusRoute: typeof StatusRoute
   TermsRoute: typeof TermsRoute
   ToolsRoute: typeof ToolsRoute
+  UnsubscribeRoute: typeof UnsubscribeRoute
   GmailCallbackRoute: typeof GmailCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tools': {
       id: '/tools'
       path: '/tools'
@@ -468,6 +488,7 @@ const rootRouteChildren: RootRouteChildren = {
   StatusRoute: StatusRoute,
   TermsRoute: TermsRoute,
   ToolsRoute: ToolsRoute,
+  UnsubscribeRoute: UnsubscribeRoute,
   GmailCallbackRoute: GmailCallbackRoute,
 }
 export const routeTree = rootRouteImport
