@@ -73,6 +73,18 @@ function buildRawEmail(to: string, subject: string, body: string, fromEmail: str
   return toBase64Url(email);
 }
 
+function stripQuoted(text: string): string {
+  const markers = [
+    /\n?On .{4,80} (wrote|said):[\s\S]*$/i,
+    /\n?-+\s?(Forwarded|Original)\s?-*[\s\S]*$/i,
+    /\n?From:\s[^\n]{3,120}\n(Sent|Date|To|Subject):[\s\S]*$/i,
+  ];
+  let out = text;
+  for (const m of markers) out = out.replace(m, "");
+  out = out.split("\n").filter((l) => !/^\s*>/.test(l)).join("\n");
+  return out.trim();
+}
+
 async function sendGmail(accessToken: string, raw: string): Promise<void> {
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
@@ -124,6 +136,7 @@ serve(async (req) => {
     // -----------------------------------------------------------------
     let repliesFound = 0;
     let unsubscribes = 0;
+    let groqFail = "";
 
     try {
       const { data: openEmails } = await supabase
@@ -189,7 +202,7 @@ serve(async (req) => {
         if (!profile || !refreshToken || !lead?.email || lead.unsubscribed) continue;
 
         const afterEpoch = Math.floor(new Date(email.sent_at).getTime() / 1000);
-        const q = `from:${lead.email} is:inbox after:${afterEpoch}`;
+        const q = `from:${lead.email} in:anywhere -category:promotions after:${afterEpoch}`;
         const searchRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
           { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
@@ -434,7 +447,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
     try {
       const { data: threads } = await supabase
         .from("emails_sent")
-        .select("id, user_id, campaign_id, subject, sent_at, ai_turns, last_lead_msg_at, last_ai_msg_at, ai_paused, replied, autoreplied, lead:leads(id, email, name, company, job_title, country, unsubscribed)")
+        .select("id, user_id, campaign_id, subject, sent_at, ai_turns, last_lead_msg_at, last_ai_msg_at, ai_paused, replied, autoreplied, reply_sentiment, lead:leads(id, email, name, company, job_title, country, unsubscribed)")
         .eq("ai_paused", false)
         .lt("ai_turns", 3)
         .order("sent_at", { ascending: false })
@@ -451,6 +464,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
         ? await supabase.from("campaigns").select("id, autopilot").in("id", campIds)
         : { data: [] };
       const convCampMap = Object.fromEntries((convCamps ?? []).map((c: { id: string; autopilot: boolean }) => [c.id, c.autopilot]));
+      const handledMsgs = new Set<string>();
 
       for (const t of threads ?? []) {
         const lead = Array.isArray(t.lead) ? t.lead[0] : t.lead;
@@ -464,7 +478,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             t.last_lead_msg_at ?? t.sent_at
           ).getTime() / 1000) + 1;
           const sRes = await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(`from:${lead.email} is:inbox after:${afterEpoch}`)}&maxResults=1`,
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(`from:${lead.email} in:anywhere`)}&maxResults=3`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
           if (!sRes.ok) continue;
@@ -498,9 +512,11 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           if (!mRes.ok) continue;
           const msg = await mRes.json();
           const msgDateMs = Number(msg.internalDate ?? Date.now());
-          if (t.last_lead_msg_at && msgDateMs <= new Date(t.last_lead_msg_at).getTime()) continue;
+          if (msgDateMs <= new Date(t.last_lead_msg_at ?? t.sent_at).getTime()) continue;
+          if (handledMsgs.has(`${lead.email}:${hits[0].id}`)) continue;
+          handledMsgs.add(`${lead.email}:${hits[0].id}`);
 
-          const theirWords = extractGmailBody(msg.payload).slice(0, 900);
+          const theirWords = stripQuoted(extractGmailBody(msg.payload)).slice(0, 900);
           const subj = (msg.payload?.headers ?? []).find((h: { name: string }) => h.name === "Subject")?.value ?? "";
           const low = `${subj}\n${theirWords}`.toLowerCase();
 
@@ -524,7 +540,10 @@ You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${p
 Booking link: ${profile.booking_link} — suggest it naturally when timing fits.` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
 
 Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Address anything specific they asked. Ask exactly one question. Sign off as "Best regards". Return only the reply text.`,
-            }], { maxTokens: 500, temperature: 0.9 }).catch(() => null);
+            }], { maxTokens: 500, temperature: 0.9 }).catch((ge: unknown) => {
+              groqFail = String(ge).slice(0, 200);
+              return null;
+            });
           }
 
           if (aiReply?.trim()) {
@@ -625,7 +644,7 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
       .lte("follow_up_at", now);
 
     if (!emails || emails.length === 0) {
-      return json({ message: "No follow-ups due", repliesFound, unsubscribes });
+      return json({ message: "No follow-ups due", repliesFound, unsubscribes, groqFail: groqFail || undefined });
     }
 
     // Fetch profiles separately (avoids the broken FK embed)
