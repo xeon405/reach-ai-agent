@@ -75,7 +75,7 @@ export function SupportChat() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open AI help chat"
-          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-gradient-to-br from-zinc-800 to-black p-3.5 text-white shadow-xl shadow-black/40 transition-transform hover:scale-105 active:scale-95"
+          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-gradient-primary p-3.5 text-white shadow-xl shadow-black/40 transition-transform hover:scale-105 active:scale-95"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path
@@ -91,7 +91,7 @@ export function SupportChat() {
 
       {open && (
         <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 flex h-[520px] max-h-[80vh] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-          <div className="flex items-center justify-between bg-gradient-to-r from-zinc-800 to-neutral-900 px-4 py-3">
+          <div className="flex items-center justify-between bg-gradient-primary px-4 py-3">
             <div>
               <div className="text-sm font-semibold text-white">OutreachAI Guide</div>
               <div className="flex items-center gap-1.5 text-xs text-white/80">
@@ -163,7 +163,7 @@ export function SupportChat() {
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
-                className="rounded-xl bg-gradient-to-r from-zinc-800 to-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                className="rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
               >
                 ➤
               </button>
