@@ -271,7 +271,7 @@ You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${p
 Their booking link: ${profile.booking_link} — invite them to book there.` : ""}
 
 Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero fluff.${sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.${(email as { ai_draft?: string }).ai_draft ? `\nIMPORTANT: You already sent them this earlier reply: "${sanitizeForPrompt((email as { ai_draft?: string }).ai_draft!, 300)}" — your new reply must use completely different wording, structure and opening line.` : ""}`,
             }], { maxTokens: 600, temperature: 0.9 });
           } catch (draftErr) {
             console.error("[follow-up] Draft failed:", draftErr instanceof Error ? draftErr.message : draftErr);

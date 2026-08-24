@@ -136,7 +136,8 @@ You originally offered: ${sanitizeForPrompt(prof?.offer ?? "our services")}${pro
 Their booking link: ${prof.booking_link} — invite them to book there.` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${prof?.name || "the sender"}. Warm, confident, zero fluff.
-Rules: respond to something SPECIFIC they said. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they said. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Sign off as "Best regards". Return only the reply text.${row.ai_draft ? `
+IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft, 300)}" — write COMPLETELY different wording, structure and opening line.` : ""}`,
       }], { maxTokens: 600, temperature: 0.9 });
       if (fresh?.trim()) {
         replyBody = fresh.trim();
