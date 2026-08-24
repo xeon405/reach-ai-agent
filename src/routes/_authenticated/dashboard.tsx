@@ -16,6 +16,7 @@ type Campaign = { id: string; name: string; status: string };
 type Activity = { id: string; subject: string | null; sent_at: string; lead?: { name: string | null; email: string | null } | null };
 
 function Dashboard() {
+  const { t } = useLang();
   const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({ leads: 0, emails: 0, replies: 0, meetings: 0 });
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -55,20 +56,20 @@ function Dashboard() {
 
   const cards = [
     { label: "Total Leads Found", value: stats.leads, icon: Users, color: "text-primary" },
-    { label: "Emails Sent", value: stats.emails, icon: Send, color: "text-primary-glow" },
+    { label: t("stat_emails"), value: stats.emails, icon: Send, color: "text-primary-glow" },
     { label: "Replies Received", value: stats.replies, icon: Reply, color: "text-success" },
-    { label: "🏆 Meetings Won", value: stats.meetings, icon: Trophy, color: "text-success" },
+    { label: `🏆 ${t("card_won")}`, value: stats.meetings, icon: Trophy, color: "text-success" },
   ];
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Your AI agent activity at a glance.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("app_dash")}</h1>
+          <p className="text-sm text-muted-foreground">{t("dash_sub")}</p>
         </div>
         <Button asChild className="bg-gradient-primary shadow-glow">
-          <Link to="/campaigns"><Plus className="mr-2 h-4 w-4" /> Add New Campaign</Link>
+          <Link to="/campaigns"><Plus className="mr-2 h-4 w-4" /> {t("dash_add")}</Link>
         </Button>
       </div>
 
@@ -88,7 +89,7 @@ function Dashboard() {
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm text-muted-foreground">Active campaign</div>
+              <div className="text-sm text-muted-foreground">{t("dash_active")}</div>
               <div className="mt-1 text-xl font-semibold">{campaign.name}</div>
             </div>
             <div className="flex items-center gap-3">
@@ -144,11 +145,11 @@ function Dashboard() {
       )}
 
       <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-        <h2 className="mb-4 text-lg font-semibold">Recent activity</h2>
+        <h2 className="mb-4 text-lg font-semibold">{t("dash_activity")}</h2>
         {activity.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
             <Mail className="mx-auto mb-3 h-8 w-8 opacity-50" />
-            No emails sent yet — your AI agent is warming up.
+            {t("dash_empty")}
           </div>
         ) : (
           <ul className="divide-y divide-border">

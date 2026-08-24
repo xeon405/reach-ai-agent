@@ -61,17 +61,47 @@ async function refreshGmailToken(refreshToken: string): Promise<string> {
   return data.access_token;
 }
 
-function buildRawEmail(to: string, subject: string, body: string, fromEmail: string): string {
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function buildHtmlBody(plain: string): string {
+  return `<html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222">${escapeHtml(plain).replace(/\n/g, "<br>")}</body></html>`;
+}
+
+function buildRawEmail(
+  to: string,
+  subject: string,
+  plainBody: string,
+  htmlBody: string,
+  fromEmail: string,
+  unsubUrl: string
+): string {
+  const boundary = "oai-alt-" + Math.random().toString(36).slice(2);
   const email = [
     `To: ${to}`,
     `Subject: ${subject}`,
-    `Content-Type: text/plain; charset=utf-8`,
-    `List-Unsubscribe: <mailto:${fromEmail}?subject=unsubscribe>`,
+    `MIME-Version: 1.0`,
+    `List-Unsubscribe: <${unsubUrl}>, <mailto:${fromEmail}?subject=unsubscribe>`,
+    `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ``,
-    body,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset=utf-8`,
+    `Content-Transfer-Encoding: 8bit`,
+    ``,
+    plainBody,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/html; charset=utf-8`,
+    `Content-Transfer-Encoding: 8bit`,
+    ``,
+    htmlBody,
+    ``,
+    `--${boundary}--`,
     ``,
     `--`,
-    `You received this one-time email. Reply with UNSUBSCRIBE and you will not be contacted again.`,
+    `You received this one-time email. Reply with UNSUBSCRIBE or use the link above to opt out.`,
   ].join("\n");
   return toBase64Url(email);
 }
@@ -441,18 +471,28 @@ Want an AI agent doing this for YOUR sales pipeline? → https://outreach-ochre-
 Reply with UNSUBSCRIBE to opt out.
 One click: https://outreach-ochre-sigma.vercel.app/unsubscribe?l=${lead.id}&c=${lead.campaign_id ?? ""}${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
-        await sendGmail(accessToken, buildRawEmail(lead.email, subject, body, profile.gmail_email ?? ""));
+        // insert row first so we get an id for the open-tracking pixel
+        const { data: emailRow, error: insertErr } = await supabase
+          .from("emails_sent")
+          .insert({
+            user_id: userId,
+            lead_id: lead.id,
+            campaign_id: campaignId,
+            subject,
+            body,
+            follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+            sequence: 1,
+            follow_up_sent: false,
+          })
+          .select("id")
+          .single();
 
-        await supabase.from("emails_sent").insert({
-          user_id: userId,
-          lead_id: lead.id,
-          campaign_id: campaignId,
-          subject,
-          body,
-          follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-          sequence: 1,
-          follow_up_sent: false,
-        });
+        const unsubUrl = `https://outreach-ochre-sigma.vercel.app/unsubscribe?l=${lead.id}&c=${lead.campaign_id ?? ""}`;
+        const htmlPart = emailRow?.id && !insertErr
+          ? buildHtmlBody(body).replace("</body>", `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${emailRow.id}" width="1" height="1" alt="" style="display:none;border:0" /></body>`)
+          : buildHtmlBody(body);
+
+        await sendGmail(accessToken, buildRawEmail(lead.email, subject, body, htmlPart, profile.gmail_email ?? "", unsubUrl));
 
         await supabase.from("leads").update({ status: "emailed" }).eq("id", lead.id);
 

@@ -72,9 +72,9 @@ const CHARTER = [
 
 const LIMITATIONS = [
   "AI-written drafts are strong but not perfect — we recommend reading the one-click AI replies before sending them.",
-  "Email opens are not tracked yet; replies, bounces and sentiment are tracked accurately.",
+  "Open tracking uses a standard invisible pixel, so opens are approximate: contacts using strict privacy tools or text-only inboxes may not be counted. Replies, bounces and sentiment are tracked accurately.",
   "Inbox placement depends partly on your own domain reputation. Our warm-up ramp protects you, but no tool can guarantee 100% inbox delivery.",
-  "The Arabic experience currently covers the marketing site and emails to Arab leads; the app interior is English-only for now.",
+  "The Arabic experience currently covers the marketing site and emails to Arab leads; parts of the app interior remain English-only for now.",
   "Support is handled by our team — we respond within 24 hours, occasionally slightly slower across time zones.",
   "Scheduled sending delivers into each lead's local business morning; exact minute-level timing cannot be controlled.",
   "This is a young product. Some rough edges exist. We fix reported issues fast and publicly credit reporters.",

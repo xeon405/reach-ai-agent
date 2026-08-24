@@ -18,15 +18,16 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 const nav = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Leads", url: "/leads", icon: Users },
-  { title: "Campaigns", url: "/campaigns", icon: Megaphone },
-  { title: "Emails Sent", url: "/emails", icon: Mail },
-  { title: "Billing", url: "/billing", icon: CreditCard },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { tKey: "app_dash", url: "/dashboard", icon: LayoutDashboard },
+  { tKey: "app_leads", url: "/leads", icon: Users },
+  { tKey: "app_campaigns", url: "/campaigns", icon: Megaphone },
+  { tKey: "app_emails", url: "/emails", icon: Mail },
+  { tKey: "app_billing", url: "/billing", icon: CreditCard },
+  { tKey: "app_settings", url: "/settings", icon: Settings },
 ] as const;
 
 function AuthenticatedLayout() {
+  const { t } = useLang();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -68,7 +69,7 @@ function AuthenticatedLayout() {
                       <SidebarMenuButton asChild isActive={path === item.url}>
                         <Link to={item.url} className="flex items-center gap-2">
                           <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
+                          <span>{t(item.tKey)}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -80,7 +81,7 @@ function AuthenticatedLayout() {
           <SidebarFooter className="border-t border-sidebar-border p-3">
             <div className="mb-2 truncate px-2 text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">{user.email}</div>
             <Button variant="ghost" size="sm" onClick={signOut} className="w-full justify-start group-data-[collapsible=icon]:justify-center">
-              <LogOut className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
+              <LogOut className="group-data-[collapsible=icon]:mr-0 mr-2 h-4 w-4" />
               <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
             </Button>
           </SidebarFooter>

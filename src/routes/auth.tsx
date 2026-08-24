@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { useLang } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ const schema = z.object({
 });
 
 function AuthPage() {
+  const { t } = useLang();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -103,8 +105,8 @@ function AuthPage() {
         <div className="rounded-2xl border border-border bg-card p-8 shadow-card">
           <Tabs defaultValue="signin">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign in</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
+              <TabsTrigger value="signin">{t("auth_signin")}</TabsTrigger>
+              <TabsTrigger value="signup">{t("auth_signup")}</TabsTrigger>
             </TabsList>
 
             <Button
@@ -114,19 +116,19 @@ function AuthPage() {
               onClick={handleGoogle}
               disabled={loading}
             >
-              <GoogleIcon /> Continue with Google
+              <GoogleIcon /> {t("auth_google")}
             </Button>
 
             <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="h-px flex-1 bg-border" /> OR <div className="h-px flex-1 bg-border" />
+              <div className="h-px flex-1 bg-border" /> {t("auth_or")} <div className="h-px flex-1 bg-border" />
             </div>
 
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
-                <Field id="email" label="Email" value={email} onChange={setEmail} type="email" />
-                <Field id="password" label="Password" value={password} onChange={setPassword} type="password" />
+                <Field id="email" label={t("auth_email")} value={email} onChange={setEmail} type="email" />
+                <Field id="password" label={t("auth_pass")} value={password} onChange={setPassword} type="password" />
                 <Button type="submit" className="w-full bg-gradient-primary shadow-glow" disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Sign in
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t("auth_signin")}
                 </Button>
               </form>
             </TabsContent>

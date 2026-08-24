@@ -24,40 +24,40 @@ export const Route = createFileRoute("/")({
 const features = [
   {
     icon: Bot,
-    title: "AI Finds Leads",
-    desc: "Searches globally for your ideal customers automatically — no list-buying, no scraping headaches.",
+    tKey: "feat1_tt",
+    dKey: "feat1_dd",
   },
   {
     icon: Mail,
-    title: "Personalised Emails",
-    desc: "Claude AI writes a unique, on-brand email for every single lead. No templates, no spray-and-pray.",
+    tKey: "feat2_tt",
+    dKey: "feat2_dd",
   },
   {
     icon: Repeat,
-    title: "Auto Follow-ups",
-    desc: "Follows up every 3 days until they reply or politely opt out. Pipeline never goes cold.",
+    tKey: "feat3_tt",
+    dKey: "feat3_dd",
   },
 ];
 
 const plans = [
   {
-    name: "Starter",
+    nameKey: "plan_starter",
     price: 37,
-    cap: "50 emails/day · 1 active campaign",
-    perks: ["AI finds & writes everything", "Auto follow-ups", "Warm-up protection", "Spam guard"],
+    capKey: "cap_starter",
+    perkKeys: ["perk_ai","perk_fu","perk_warm","perk_spam"],
   },
   {
-    name: "Growth",
+    nameKey: "plan_growth",
     price: 79,
-    cap: "200 emails/day · 5 active campaigns",
-    perks: ["Everything in Starter", "5 campaigns", "Reply detection + AI drafts", "Smart timezone sending"],
+    capKey: "cap_growth",
+    perkKeys: ["perk_ai","perk_5camp","perk_reply","perk_tz"],
     featured: true,
   },
   {
-    name: "Agency",
+    nameKey: "plan_agency",
     price: 149,
-    cap: "500 emails/day · unlimited campaigns",
-    perks: ["Unlimited campaigns", "Arabic emails for Gulf leads", "Bulk import 500 at once", "Priority support"],
+    capKey: "cap_agency",
+    perkKeys: ["perk_unlim","perk_arabic","perk_bulk","badge_support"],
   },
 ];
 
@@ -79,9 +79,9 @@ function Landing() {
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#features" className="hover:text-foreground">{t("nav_features")}</a>
             <a href="#pricing" className="hover:text-foreground">{t("nav_pricing")}</a>
-            <Link to="/tools" className="hover:text-foreground">Free tools</Link>
-            <Link to="/agency" className="font-medium text-primary hover:text-foreground">Hire us — done-for-you</Link>
-            <Link to="/stats" className="hover:text-foreground">Live stats</Link>
+            <Link to="/tools" className="hover:text-foreground">{t("nav_tools")}</Link>
+            <Link to="/agency" className="font-medium text-primary hover:text-foreground">{t("nav_hire")}</Link>
+            <Link to="/stats" className="hover:text-foreground">{t("nav_stats")}</Link>
           </nav>
           <div className="flex items-center gap-2">
             <LangToggle />
@@ -127,13 +127,13 @@ function Landing() {
             </Button>
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> Your data stays yours</span>
-            <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> No credit card</span>
-            <span className="flex items-center gap-1.5"><Trash2 className="h-4 w-4 text-primary" /> Delete anytime, for real</span>
-            <span className="flex items-center gap-1.5"><MailX className="h-4 w-4 text-primary" /> Unsubscribe always honored</span>
+            <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> {t("chip_data")}</span>
+            <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> {t("chip_card")}</span>
+            <span className="flex items-center gap-1.5"><Trash2 className="h-4 w-4 text-primary" /> {t("chip_delete")}</span>
+            <span className="flex items-center gap-1.5"><MailX className="h-4 w-4 text-primary" /> {t("chip_unsub")}</span>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            See our <Link to="/stats" className="underline hover:text-foreground">live numbers</Link> — we hide nothing.
+            {t("stats_pre")}<Link to="/stats" className="underline hover:text-foreground">{t("stats_link")}</Link>{t("stats_post")}
           </p>
         </div>
       </section>
@@ -151,15 +151,15 @@ function Landing() {
         <div className="grid gap-6 md:grid-cols-3">
           {features.map((f, i) => (
             <div
-              key={f.title}
+              key={f.tKey}
               className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-card transition-transform hover:-translate-y-1"
               style={{ animation: `fadeUp 0.6s ease ${i * 0.1}s both` }}
             >
               <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
                 <f.icon className="h-6 w-6 text-primary-foreground" />
               </div>
-              <h3 className="text-xl font-semibold">{f.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{f.desc}</p>
+              <h3 className="text-xl font-semibold">{t(f.tKey)}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t(f.dKey)}</p>
             </div>
           ))}
         </div>
@@ -178,7 +178,7 @@ function Landing() {
           <div className="grid gap-6 md:grid-cols-3">
             {plans.map((p) => (
               <div
-                key={p.name}
+                key={p.nameKey}
                 className={`relative rounded-2xl border bg-card p-8 shadow-card ${
                   p.featured
                     ? "border-primary shadow-glow ring-1 ring-primary/40"
@@ -190,17 +190,17 @@ function Landing() {
                     {t("plan_popular")}
                   </div>
                 )}
-                <h3 className="text-lg font-semibold">{p.name}</h3>
+                <h3 className="text-lg font-semibold">{t(p.nameKey)}</h3>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-5xl font-bold tracking-tight">${p.price}</span>
                   <span className="text-muted-foreground">{t("per_month")}</span>
                 </div>
-                <p className="mt-2 text-sm font-medium text-primary">{p.cap}</p>
+                <p className="mt-2 text-sm font-medium text-primary">{t(p.capKey)}</p>
                 <ul className="mt-6 space-y-3 text-sm">
-                  {p.perks.map((perk) => (
-                    <li key={perk} className="flex items-start gap-2">
+                  {(p.perkKeys).map((perkKey) => (
+                    <li key={perkKey} className="flex items-start gap-2">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                      <span>{perk}</span>
+                      <span>{t(perkKey)}</span>
                     </li>
                   ))}
                 </ul>
@@ -220,7 +220,7 @@ function Landing() {
             <span className="flex items-center gap-2">{t("badge_support")}</span>
           </div>
           <p className="mt-8 text-center text-sm text-muted-foreground">
-            Not ready to pay? The free plan gives you <strong className="text-foreground">10 emails/day, forever</strong> — no card needed.
+            {t("free_pre")}<strong className="text-foreground">{t("free_num")}</strong>{t("free_post")}
           </p>
           <p className="mt-4 text-center text-sm">
             <Link to="/security" className="text-primary underline underline-offset-4 hover:opacity-80">
@@ -254,7 +254,7 @@ function Landing() {
               <>
                 <div className="mb-10 text-center">
                   <h2 className="text-3xl font-bold tracking-tight md:text-4xl">🧮 What could this do for YOU?</h2>
-                  <p className="mx-auto mt-3 max-w-xl text-muted-foreground">Drag the sliders — see your potential pipeline in real numbers.</p>
+                  <p className="mx-auto mt-3 max-w-xl text-muted-foreground">{t("roi_sub")}</p>
                 </div>
                 <div className="grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2">
                   <div className="space-y-6">
@@ -264,17 +264,17 @@ function Landing() {
                     <Slider label="Average deal value" value={deal} set={setDeal} min={100} max={10000} suffix="$" />
                   </div>
                   <div className="flex flex-col justify-center rounded-2xl bg-gradient-primary p-8 text-center text-primary-foreground">
-                    <div className="text-sm font-medium opacity-80">Your projected results</div>
+                    <div className="text-sm font-medium opacity-80">{t("roi_result")}</div>
                     <div className="mt-4 text-5xl font-extrabold tracking-tight">{monthlyMeetings}</div>
-                    <div className="text-sm opacity-90">meetings booked / month</div>
+                    <div className="text-sm opacity-90">{t("roi_meetings")}</div>
                     <div className="mt-6 border-t border-white/20 pt-5">
                       <div className="text-2xl font-bold">${revenue.toLocaleString()}</div>
-                      <div className="text-xs opacity-80">new monthly revenue potential</div>
+                      <div className="text-xs opacity-80">{t("roi_rev")}</div>
                     </div>
                   </div>
                 </div>
                 <p className="mt-6 text-center text-xs text-muted-foreground">
-                  Estimates based on typical cold-email performance. Your agent works daily to beat these numbers.
+                  {t("roi_note")}
                 </p>
               </>
             );
