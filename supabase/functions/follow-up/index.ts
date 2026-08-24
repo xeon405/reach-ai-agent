@@ -517,6 +517,10 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           handledMsgs.add(`${lead.email}:${hits[0].id}`);
 
           const theirWords = stripQuoted(extractGmailBody(msg.payload)).slice(0, 900);
+          if (!theirWords.trim()) {
+            await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+            continue;
+          }
           const subj = (msg.payload?.headers ?? []).find((h: { name: string }) => h.name === "Subject")?.value ?? "";
           const low = `${subj}\n${theirWords}`.toLowerCase();
 
@@ -526,7 +530,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           if (/unsubscribe|opt.?out|remove me|stop emailing|do not email/i.test(low)) {
             await supabase.from("leads").update({ unsubscribed: true, status: "unsubscribed" }).eq("id", lead.id);
             ownerNote = `🚫 ${lead.name ?? lead.email} asked to stop — suppressed permanently.\n→ https://outreach-ochre-sigma.vercel.app/leads`;
-          } else if (/calendar|book(ing)? a? ?call|schedule a|zoom|google meet|teams link|available (at|on|tomorrow|mon|tue|wed|thu|fri)|what time works/i.test(low)) {
+          } else if (/calendar|book(ing)?|\bcall\b|schedule|zoom|google meet|teams link|(mon|tue|wed|thu|fri|sat|sun)day|\b\d{1,2}(:\d{2})?\s?(am|pm)\b|what time works|i'?m free|availability/i.test(low)) {
             await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
             ownerNote = `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.\n→ https://outreach-ochre-sigma.vercel.app/emails`;
           } else {
