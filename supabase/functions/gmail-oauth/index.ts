@@ -31,6 +31,21 @@ serve(async (req) => {
   try {
     const userId = await getAuthedUserId(req);
     const body = await req.json().catch(() => ({}));
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Disconnect action: wipe vault row + clear profile flags
+    if (body?.action === "disconnect") {
+      await supabase.from("gmail_tokens").delete().eq("profile_id", userId);
+      await supabase.from("profiles").update({
+        gmail_connected: false,
+        gmail_email: null,
+      }).eq("id", userId);
+      return json({ disconnected: true });
+    }
+
     const { code } = body ?? {};
     if (!code) throw new Error("Missing authorization code");
 
@@ -62,21 +77,6 @@ serve(async (req) => {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     const googleProfile = await profileRes.json();
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    // Disconnect action: wipe vault row + clear profile flags
-    if (body?.action === "disconnect") {
-      await supabase.from("gmail_tokens").delete().eq("profile_id", userId);
-      await supabase.from("profiles").update({
-        gmail_connected: false,
-        gmail_email: null,
-      }).eq("id", userId);
-      return json({ disconnected: true });
-    }
 
     const { error: updateError } = await supabase.from("profiles").update({
       gmail_connected: true,

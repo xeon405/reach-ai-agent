@@ -48,3 +48,6 @@ supabase/.temp/
 
 .new-token
 .new-token.txt
+android-app/builddrive.js
+android-app/drive.js
+*.log
