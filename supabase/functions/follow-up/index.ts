@@ -424,6 +424,152 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
       }
     }
 
+    // -----------------------------------------------------------------
+    // 🔄 CONVERSATION MODE: multi-turn AI handling of live threads.
+    // For every outreach email where the AI (or lead) is already engaged,
+    // detect brand-new lead messages, reply personally up to 3 turns,
+    // step back permanently when the owner replies manually, escalate
+    // booking intent to the owner, and suppress on opt-out.
+    // -----------------------------------------------------------------
+    try {
+      const { data: threads } = await supabase
+        .from("emails_sent")
+        .select("id, user_id, campaign_id, subject, sent_at, ai_turns, last_lead_msg_at, last_ai_msg_at, ai_paused, replied, autoreplied, lead:leads(id, email, name, company, job_title, country, unsubscribed)")
+        .eq("ai_paused", false)
+        .lt("ai_turns", 3)
+        .order("sent_at", { ascending: false })
+        .limit(40);
+
+      const convUserIds = [...new Set((threads ?? []).map((t) => t.user_id))];
+      const { data: convProfiles } = convUserIds.length
+        ? await supabase.from("profiles").select("*").in("id", convUserIds)
+        : { data: [] };
+      const convProfileMap = Object.fromEntries((convProfiles ?? []).map((p) => [p.id, p]));
+      const convTokens = await fetchTokenMap(supabase, convUserIds);
+      const campIds = [...new Set((threads ?? []).map((t) => t.campaign_id).filter(Boolean))];
+      const { data: convCamps } = campIds.length
+        ? await supabase.from("campaigns").select("id, autopilot").in("id", campIds)
+        : { data: [] };
+      const convCampMap = Object.fromEntries((convCamps ?? []).map((c: { id: string; autopilot: boolean }) => [c.id, c.autopilot]));
+
+      for (const t of threads ?? []) {
+        const lead = Array.isArray(t.lead) ? t.lead[0] : t.lead;
+        const profile = convProfileMap[t.user_id];
+        const rt = convTokens[t.user_id];
+        if (!lead?.email || lead.unsubscribed || !profile || !rt) continue;
+
+        try {
+          const accessToken = await refreshGmailToken(rt);
+          const afterEpoch = Math.floor(new Date(
+            t.last_lead_msg_at ?? t.sent_at
+          ).getTime() / 1000) + 1;
+          const sRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(`from:${lead.email} is:inbox after:${afterEpoch}`)}&maxResults=1`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (!sRes.ok) continue;
+          const hits = ((await sRes.json()).messages ?? []) as Array<{ id: string }>;
+          if (hits.length === 0) continue;
+
+          // Owner manually answered after our last AI turn? Step back for good.
+          if (t.last_ai_msg_at) {
+            const oRes = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(`to:${lead.email} is:sent after:${Math.floor(new Date(t.last_ai_msg_at).getTime() / 1000) + 1}`)}&maxResults=1`,
+              { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            if (oRes.ok && (((await oRes.json()).messages ?? []).length > 0)) {
+              await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
+              if (profile.notify_replies !== false && profile.gmail_email) {
+                await sendGmail(await refreshGmailToken(rt), buildRawEmail(
+                  profile.gmail_email,
+                  `🤝 AI stepped back — you're talking with ${lead.name ?? lead.email}`,
+                  `You replied to ${lead.email} yourself, so the AI has stopped auto-answering this thread.\nThe conversation is all yours now.`,
+                  profile.gmail_email || profile.email
+                ));
+              }
+              continue;
+            }
+          }
+
+          const mRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (!mRes.ok) continue;
+          const msg = await mRes.json();
+          const msgDateMs = Number(msg.internalDate ?? Date.now());
+          if (t.last_lead_msg_at && msgDateMs <= new Date(t.last_lead_msg_at).getTime()) continue;
+
+          const theirWords = extractGmailBody(msg.payload).slice(0, 900);
+          const subj = (msg.payload?.headers ?? []).find((h: { name: string }) => h.name === "Subject")?.value ?? "";
+          const low = `${subj}\n${theirWords}`.toLowerCase();
+
+          let ownerNote = "";
+          let aiReply: string | null = null;
+
+          if (/unsubscribe|opt.?out|remove me|stop emailing|do not email/i.test(low)) {
+            await supabase.from("leads").update({ unsubscribed: true, status: "unsubscribed" }).eq("id", lead.id);
+            ownerNote = `🚫 ${lead.name ?? lead.email} asked to stop — suppressed permanently.`;
+          } else if (/calendar|book(ing)? a? ?call|schedule a|zoom|google meet|teams link|available (at|on|tomorrow|mon|tue|wed|thu|fri)|what time works/i.test(low)) {
+            await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
+            ownerNote = `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nTheir words: "${theirWords.slice(0, 200)}"\nReply from your Gmail now — AI has stepped back so you can close.`;
+          } else {
+            aiReply = await groqChat([{
+              role: "user",
+              content: `Ongoing email conversation with a lead.
+Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
+Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
+Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}
+You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${profile.booking_link ? `
+Booking link: ${profile.booking_link} — suggest it naturally when timing fits.` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
+
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Address anything specific they asked. Ask exactly one question. Sign off as "Best regards". Return only the reply text.`,
+            }], { maxTokens: 500, temperature: 0.9 }).catch(() => null);
+          }
+
+          if (aiReply?.trim()) {
+            let sendOk = false;
+            try {
+              await sendGmail(
+                await refreshGmailToken(rt),
+                buildRawEmail(
+                  lead.email,
+                  subj.startsWith("Re:") ? subj : `Re: ${subj}`,
+                  `${aiReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
+                  profile.gmail_email || profile.email
+                )
+              );
+              sendOk = true;
+            } catch (_se) { /* send failed */ }
+            if (sendOk) {
+              await supabase.from("emails_sent").update({
+                ai_turns: (t.ai_turns ?? 0) + 1,
+                last_ai_msg_at: new Date().toISOString(),
+                last_lead_msg_at: new Date(msgDateMs).toISOString(),
+                autoreplied: true,
+              }).eq("id", t.id);
+              ownerNote = `💬 AI replied to ${lead.name ?? lead.email} (turn ${(t.ai_turns ?? 0) + 1}/3).\nTheir message: "${theirWords.slice(0, 200)}"\nAI's answer: "${aiReply.trim().slice(0, 250)}"\nReply from your Gmail anytime to take over — the AI will step back instantly.`;
+            }
+          } else if (!ownerNote) {
+            await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+          }
+
+          if (ownerNote && profile.notify_replies !== false && profile.gmail_email) {
+            await sendGmail(await refreshGmailToken(rt), buildRawEmail(
+              profile.gmail_email,
+              subj.includes("Re:") ? `Re: ${subj.split("Re:").pop()?.trim()} — AI update` : `AI update: ${lead.name ?? lead.email}`,
+              ownerNote,
+              profile.gmail_email || profile.email
+            )).catch(() => {});
+          }
+        } catch (convErr) {
+          console.error("[follow-up] conversation turn failed:", convErr instanceof Error ? convErr.message : convErr);
+        }
+      }
+    } catch (cmErr) {
+      console.error("[follow-up] conversation mode failed:", cmErr instanceof Error ? cmErr.message : cmErr);
+    }
+
     // ☀️ Morning digest: once a day (~10:30am IST / 04:00 UTC) email each active
     // sender a summary of their agent's yesterday. Runs inline with the hourly cron.
     if (new Date().getUTCHours() === 4) {
