@@ -16,6 +16,22 @@ export const Route = createFileRoute("/")({
         content:
           "OutreachAI finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
       },
+      { property: "og:title", content: "OutreachAI — Your AI Sales Agent" },
+      {
+        property: "og:description",
+        content:
+          "Finds leads worldwide, writes personalized cold emails, handles replies, and books meetings — automatically.",
+      },
+      { property: "og:image", content: "/og.png" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "OutreachAI — Your AI Sales Agent" },
+      {
+        name: "twitter:description",
+        content:
+          "Finds leads worldwide, writes personalized cold emails, handles replies, and books meetings — automatically.",
+      },
+      { name: "twitter:image", content: "/og.png" },
     ],
   }),
   component: Landing,
@@ -103,7 +119,7 @@ function Landing() {
             <Sparkles className="h-3.5 w-3.5" />
             {t("hero_badge")}
           </div>
-          {stats && stats.emails_sent > 0 && (
+          {stats && stats.emails_sent >= 100 && (
             <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400">
               <Flame className="h-3.5 w-3.5" />
               {stats.emails_sent.toLocaleString()} cold emails already sent by OutreachAI agents
