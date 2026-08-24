@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StatsRouteImport } from './routes/stats'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AgencyRouteImport } from './routes/agency'
@@ -41,6 +42,11 @@ const TermsRoute = TermsRouteImport.update({
 const StatsRoute = StatsRouteImport.update({
   id: '/stats',
   path: '/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/privacy': typeof PrivacyRoute
+  '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/privacy': typeof PrivacyRoute
+  '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/privacy': typeof PrivacyRoute
+  '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
@@ -184,6 +193,7 @@ export interface FileRouteTypes {
     | '/agency'
     | '/auth'
     | '/privacy'
+    | '/security'
     | '/stats'
     | '/terms'
     | '/tools'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/agency'
     | '/auth'
     | '/privacy'
+    | '/security'
     | '/stats'
     | '/terms'
     | '/tools'
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/agency'
     | '/auth'
     | '/privacy'
+    | '/security'
     | '/stats'
     | '/terms'
     | '/tools'
@@ -244,6 +256,7 @@ export interface RootRouteChildren {
   AgencyRoute: typeof AgencyRoute
   AuthRoute: typeof AuthRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
+  SecurityRoute: typeof SecurityRoute
   StatsRoute: typeof StatsRoute
   TermsRoute: typeof TermsRoute
   ToolsRoute: typeof ToolsRoute
@@ -271,6 +284,13 @@ declare module '@tanstack/react-router' {
       path: '/stats'
       fullPath: '/stats'
       preLoaderRoute: typeof StatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -423,6 +443,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgencyRoute: AgencyRoute,
   AuthRoute: AuthRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
+  SecurityRoute: SecurityRoute,
   StatsRoute: StatsRoute,
   TermsRoute: TermsRoute,
   ToolsRoute: ToolsRoute,

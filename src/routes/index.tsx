@@ -211,6 +211,16 @@ function Landing() {
               </div>
             ))}
           </div>
+          <div className="mx-auto mt-12 flex max-w-3xl flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-2xl border border-border bg-card/60 px-6 py-5 text-sm text-muted-foreground">
+            <span className="flex items-center gap-2">✅ 14-day money-back guarantee</span>
+            <span className="flex items-center gap-2">✅ Cancel anytime, keep your data</span>
+            <span className="flex items-center gap-2">✅ Human support within 24h</span>
+          </div>
+          <p className="mt-6 text-center text-sm">
+            <Link to="/security" className="text-primary underline underline-offset-4 hover:opacity-80">
+              🔒 See exactly how we protect your Gmail account
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -222,6 +232,7 @@ function Landing() {
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
             <Link to="/terms" className="hover:text-foreground">Terms</Link>
             <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link to="/security" className="hover:text-foreground">Security</Link>
             <Link to="/auth" className="hover:text-foreground">Log in</Link>
           </div>
           <p className="text-xs text-muted-foreground">© 2026 OutreachAI</p>

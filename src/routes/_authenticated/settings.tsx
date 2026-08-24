@@ -9,7 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { AlertTriangle, Check } from "lucide-react";
-
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
@@ -28,6 +27,43 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [referral, setReferral] = useState<string | null>(null);
   const [invited, setInvited] = useState(0);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportData() {
+    setExporting(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      const uid = u.user.id;
+      const [profile, campaigns, leads, emails, referrals] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", uid),
+        supabase.from("campaigns").select("*").eq("user_id", uid),
+        supabase.from("leads").select("*").eq("user_id", uid),
+        supabase.from("emails_sent").select("*").eq("user_id", uid),
+        supabase.from("referrals").select("*").eq("referrer_id", uid),
+      ]);
+      const bundle = {
+        exported_at: new Date().toISOString(),
+        note: "Full export of your OutreachAI data. Gmail access tokens are intentionally excluded — disconnect in Settings or via Google Account to revoke them.",
+        profile: profile.data ?? [],
+        campaigns: campaigns.data ?? [],
+        leads: leads.data ?? [],
+        emails_sent: emails.data ?? [],
+        referrals: referrals.data ?? [],
+      };
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `outreachai-data-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Your data has been downloaded");
+    } catch {
+      toast.error("Export failed — please try again");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -256,6 +292,20 @@ function SettingsPage() {
               </div>
             </>
           )}
+        </div>
+      </Section>
+
+      <Section title="Your data">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
+          <div>
+            <div className="font-medium">Download my data</div>
+            <div className="text-xs text-muted-foreground">
+              Export your profile, campaigns, leads, and email history as a JSON file.
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={exportData} disabled={exporting}>
+            {exporting ? "Exporting…" : "Export"}
+          </Button>
         </div>
       </Section>
 
