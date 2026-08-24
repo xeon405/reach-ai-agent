@@ -95,12 +95,27 @@ function BillingPage() {
       <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
         <div className="text-sm text-muted-foreground">Current plan</div>
         <div className="mt-1 flex items-center gap-3">
-          <h2 className="text-2xl font-bold capitalize">{plan === "free" ? "Free Trial" : plan}</h2>
+          <h2 className="text-2xl font-bold capitalize">{plan}</h2>
           <Badge className="bg-success/15 text-success" variant="secondary">Active</Badge>
         </div>
         {plan === "free" && (
           <p className="mt-2 text-sm text-muted-foreground">
-            You're on a free trial. Upgrade to unlock full sending limits.
+            Free plan: 10 emails/day · 1 active campaign. Upgrade anytime for higher sending power.
+          </p>
+        )}
+        {plan === "starter" && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Starter: 50 emails/day · 1 active campaign.
+          </p>
+        )}
+        {plan === "growth" && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Growth: 200 emails/day · 5 active campaigns.
+          </p>
+        )}
+        {plan === "agency" && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Agency: 500 emails/day · unlimited campaigns.
           </p>
         )}
       </div>

@@ -13,6 +13,7 @@ const BATCH_SIZE = 10;
 const DELAY_MS = 8000;
 
 const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
+  free: { dailyEmails: 10 },
   starter: { dailyEmails: 50 },
   growth: { dailyEmails: 200 },
   agency: { dailyEmails: 500 },

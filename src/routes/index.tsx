@@ -10,7 +10,7 @@ import { useLang, LangToggle } from "@/lib/i18n";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot" },
+      { title: "OutreachAI — AI Sales Agent That Finds Leads & Sends Cold Emails For You" },
       {
         name: "description",
         content:
@@ -219,7 +219,10 @@ function Landing() {
             <span className="flex items-center gap-2">{t("badge_cancel")}</span>
             <span className="flex items-center gap-2">{t("badge_support")}</span>
           </div>
-          <p className="mt-6 text-center text-sm">
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            Not ready to pay? The free plan gives you <strong className="text-foreground">10 emails/day, forever</strong> — no card needed.
+          </p>
+          <p className="mt-4 text-center text-sm">
             <Link to="/security" className="text-primary underline underline-offset-4 hover:opacity-80">
               {t("security_link")}
             </Link>
