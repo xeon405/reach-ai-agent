@@ -362,8 +362,8 @@ function LeadsPage() {
         </Select>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-card">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-3">Name</th>

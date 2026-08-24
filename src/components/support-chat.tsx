@@ -75,7 +75,7 @@ export function SupportChat() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open AI help chat"
-          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-gradient-primary p-3.5 text-white shadow-xl shadow-black/40 transition-transform hover:scale-105 active:scale-95"
+          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-primary text-white shadow-xl shadow-black/40 transition-transform hover:scale-105 active:scale-95"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path

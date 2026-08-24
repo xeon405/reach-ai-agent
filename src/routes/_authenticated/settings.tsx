@@ -164,7 +164,7 @@ function SettingsPage() {
       </Section>
 
       <Section title="Connected accounts">
-        <div className="flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Gmail</div>
             <div className="text-xs text-muted-foreground">
@@ -196,7 +196,7 @@ function SettingsPage() {
       </Section>
 
       <Section title="Notifications">
-        <div className="flex items-center justify-between rounded-xl border border-border bg-background/40 p-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Email alerts for replies</div>
             <div className="text-xs text-muted-foreground">
@@ -296,21 +296,21 @@ function SettingsPage() {
       </Section>
 
       <Section title="Your data">
-        <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="font-medium">Download my data</div>
             <div className="text-xs text-muted-foreground">
               Export your profile, campaigns, leads, and email history as a JSON file.
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={exportData} disabled={exporting}>
+          <Button variant="outline" size="sm" onClick={exportData} disabled={exporting} className="shrink-0 self-start sm:self-auto">
             {exporting ? "Exporting…" : "Export"}
           </Button>
         </div>
       </Section>
 
       <Section title="Danger zone">
-        <div className="flex items-center justify-between rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
             <div>
