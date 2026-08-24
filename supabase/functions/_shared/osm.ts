@@ -69,13 +69,42 @@ interface OsmEl {
 }
 
 export async function searchDirectory(niche: Niche, iso: string, limit: number) {
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "data=" + encodeURIComponent(buildQuery(niche, iso, limit)),
-  });
-  if (!res.ok) throw new Error("Directory search unavailable, try again shortly");
-  const data = (await res.json()) as { elements?: OsmEl[] };
+  const body = "data=" + encodeURIComponent(buildQuery(niche, iso, limit));
+  // Primary instance is slow under load (40s+ country scans) — try mirrors in order
+  let lastErr: unknown = new Error("no endpoint attempted");
+  for (const endpoint of [
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.osm.jp/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  ]) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 50_000);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "OutreachAI-LeadFinder/1.0 (https://outreach-ochre-sigma.vercel.app)",
+        },
+        body,
+        signal: ctrl.signal,
+      });
+      if (!res.ok) {
+        lastErr = new Error("Directory search unavailable, try again shortly");
+        continue;
+      }
+      return parseOverpass(await res.json(), limit, iso);
+    } catch (err) {
+      lastErr = err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr;
+}
+
+function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string) {
 
   const seen = new Set<string>();
   const leads: Array<{

@@ -23,7 +23,7 @@ PRODUCT MAP (be accurate, cite page names):
 - Campaigns (/campaigns): Create campaign (name, country, niche, what you offer). "AI Write" generates the email copy. Launch starts sending. Templates library gives proven cold-email templates per niche. Toggle active/pause. Rename/delete.
 - Emails Sent (/emails): every sent email with Opened/Replied badges and reply sentiment (Interested / Maybe / Not interested). When a warm reply arrives, an AI draft appears — click "Send AI Reply" to send it from your Gmail instantly, or edit it first.
 - Settings (/settings): connect/disconnect Gmail (Google OAuth), notification toggle, booking link (added to all emails), Autopilot (finds fresh leads daily + sends within safe limits while Gmail connected), invite link with referral count, delete account.
-- Billing (/billing): Free plan = 50 leads + 50 emails/month. Pro unlocks higher limits.
+- Billing (/billing): Free plan = 10 emails/month and 25 stored leads max. Paid plans: Starter $37/mo (50 emails), Growth $79/mo (200 emails), Agency $149/mo (500 emails). Never invent other prices or limits.
 - Free Tools (/tools): public Email Validator and Subject Line Generator — no login needed.
 - Stats (/stats): live platform-wide numbers.
 
