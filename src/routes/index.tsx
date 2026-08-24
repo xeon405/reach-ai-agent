@@ -43,21 +43,21 @@ const plans = [
   {
     name: "Starter",
     price: 37,
-    cap: "500 emails/month",
-    perks: ["1 active campaign", "AI lead discovery", "Gmail integration", "Auto follow-ups"],
+    cap: "50 emails/day · 1 active campaign",
+    perks: ["AI finds & writes everything", "Auto follow-ups", "Warm-up protection", "Spam guard"],
   },
   {
     name: "Growth",
     price: 79,
-    cap: "2,000 emails/month",
-    perks: ["5 active campaigns", "Priority lead sourcing", "A/B subject testing", "Reply detection"],
+    cap: "200 emails/day · 5 active campaigns",
+    perks: ["Everything in Starter", "5 campaigns", "Reply detection + AI drafts", "Smart timezone sending"],
     featured: true,
   },
   {
     name: "Agency",
     price: 149,
-    cap: "Unlimited emails",
-    perks: ["Unlimited campaigns", "Multi-workspace", "CRM integrations", "Dedicated success mgr"],
+    cap: "500 emails/day · unlimited campaigns",
+    perks: ["Unlimited campaigns", "Arabic emails for Gulf leads", "Bulk import 500 at once", "Priority support"],
   },
 ];
 

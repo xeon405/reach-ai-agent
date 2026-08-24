@@ -87,7 +87,7 @@ function Terms() {
 
           <section>
             <h2 className="text-lg font-semibold">10. Contact</h2>
-            <p className="mt-2">Questions? Contact us at support@outreachai.app.</p>
+            <p className="mt-2">Questions? Contact us at support@outreach-ochre-sigma.vercel.app.</p>
           </section>
         </div>
       </div>
