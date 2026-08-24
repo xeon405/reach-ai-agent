@@ -90,12 +90,24 @@ async function sendGmail(accessToken: string, raw: string): Promise<void> {
   }
 }
 
+// Arab countries → emails are written in professional Arabic automatically
+const ARAB_COUNTRIES = new Set([
+  "KW", "QA", "BH", "OM", "AE", "SA", "JO", "LB", "IQ", "PS", "YE", "LY", "TN", "DZ", "MA", "SD", "SY", "EG",
+  "KUWAIT", "QATAR", "BAHRAIN", "OMAN", "UAE", "UNITED ARAB EMIRATES", "SAUDI ARABIA", "JORDAN",
+  "LEBANON", "IRAQ", "PALESTINE", "YEMEN", "LIBYA", "TUNISIA", "ALGERIA", "MOROCCO", "SUDAN", "SYRIA", "EGYPT",
+]);
+function isArabicLead(country?: string | null): boolean {
+  if (!country) return false;
+  return ARAB_COUNTRIES.has(country.trim().toUpperCase());
+}
+
 async function generateEmail(
   leadName: string,
   leadCompany: string,
   leadJobTitle: string,
   userOffer: string,
-  avoidHint = ""
+  avoidHint = "",
+  arabic = false
 ): Promise<{ subject: string; body: string }> {
   const text = await groqChat([{
     role: "user",
@@ -104,7 +116,15 @@ Our offer: ${sanitizeForPrompt(userOffer)}
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
 Return ONLY a JSON object with this exact format:
 {"subject": "...", "body": "..."}
-
+${arabic ? `
+LANGUAGE REQUIREMENT — WRITE IN ARABIC:
+- The entire subject AND body must be in professional Modern Standard Arabic (فصحى مبسطة), business-appropriate for Gulf region (Kuwait, UAE, Saudi Arabia, Qatar).
+- Start the greeting with "السلام عليكم" or "تحية طيبة وبعد،".
+- Keep company/person names and technical terms in their original form where natural.
+- End with a polite question inviting a reply, e.g. "هل يمكنني مشاركة المزيد من التفاصيل؟".
+- Sign off with "مع أطيب التحيات".
+- JSON keys stay in English; only the VALUES are in Arabic.
+` : ""}
 Rules for subject:
 - Max 7 words
 - Personal and curiosity-driven — mention their company, role, or a specific benefit
@@ -130,6 +150,10 @@ Rules for body:
 const COUNTRY_TZ: Record<string, string> = {
   US: "America/New_York", CA: "America/Toronto", GB: "Europe/London", IE: "Europe/Dublin",
   IN: "Asia/Kolkata", AE: "Asia/Dubai", SA: "Asia/Riyadh", SG: "Asia/Singapore",
+  KW: "Asia/Kuwait", QA: "Asia/Qatar", BH: "Asia/Bahrain", OM: "Asia/Muscat",
+  JO: "Asia/Amman", LB: "Asia/Beirut", IQ: "Asia/Baghdad", PS: "Asia/Gaza",
+  YE: "Asia/Aden", LY: "Africa/Tripoli", TN: "Africa/Tunis", DZ: "Africa/Algiers",
+  MA: "Africa/Casablanca", SD: "Africa/Khartoum", SY: "Asia/Damascus",
   AU: "Australia/Sydney", NZ: "Pacific/Auckland", DE: "Europe/Berlin", FR: "Europe/Paris",
   NL: "Europe/Amsterdam", ES: "Europe/Madrid", IT: "Europe/Rome", CH: "Europe/Zurich",
   SE: "Europe/Stockholm", NO: "Europe/Oslo", DK: "Europe/Copenhagen", FI: "Europe/Helsinki",
@@ -377,7 +401,9 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
           lead.name ?? "there",
           lead.company ?? "your company",
           lead.job_title ?? "professional",
-          profile.offer ?? "our service"
+          profile.offer ?? "our service",
+          "",
+          isArabicLead(lead.country)
         );
 
         // 🛡️ Pre-send deliverability guard: regenerate once if draft looks spammy
@@ -389,7 +415,8 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
               lead.company ?? "your company",
               lead.job_title ?? "professional",
               profile.offer ?? "our service",
-              check.hint
+              check.hint,
+              isArabicLead(lead.country)
             );
             const retryCheck = localSpamScore(retry.subject, retry.body);
             if (retryCheck.score > check.score) {

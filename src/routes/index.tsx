@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useLang, LangToggle } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -61,6 +62,7 @@ const plans = [
 ];
 
 function Landing() {
+  const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
 
   useEffect(() => {
@@ -75,19 +77,20 @@ function Landing() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Logo />
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="hover:text-foreground">Features</a>
-            <a href="#pricing" className="hover:text-foreground">Pricing</a>
+            <a href="#features" className="hover:text-foreground">{t("nav_features")}</a>
+            <a href="#pricing" className="hover:text-foreground">{t("nav_pricing")}</a>
             <Link to="/tools" className="hover:text-foreground">Free tools</Link>
             <Link to="/agency" className="font-medium text-primary hover:text-foreground">Hire us — done-for-you</Link>
             <Link to="/stats" className="hover:text-foreground">Live stats</Link>
           </nav>
           <div className="flex items-center gap-2">
+            <LangToggle />
             <ThemeToggle />
             <Button asChild variant="ghost" size="sm">
-              <Link to="/auth">Log in</Link>
+              <Link to="/auth">{t("nav_login")}</Link>
             </Button>
             <Button asChild size="sm" className="bg-gradient-primary shadow-glow">
-              <Link to="/auth">Start free</Link>
+              <Link to="/auth">{t("start_free")}</Link>
             </Button>
           </div>
         </div>
@@ -98,7 +101,7 @@ function Landing() {
         <div className="mx-auto max-w-5xl px-6 pt-24 pb-32 text-center">
           <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
             <Sparkles className="h-3.5 w-3.5" />
-            Powered by advanced AI — built for B2B teams worldwide
+            {t("hero_badge")}
           </div>
           {stats && stats.emails_sent > 0 && (
             <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400">
@@ -107,21 +110,20 @@ function Landing() {
             </div>
           )}
           <h1 className="text-balance text-5xl font-bold tracking-tight md:text-7xl">
-            AI Agent That Finds Your Customers &amp;{" "}
-            <span className="text-gradient">Emails Them Automatically</span> — While You Sleep
+            {t("hero_title_a")}{" "}
+            <span className="text-gradient">{t("hero_title_b")}</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
-            Give us your ideal customer. We find them globally, write personalized emails,
-            follow up automatically, and book meetings into your calendar.
+            {t("hero_sub")}
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <Button asChild size="lg" className="bg-gradient-primary shadow-glow text-base h-12 px-7">
               <Link to="/auth">
-                Start Free — No Card Needed <ArrowRight className="ml-2 h-4 w-4" />
+                {t("hero_cta")} <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-12 px-7">
-              <a href="#pricing">See pricing</a>
+              <a href="#pricing">{t("nav_pricing")}</a>
             </Button>
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -167,9 +169,9 @@ function Landing() {
       <section id="pricing" className="border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <div className="mb-16 text-center">
-            <h2 className="text-4xl font-bold tracking-tight md:text-5xl">Simple, scalable pricing</h2>
+            <h2 className="text-4xl font-bold tracking-tight md:text-5xl">{t("sec_pricing_title")}</h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-              Free while in launch phase. Upgrade when you are booking meetings.
+            {t("sec_pricing_sub")}
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
@@ -184,13 +186,13 @@ function Landing() {
               >
                 {p.featured && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
-                    Most popular
+                    {t("plan_popular")}
                   </div>
                 )}
                 <h3 className="text-lg font-semibold">{p.name}</h3>
                 <div className="mt-4 flex items-baseline gap-1">
                   <span className="text-5xl font-bold tracking-tight">${p.price}</span>
-                  <span className="text-muted-foreground">/mo</span>
+                  <span className="text-muted-foreground">{t("per_month")}</span>
                 </div>
                 <p className="mt-2 text-sm font-medium text-primary">{p.cap}</p>
                 <ul className="mt-6 space-y-3 text-sm">
@@ -206,19 +208,19 @@ function Landing() {
                   className={`mt-8 w-full ${p.featured ? "bg-gradient-primary shadow-glow" : ""}`}
                   variant={p.featured ? "default" : "outline"}
                 >
-                  <Link to="/auth">Start free</Link>
+                  <Link to="/auth">{t("start_free")}</Link>
                 </Button>
               </div>
             ))}
           </div>
           <div className="mx-auto mt-12 flex max-w-3xl flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-2xl border border-border bg-card/60 px-6 py-5 text-sm text-muted-foreground">
-            <span className="flex items-center gap-2">✅ 14-day money-back guarantee</span>
-            <span className="flex items-center gap-2">✅ Cancel anytime, keep your data</span>
-            <span className="flex items-center gap-2">✅ Human support within 24h</span>
+            <span className="flex items-center gap-2">{t("badge_guarantee")}</span>
+            <span className="flex items-center gap-2">{t("badge_cancel")}</span>
+            <span className="flex items-center gap-2">{t("badge_support")}</span>
           </div>
           <p className="mt-6 text-center text-sm">
             <Link to="/security" className="text-primary underline underline-offset-4 hover:opacity-80">
-              🔒 See exactly how we protect your Gmail account
+              {t("security_link")}
             </Link>
           </p>
         </div>
@@ -227,14 +229,13 @@ function Landing() {
       <section className="border-t border-border/50">
         <div className="mx-auto max-w-3xl px-6 py-24 text-center">
           <p className="text-2xl font-medium leading-relaxed tracking-tight md:text-3xl">
-            "I built OutreachAI because small teams deserve the same outreach firepower as
-            companies with entire SDR departments — <span className="text-primary">without the headcount or the $500/mo tools.</span>"
+            {t("founder_quote")}
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-primary font-bold text-primary-foreground">O</div>
             <div className="text-left">
-              <div className="text-sm font-semibold">Founder, OutreachAI</div>
-              <div className="text-xs text-muted-foreground">Answers every support email personally · usually within 24h</div>
+              <div className="text-sm font-semibold">{t("founder_role")}</div>
+              <div className="text-xs text-muted-foreground">{t("founder_note")}</div>
             </div>
           </div>
         </div>
@@ -244,13 +245,13 @@ function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 md:flex-row">
           <Logo />
           <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-            <a href="#features" className="hover:text-foreground">Features</a>
-            <a href="#pricing" className="hover:text-foreground">Pricing</a>
-            <Link to="/security" className="hover:text-foreground">Security</Link>
-            <Link to="/status" className="hover:text-foreground">Status</Link>
-            <Link to="/terms" className="hover:text-foreground">Terms</Link>
-            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link to="/auth" className="hover:text-foreground">Log in</Link>
+            <a href="#features" className="hover:text-foreground">{t("nav_features")}</a>
+            <a href="#pricing" className="hover:text-foreground">{t("nav_pricing")}</a>
+            <Link to="/security" className="hover:text-foreground">{t("footer_security")}</Link>
+            <Link to="/status" className="hover:text-foreground">{t("footer_status")}</Link>
+            <Link to="/terms" className="hover:text-foreground">{t("footer_terms")}</Link>
+            <Link to="/privacy" className="hover:text-foreground">{t("footer_privacy")}</Link>
+            <Link to="/auth" className="hover:text-foreground">{t("nav_login")}</Link>
           </div>
           <p className="text-xs text-muted-foreground">© 2026 OutreachAI</p>
         </div>

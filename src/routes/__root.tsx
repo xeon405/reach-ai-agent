@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { IosInstallBanner } from "@/components/ios-install-banner";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
+import { LangProvider } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -186,11 +187,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthListener />
-        <ServiceWorkerRegistrar />
-        <Outlet />
-        <IosInstallBanner />
-        <Toaster />
+        <LangProvider>
+          <AuthListener />
+          <ServiceWorkerRegistrar />
+          <Outlet />
+          <IosInstallBanner />
+          <Toaster />
+        </LangProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
