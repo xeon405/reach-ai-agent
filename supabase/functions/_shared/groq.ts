@@ -5,39 +5,57 @@ export function groqKeys(): string[] {
     .split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+let keyCursor = 0;
+
 export async function groqChat(
   messages: Array<{ role: string; content: string }>,
   opts?: { maxTokens?: number; temperature?: number }
 ): Promise<string> {
   const keys = groqKeys();
   if (keys.length === 0) throw new Error("No GROQ API keys configured");
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${keys[Math.floor(Math.random() * keys.length)]}`,
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      messages,
-      max_tokens: opts?.maxTokens ?? 1024,
-      temperature: opts?.temperature,
-      // Reasoning models spend budget thinking first — cap it so answers survive
-      reasoning_effort: "low",
-    }),
-  });
-  if (!res.ok) {
-    console.error("[groq] error:", res.status, await res.text());
-    throw new Error("AI service temporarily unavailable");
+  const maxTries = Math.max(3, keys.length * 2);
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    const key = keys[keyCursor++ % keys.length];
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model: DEFAULT_MODEL,
+          messages,
+          max_tokens: opts?.maxTokens ?? 1024,
+          temperature: opts?.temperature,
+          // Reasoning models spend budget thinking first — cap it so answers survive
+          reasoning_effort: "low",
+        }),
+      });
+      if (res.status === 429 || res.status >= 500) {
+        // Rate-limited or upstream busy — rotate key and back off
+        lastErr = new Error(`AI busy (${res.status})`);
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        continue;
+      }
+      if (!res.ok) {
+        console.error("[groq] error:", res.status, await res.text());
+        throw new Error("AI service temporarily unavailable");
+      }
+      const data = await res.json();
+      const msg = data?.choices?.[0]?.message ?? {};
+      // Reasoning models sometimes put everything in `reasoning` with empty content
+      let text = String(msg.content ?? "");
+      if (!text.trim() && typeof msg.reasoning === "string") text = msg.reasoning;
+      // Some models wrap thoughts in tags or code fences — strip both
+      text = text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/```json|```/g, "").trim();
+      return text;
+    } catch (e) {
+      lastErr = e;
+    }
   }
-  const data = await res.json();
-  const msg = data?.choices?.[0]?.message ?? {};
-  // Reasoning models sometimes put everything in `reasoning` with empty content
-  let text = String(msg.content ?? "");
-  if (!text.trim() && typeof msg.reasoning === "string") text = msg.reasoning;
-  // Some models wrap thoughts in tags or code fences — strip both
-  text = text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/```json|```/g, "").trim();
-  return text;
+  throw lastErr instanceof Error ? lastErr : new Error("AI service temporarily unavailable");
 }
 
 /** Pulls the first JSON object/array out of an LLM response. */

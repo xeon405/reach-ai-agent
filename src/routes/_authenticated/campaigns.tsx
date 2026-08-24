@@ -106,30 +106,24 @@ function CampaignsPage() {
 
   async function launchCampaign(campaignId: string) {
     setSending(campaignId);
-    toast.info("Launching campaign...");
+    toast.info("Queueing campaign...");
 
     try {
-      let totalSent = 0;
-      let batches = 0;
+      const { data, error } = await supabase.functions.invoke("send-campaign", {
+        body: { campaignId },
+      });
 
-      // The edge function sends one small batch per call; keep calling
-      // while it reports there is more to send.
-      while (batches < 100) {
-        const { data, error } = await supabase.functions.invoke("send-campaign", {
-          body: { campaignId },
-        });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
 
-        if (error) throw new Error(error.message);
-        if (data?.error) throw new Error(data.error);
-
-        totalSent += data?.sent ?? 0;
-        batches++;
-
-        if (!data?.continue) break;
+      if (data?.queued > 0) {
+        toast.success(`📥 ${data.message}`);
+        // stats refresh as the background worker sends
+        setTimeout(() => load(), 15000);
+        setTimeout(() => load(), 45000);
+      } else {
+        toast.info(data?.message ?? "Nothing new to send.");
       }
-
-      if (totalSent > 0) toast.success(`✅ Sent ${totalSent} emails!`);
-      else toast.info("No new leads to email.");
       load();
     } catch (e: any) {
       toast.error(e.message ?? "Failed to launch campaign");

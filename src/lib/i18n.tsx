@@ -113,10 +113,9 @@ const DICT: Record<string, { en: string; ar: string }> = {
   stat_emails: { en: "Emails Sent", ar: "رسائل مُرسلة" },
   stat_reply: { en: "Replies", ar: "الردود" },
   btn_launch: { en: "Launch", ar: "إطلاق" },
-};
-
   perk_ab: { en: "A/B tested subject lines", ar: "اختبار A/B لعناوين الرسائل" },
   perk_auto: { en: "Autopilot AI replies", ar: "ردود تلقائية بالذكاء الاصطناعي" },
+};
 
 interface LangCtx {
   lang: Lang;

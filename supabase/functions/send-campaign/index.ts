@@ -232,7 +232,7 @@ serve(async (req) => {
     } else {
       userId = await getAuthedUserId(req);
     }
-    const { campaignId } = body;
+    const campaignId: string = body.campaignId ?? body.campaign_id;
     if (!campaignId) throw new Error("campaignId is required");
 
     const supabase = createClient(
@@ -258,21 +258,6 @@ serve(async (req) => {
       .single();
 
     if (!profile) throw new Error("Profile not found");
-
-    // A/B test: pre-generate alternative subject lines for variant B
-    let altSubjects: string[] = [];
-    if (campaign.ab_test) {
-      try {
-        const altText = await groqChat([{
-          role: "user",
-          content: `Our cold outreach offer: ${sanitizeForPrompt(profile.offer ?? "our services", 300)}
-Write 5 alternative email subject lines for this offer. Rules: max 8 words each, curious but never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
-        }], { maxTokens: 200, temperature: 0.9 });
-        altSubjects = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5);
-      } catch (_e) {
-        // fall back to single-variant run if generation fails
-      }
-    }
 
     const { data: tokenRow } = await supabase
       .from("gmail_tokens")
@@ -317,14 +302,37 @@ Write 5 alternative email subject lines for this offer. Rules: max 8 words each,
       }, 429);
     }
 
-    // Refresh Gmail token once per batch; persist rotated access token in the vault
-    const accessToken = await refreshGmailToken(tokenRow.refresh_token);
-    await supabase.from("gmail_tokens").upsert({
-      profile_id: userId,
-      refresh_token: tokenRow.refresh_token,
-      access_token: accessToken,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "profile_id" });
+    const { data: tokenRow } = await supabase
+      .from("gmail_tokens")
+      .select("refresh_token")
+      .eq("profile_id", userId)
+      .single();
+    if (!profile.gmail_connected || !tokenRow?.refresh_token) {
+      throw new Error("Gmail not connected. Connect it in Settings first.");
+    }
+
+    // Check plan limits (same math the worker applies when actually sending)
+    const plan = profile.plan ?? "starter";
+    const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.starter;
+
+    // Auto warm-up: fresh Gmail accounts ramp 5/day, +5 each day, up to the plan cap.
+    const daysWarm = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000)
+    );
+    const dailyCap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
+
+    const today = new Date().toISOString().split("T")[0];
+    let sentToday: number = profile.emails_sent_today ?? 0;
+    if (profile.emails_sent_date !== today) sentToday = 0;
+
+    const remainingToday = dailyCap - sentToday;
+    if (remainingToday <= 0) {
+      return json({
+        queued: 0,
+        error: `Daily limit reached (warm-up cap: ${dailyCap}/day while your sender builds reputation).`,
+      }, 429);
+    }
 
     // Fetch next batch of un-emailed leads (never email unsubscribed leads)
     const { data: leads } = await supabase
@@ -333,10 +341,10 @@ Write 5 alternative email subject lines for this offer. Rules: max 8 words each,
       .eq("campaign_id", campaignId)
       .eq("status", "new")
       .eq("unsubscribed", false)
-      .limit(Math.min(BATCH_SIZE, remainingToday));
+      .limit(Math.min(BATCH_SIZE * 4, remainingToday));
 
     if (!leads || leads.length === 0) {
-      return json({ sent: 0, sentToday, remainingToday, continue: false, message: "No new leads to email" });
+      return json({ queued: 0, message: "No new leads to email" });
     }
 
     // 🚫 Global dedupe: never email the same person twice — across ALL campaigns
@@ -376,7 +384,7 @@ Write 5 alternative email subject lines for this offer. Rules: max 8 words each,
       (l) => !dupeIds.has(l.id)
     );
     if (freshLeads.length === 0) {
-      return json({ sent: 0, sentToday, remainingToday, continue: true, message: `${dupeIds.size} duplicates skipped` });
+      return json({ queued: 0, message: `${dupeIds.size} duplicates skipped` });
     }
 
     // 📡 MX validation: verify each domain can actually receive mail before spending a send
@@ -400,159 +408,51 @@ Write 5 alternative email subject lines for this offer. Rules: max 8 words each,
     }
     const deliverable = freshLeads.filter((l) => !invalidLeadIds.includes(l.id));
     if (deliverable.length === 0) {
-      return json({ sent: 0, sentToday, remainingToday, continue: true, message: `${invalidLeadIds.length} undeliverable emails skipped` });
+      return json({ queued: 0, message: `${invalidLeadIds.length} undeliverable emails skipped` });
     }
 
-    // Only send into the lead's local business hours — the rest wait for their morning
+    // Only queue leads whose local business morning has arrived — the rest wait
     const eligible = deliverable.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
-    const waiting = leads.length - eligible.length;
-    if (eligible.length === 0) {
-      return json({
-        sent: 0,
-        sentToday,
-        remainingToday,
-        continue: true,
-        message: `Smart timing: ${waiting} lead${waiting === 1 ? "" : "s"} wait for their local business hours`,
-      });
+    const waiting = deliverable.length - eligible.length;
+
+    // 📥 QUEUE: persist jobs and return instantly — sending happens in the background
+    const rows = eligible.map((l: { id: string }, i: number) => ({
+      user_id: userId,
+      campaign_id: campaignId,
+      lead_id: l.id,
+      variant: campaign.ab_test ? (i % 2 === 0 ? "A" : "B") : null,
+    }));
+    let inserted = rows.length;
+    if (rows.length > 0) {
+      const { data: insertedRows, error: qErr } = await supabase
+        .from("send_queue")
+        .insert(rows)
+        .select("id");
+      if (qErr) throw new Error(`Queue error: ${qErr.message}`);
+      inserted = insertedRows?.length ?? 0;
     }
 
-    let sent = 0;
-
-// Lightweight spam scoring (same rules as the /spam-check edge function).
-// If an AI draft scores below 60, we regenerate ONCE with corrective hints
-// before sending — protecting domain reputation automatically.
-function localSpamScore(subject: string, body: string): { score: number; hint: string } {
-  let s = 100;
-  const hints: string[] = [];
-  const subjLower = subject.toLowerCase();
-  const bodyLower = body.toLowerCase();
-  const capsWords = subject.match(/\b[A-Z]{4,}\b/g) ?? [];
-  if (capsWords.length > 0) { s -= Math.min(20, capsWords.length * 8); hints.push("Do not use ANY all-caps words in the subject."); }
-  if (/[!]{2,}|\$\$\$/.test(subject)) { s -= 12; hints.push('Remove "!!!" or "$$$" from the subject.'); }
-  if (subjLower.length > 60) { s -= 8; hints.push("Subject must be under 50 characters."); }
-  if (/^(re:|fwd:)/.test(subjLower)) { s -= 15; hints.push('Never start the subject with "Re:" or "Fwd:".'); }
-  const triggers = ["free", "guarantee", "act now", "limited time", "risk-free", "urgent", "buy now",
-    "cheap", "loan", "click here", "100%", "make money", "congratulations", "dear friend", "instant"];
-  const found = triggers.filter((w) => bodyLower.includes(w));
-  if (found.length > 0) { s -= Math.min(25, found.length * 7); hints.push(`Never use these words in the body: ${found.join(", ")}.`); }
-  if (/^dear (sir|madam|friend)/im.test(body)) { s -= 8; hints.push('Greet by first name only — never "Dear Sir/Madam".'); }
-  const links = (body.match(/https?:\/\//g) ?? []).length;
-  if (links > 3) { s -= (links - 3) * 6; hints.push("Use at most 1-2 links in a cold email."); }
-  return { score: Math.max(0, Math.min(100, s)), hint: hints.join(" ") };
-}
-
-    for (let leadIdx = 0; leadIdx < eligible.length; leadIdx++) {
-      const lead = eligible[leadIdx];
-      try {
-        // A/B split: even leads = A (AI per-lead subject), odd leads = B (alt subjects, rotating)
-        let variant: string | null = null;
-        if (campaign.ab_test && altSubjects.length > 0) {
-          variant = leadIdx % 2 === 0 ? "A" : "B";
-        }
-
-        let { subject, body: aiBody } = await generateEmail(
-          lead.name ?? "there",
-          lead.company ?? "your company",
-          lead.job_title ?? "professional",
-          profile.offer ?? "our service",
-          "",
-          isArabicLead(lead.country)
-        );
-        if (variant === "B") subject = altSubjects[sent % altSubjects.length];
-
-        // 🛡️ Pre-send deliverability guard: regenerate once if draft looks spammy
-        let check = localSpamScore(subject, aiBody);
-        if (check.score < 60 && check.hint) {
-          try {
-            const retry = await generateEmail(
-              lead.name ?? "there",
-              lead.company ?? "your company",
-              lead.job_title ?? "professional",
-              profile.offer ?? "our service",
-              check.hint,
-              isArabicLead(lead.country)
-            );
-            const retryCheck = localSpamScore(retry.subject, retry.body);
-            if (retryCheck.score > check.score) {
-              subject = retry.subject;
-              aiBody = retry.body;
-              check = retryCheck;
-            }
-          } catch {
-            // keep original draft if retry fails
-          }
-        }
-
-        // Killer feature: every email is a live demo of the product
-        const body = `${aiBody}${profile.signature ? `\n\n${sanitizeForPrompt(profile.signature, 400)}` : ""}
-
---
-
-⚡ Fun fact: this email was found, written and sent automatically by an AI agent.
-Want an AI agent doing this for YOUR sales pipeline? → https://outreach-ochre-sigma.vercel.app
-
-Reply with UNSUBSCRIBE to opt out.
-One click: https://outreach-ochre-sigma.vercel.app/unsubscribe?l=${lead.id}&c=${lead.campaign_id ?? ""}${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
-
-        // insert row first so we get an id for the open-tracking pixel
-        const { data: emailRow, error: insertErr } = await supabase
-          .from("emails_sent")
-          .insert({
-            user_id: userId,
-            lead_id: lead.id,
-            campaign_id: campaignId,
-            subject,
-            body,
-            variant,
-            follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-            sequence: 1,
-            follow_up_sent: false,
-          })
-          .select("id")
-          .single();
-
-        const unsubUrl = `https://outreach-ochre-sigma.vercel.app/unsubscribe?l=${lead.id}&c=${lead.campaign_id ?? ""}`;
-        const htmlPart = emailRow?.id && !insertErr
-          ? buildHtmlBody(body).replace("</body>", `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${emailRow.id}" width="1" height="1" alt="" style="display:none;border:0" /></body>`)
-          : buildHtmlBody(body);
-
-        await sendGmail(accessToken, buildRawEmail(lead.email, subject, body, htmlPart, profile.gmail_email ?? "", unsubUrl));
-
-        await supabase.from("leads").update({ status: "emailed" }).eq("id", lead.id);
-
-        sent++;
-        sentToday++;
-
-        if (sent < leads.length) {
-          await new Promise((r) => setTimeout(r, DELAY_MS));
-        }
-      } catch (e) {
-        console.error(`Failed to send to ${lead.email}:`, e instanceof Error ? e.message : e);
-      }
+    // Kick the background worker without blocking the HTTP response
+    const kickoff = drainQueue(supabase);
+    const et = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (et?.waitUntil) {
+      et.waitUntil(kickoff);
+    } else {
+      kickoff.catch(() => {});
     }
 
-    // Single counter update per batch (not per email)
-    if (sent > 0) {
-      await supabase.from("profiles").update({
-        emails_sent_today: sentToday,
-        emails_sent_date: today,
-      }).eq("id", userId);
-    }
-
-    // Decide whether another batch should be requested
-    const stillRemainingToday = dailyCap - sentToday;
-    const { count: leadsLeft } = await supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("status", "new");
+    const parts: string[] = [];
+    if (inserted > 0) parts.push(`${inserted} email${inserted === 1 ? "" : "s"} queued — sending one by one in the background`);
+    if (waiting > 0) parts.push(`${waiting} waiting for their local morning`);
+    if (invalidLeadIds.length > 0) parts.push(`${invalidLeadIds.length} undeliverable skipped`);
+    if (dupeIds.size > 0) parts.push(`${dupeIds.size} duplicates skipped`);
 
     return json({
-      sent,
-      sentToday,
-      remainingToday: Math.max(stillRemainingToday, 0),
-      continue: stillRemainingToday > 0 && (leadsLeft ?? 0) > 0,
+      queued: inserted,
+      message: parts.join(" · ") || "Nothing new to send",
+      remainingToday: Math.max(remainingToday - inserted, 0),
     });
+
 
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
