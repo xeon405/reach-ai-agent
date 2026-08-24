@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { groqChat, groqKeys, extractJson, sanitizeForPrompt } from "../_shared/groq.ts";
+import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,9 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// One invocation sends a small batch, well under the edge-function time limit.
-// The frontend loops invocations while `continue` is true.
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 40;
 const DELAY_MS = 8000;
 
 const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
@@ -18,6 +15,8 @@ const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
   growth: { dailyEmails: 200 },
   agency: { dailyEmails: 500 },
 };
+
+const SITE = "https://outreach-ochre-sigma.vercel.app";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -40,33 +39,18 @@ async function getAuthedUserId(req: Request): Promise<string> {
 
 function toBase64Url(str: string): string {
   const bytes = new TextEncoder().encode(str);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function refreshGmailToken(refreshToken: string): Promise<string> {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error("Failed to refresh token: " + data.error);
-  return data.access_token;
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function buildHtmlBody(plain: string): string {
-  return `<html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222">${escapeHtml(plain).replace(/\n/g, "<br>")}</body></html>`;
+function buildHtmlBody(plain: string, pixel?: string): string {
+  const html = escapeHtml(plain).replace(/\n/g, "<br>");
+  return `<html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222">${html}${pixel ?? ""}</body></html>`;
 }
 
 function buildRawEmail(
@@ -115,19 +99,59 @@ async function sendGmail(accessToken: string, raw: string): Promise<void> {
     },
     body: JSON.stringify({ raw }),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error("Gmail send failed: " + err);
-  }
+  if (!res.ok) throw new Error(`Gmail send failed: ${res.status}`);
 }
 
-// Arab countries → emails are written in professional Arabic automatically
+async function refreshGmailToken(refreshToken: string): Promise<string> {
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
+      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
+  const data = await res.json();
+  return data.access_token;
+}
+
 const ARAB_COUNTRIES = new Set([
-  "KW", "QA", "BH", "OM", "AE", "SA", "JO", "LB", "IQ", "PS", "YE", "LY", "TN", "DZ", "MA", "SD", "SY", "EG",
-  "KUWAIT", "QATAR", "BAHRAIN", "OMAN", "UAE", "UNITED ARAB EMIRATES", "SAUDI ARABIA", "JORDAN",
-  "LEBANON", "IRAQ", "PALESTINE", "YEMEN", "LIBYA", "TUNISIA", "ALGERIA", "MOROCCO", "SUDAN", "SYRIA", "EGYPT",
+  "SA", "AE", "EG", "KW", "QA", "BH", "OM", "JO", "LB", "IQ", "PS", "YE", "LY", "TN", "DZ", "MA", "SD", "SY",
 ]);
-function isArabicLead(country?: string | null): boolean {
+
+const COUNTRY_TZ: Record<string, [number, number]> = {
+  US: [-8, -5], CA: [-8, -3.5], GB: [0, 0], IE: [0, 0], PT: [0, 0],
+  ES: [1, 1], FR: [1, 1], BE: [1, 1], NL: [1, 1], DE: [1, 1], CH: [1, 1], AT: [1, 1], IT: [1, 1],
+  SE: [1, 1], NO: [1, 1], DK: [1, 1], FI: [2, 2], PL: [1, 1], CZ: [1, 1], HU: [1, 1], RO: [2, 2], GR: [2, 2],
+  TR: [3, 3], RU: [3, 3], UA: [2, 2],
+  IN: [5.5, 5.5], PK: [5, 5], BD: [6, 6], LK: [5.5, 5.5], NP: [5.75, 5.75],
+  CN: [8, 8], HK: [8, 8], TW: [8, 8], JP: [9, 9], KR: [9, 9], SG: [8, 8], MY: [8, 8],
+  TH: [7, 7], VN: [7, 7], PH: [8, 8], ID: [7, 8],
+  AU: [8, 11], NZ: [12, 13],
+  BR: [-3, -2], AR: [-3, -3], CL: [-4, -4], CO: [-5, -5], MX: [-6, -6], PE: [-5, -5],
+  ZA: [2, 2], NG: [1, 1], KE: [3, 3], GH: [0, 0], EG: [2, 2],
+  SA: [3, 3], AE: [4, 4], KW: [3, 3], QA: [3, 3], BH: [3, 3], OM: [4, 4],
+  JO: [3, 3], LB: [2, 2], IQ: [3, 3], PS: [2, 2], YE: [3, 3], LY: [2, 2], TN: [1, 1], DZ: [1, 1], MA: [1, 1], SD: [2, 2], SY: [3, 3],
+  IL: [2, 2],
+};
+
+function tzOffsetFor(country: string | null | undefined): number {
+  if (!country) return 0;
+  const range = COUNTRY_TZ[country.trim().toUpperCase()];
+  if (!range) return 0;
+  return range[0];
+}
+
+function isBusinessMorning(country: string | null | undefined): boolean {
+  const hourUTC = new Date().getUTCHours();
+  const local = (hourUTC + tzOffsetFor(country) + 24) % 24;
+  return local >= 8 && local < 11;
+}
+
+function isArabicLead(country: string | null | undefined): boolean {
   if (!country) return false;
   return ARAB_COUNTRIES.has(country.trim().toUpperCase());
 }
@@ -145,89 +169,105 @@ async function generateEmail(
     content: `Write a short cold email to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
-Return ONLY a JSON object with this exact format:
-{"subject": "...", "body": "..."}
-${arabic ? `
-LANGUAGE REQUIREMENT — WRITE IN ARABIC:
-- The entire subject AND body must be in professional Modern Standard Arabic (فصحى مبسطة), business-appropriate for Gulf region (Kuwait, UAE, Saudi Arabia, Qatar).
-- Start the greeting with "السلام عليكم" or "تحية طيبة وبعد،".
-- Keep company/person names and technical terms in their original form where natural.
-- End with a polite question inviting a reply, e.g. "هل يمكنني مشاركة المزيد من التفاصيل؟".
-- Sign off with "مع أطيب التحيات".
-- JSON keys stay in English; only the VALUES are in Arabic.
-` : ""}
 Rules for subject:
-- Max 7 words
-- Personal and curiosity-driven — mention their company, role, or a specific benefit
-- NEVER use words like "opportunity", "business proposal", or "quick question"
-- Lowercase style is fine (e.g. "quick idea for acme's pipeline")
-
+- Under 50 characters, lowercase-friendly, curious not salesy.
+- No spam words, no ALL CAPS words, no emojis, no "Re:"/"Fwd:" prefixes.
 Rules for body:
-- Max 5 sentences
-- Sound human, not salesy
-- Reference their specific role
-- Include ONE short transparent sentence mentioning that this email was found, written and sent automatically by your AI agent (keep it fun and confident, e.g. "Fun fact: my AI agent found you, wrote this, and hit send")
-- End with a simple question
-- Sign off with "Best regards"
-- No subject line in body`,
-  }], { maxTokens: 900 });
+- 60-120 words max. Short paragraphs (1-3 sentences each).
+- Open with something specific to their role/company. No "Dear Sir/Madam", no "Hope this finds you well".
+- Explain our offer in one clear sentence tied to THEIR pain.
+- End with a soft question asking if this is worth a quick chat.
+- Sign off as "Best regards".
+- Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.
+Return ONLY a JSON object with this exact format:
+{"subject":"...","body":"line1\\nline2\\nline3"}
+The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT — WRITE IN ARABIC:\n- Write the subject and body in fluent Modern Standard Arabic with a professional Gulf business tone.\n- Keep company names and technical terms in Latin script where natural.\n- The JSON keys stay \"subject\" and \"body\"; values are Arabic." : ""}`,
+  }], { maxTokens: 700, temperature: 0.8 });
 
-  const parsed = extractJson<{ subject?: unknown; body?: unknown }>(text);
-  if (!parsed || !parsed.subject || !parsed.body) throw new Error("AI returned a malformed email");
-  return { subject: String(parsed.subject), body: String(parsed.body) };
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1));
+      if (parsed.subject && parsed.body) {
+        return { subject: String(parsed.subject), body: String(parsed.body).replace(/\\n/g, "\n") };
+      }
+    } catch {
+      // fall through to line-based parse
+    }
+  }
+  const lines = text.split("\n").filter(Boolean);
+  return { subject: (lines[0] ?? "Quick question").slice(0, 90), body: lines.slice(1).join("\n") || text };
 }
 
-// Smart send-time: deliver into each lead's local business morning
-const COUNTRY_TZ: Record<string, string> = {
-  US: "America/New_York", CA: "America/Toronto", GB: "Europe/London", IE: "Europe/Dublin",
-  IN: "Asia/Kolkata", AE: "Asia/Dubai", SA: "Asia/Riyadh", SG: "Asia/Singapore",
-  KW: "Asia/Kuwait", QA: "Asia/Qatar", BH: "Asia/Bahrain", OM: "Asia/Muscat",
-  JO: "Asia/Amman", LB: "Asia/Beirut", IQ: "Asia/Baghdad", PS: "Asia/Gaza",
-  YE: "Asia/Aden", LY: "Africa/Tripoli", TN: "Africa/Tunis", DZ: "Africa/Algiers",
-  MA: "Africa/Casablanca", SD: "Africa/Khartoum", SY: "Asia/Damascus",
-  AU: "Australia/Sydney", NZ: "Pacific/Auckland", DE: "Europe/Berlin", FR: "Europe/Paris",
-  NL: "Europe/Amsterdam", ES: "Europe/Madrid", IT: "Europe/Rome", CH: "Europe/Zurich",
-  SE: "Europe/Stockholm", NO: "Europe/Oslo", DK: "Europe/Copenhagen", FI: "Europe/Helsinki",
-  PL: "Europe/Warsaw", PT: "Europe/Lisbon", BR: "America/Sao_Paulo", MX: "America/Mexico_City",
-  ZA: "Africa/Johannesburg", NG: "Africa/Lagos", KE: "Africa/Nairobi", EG: "Africa/Cairo",
-  JP: "Asia/Tokyo", KR: "Asia/Seoul", HK: "Asia/Hong_Kong", MY: "Asia/Kuala_Lumpur",
-  ID: "Asia/Jakarta", TH: "Asia/Bangkok", PH: "Asia/Manila", PK: "Asia/Karachi",
-  BD: "Asia/Dhaka", LK: "Asia/Colombo", IL: "Asia/Jerusalem", TR: "Europe/Istanbul",
+function localSpamScore(subject: string, body: string): { score: number; hint: string } {
+  let s = 100;
+  const hints: string[] = [];
+  const subjLower = subject.toLowerCase();
+  const bodyLower = body.toLowerCase();
+  const capsWords = subject.match(/\b[A-Z]{4,}\b/g) ?? [];
+  if (capsWords.length > 0) { s -= Math.min(20, capsWords.length * 8); hints.push("Do not use ANY all-caps words in the subject."); }
+  if (/!{2,}|\$/.test(subject)) { s -= 12; hints.push('Remove "!!!" or "$" from the subject.'); }
+  if (subjLower.length > 60) { s -= 8; hints.push("Subject must be under 50 characters."); }
+  if (/^(re:|fwd:)/.test(subjLower)) { s -= 15; hints.push('Never start the subject with "Re:" or "Fwd:".'); }
+  const triggers = ["free", "guarantee", "act now", "limited time", "risk-free", "urgent", "buy now",
+    "cheap", "loan", "click here", "100%", "make money", "congratulations", "dear friend", "instant"];
+  const found = triggers.filter((w) => bodyLower.includes(w));
+  if (found.length > 0) { s -= Math.min(25, found.length * 7); hints.push(`Never use these words in the body: ${found.join(", ")}.`); }
+  if (/^dear (sir|madam|friend)/im.test(body)) { s -= 8; hints.push('Greet by first name only — never "Dear Sir/Madam".'); }
+  const links = (body.match(/https?:\/\//g) ?? []).length;
+  if (links > 3) { s -= (links - 3) * 6; hints.push("Use at most 1-2 links in a cold email."); }
+  return { score: Math.max(0, Math.min(100, s)), hint: hints.join(" ") };
+}
+
+const abCache = new Map<string, { subs: string[]; at: number }>();
+async function getAltSubjects(campaignId: string, offer: string): Promise<string[]> {
+  const hit = abCache.get(campaignId);
+  if (hit && Date.now() - hit.at < 600_000) return hit.subs;
+  let subs: string[] = [];
+  try {
+    const altText = await groqChat([{
+      role: "user",
+      content: `Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
+Write 5 alternative email subject lines for this offer. Rules: max 8 words each, curious but never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
+    }], { maxTokens: 200, temperature: 0.9 });
+    subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5);
+  } catch (_e) {
+    // empty list → variant B falls back to A behaviour
+  }
+  abCache.set(campaignId, { subs, at: Date.now() });
+  return subs;
+}
+
+type QueueJob = {
+  id: string;
+  user_id: string;
+  campaign_id: string;
+  lead_id: string;
+  variant: string | null;
+  attempts: number;
 };
 
-function isBusinessMorning(country: string | null | undefined): boolean {
-  if (!country) return true; // unknown origin → send immediately
-  const tz = COUNTRY_TZ[country.toUpperCase()];
-  if (!tz) return true;
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      hour: "numeric",
-      hour12: false,
-      weekday: "short",
-      timeZone: tz,
-    }).formatToParts(new Date());
-    const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 12);
-    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
-    if (weekday === "Sat" || weekday === "Sun") return false; // nobody reads cold email on weekends
-    return hour >= 9 && hour <= 17;
-  } catch {
-    return true;
-  }
-}
+type UserCtx = {
+  profile: Record<string, unknown>;
+  accessToken: string;
+  dailyCap: number;
+  today: string;
+  sentToday: number;
+  exhausted: boolean;
+  offer: () => string;
+};
 
-serve(async (req) => {
+const drainCtxs = new Map<string, UserCtx>();
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     let userId: string;
     const cronSecret = Deno.env.get("CRON_SECRET");
-    if (
-      cronSecret &&
-      req.headers.get("x-cron-secret") === cronSecret &&
-      typeof body.user_id === "string"
-    ) {
-      // Trusted autopilot path (cron robot) — same secret gate as follow-up
+    if (cronSecret && req.headers.get("x-cron-secret") === cronSecret && typeof body.user_id === "string") {
       userId = body.user_id;
     } else {
       userId = await getAuthedUserId(req);
@@ -240,7 +280,6 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Verify the campaign belongs to this user and is active
     const { data: campaign } = await supabase
       .from("campaigns")
       .select("id, status, ab_test")
@@ -250,13 +289,7 @@ serve(async (req) => {
     if (!campaign) throw new Error("Campaign not found");
     if (campaign.status !== "active") throw new Error("Campaign is not active");
 
-    // Get user profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-
+    const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
     if (!profile) throw new Error("Profile not found");
 
     const { data: tokenRow } = await supabase
@@ -268,65 +301,13 @@ serve(async (req) => {
       throw new Error("Gmail not connected. Connect it in Settings first.");
     }
 
-    // Check plan limits
-    const plan = profile.plan ?? "starter";
-    const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.starter;
-
-    // Auto warm-up: fresh Gmail accounts ramp 5/day, +5 each day, up to the plan cap.
-    // Keeps new senders out of spam while they build reputation.
-    const daysWarm = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000)
-    );
+    const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+    const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
     const dailyCap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
-
-    // Reset daily counter if new day
     const today = new Date().toISOString().split("T")[0];
-    let sentToday: number = profile.emails_sent_today ?? 0;
-    if (profile.emails_sent_date !== today) {
-      sentToday = 0;
-      await supabase.from("profiles").update({
-        emails_sent_today: 0,
-        emails_sent_date: today,
-      }).eq("id", userId);
-    }
+    const sentTodayBase = profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0;
 
-    const remainingToday = dailyCap - sentToday;
-    if (remainingToday <= 0) {
-      return json({
-        sent: 0,
-        sentToday,
-        remainingToday: 0,
-        continue: false,
-        error: `Daily limit reached (warm-up cap: ${dailyCap}/day while your sender builds reputation).`,
-      }, 429);
-    }
-
-    const { data: tokenRow } = await supabase
-      .from("gmail_tokens")
-      .select("refresh_token")
-      .eq("profile_id", userId)
-      .single();
-    if (!profile.gmail_connected || !tokenRow?.refresh_token) {
-      throw new Error("Gmail not connected. Connect it in Settings first.");
-    }
-
-    // Check plan limits (same math the worker applies when actually sending)
-    const plan = profile.plan ?? "starter";
-    const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.starter;
-
-    // Auto warm-up: fresh Gmail accounts ramp 5/day, +5 each day, up to the plan cap.
-    const daysWarm = Math.max(
-      0,
-      Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000)
-    );
-    const dailyCap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
-
-    const today = new Date().toISOString().split("T")[0];
-    let sentToday: number = profile.emails_sent_today ?? 0;
-    if (profile.emails_sent_date !== today) sentToday = 0;
-
-    const remainingToday = dailyCap - sentToday;
+    const remainingToday = dailyCap - sentTodayBase;
     if (remainingToday <= 0) {
       return json({
         queued: 0,
@@ -334,14 +315,13 @@ serve(async (req) => {
       }, 429);
     }
 
-    // Fetch next batch of un-emailed leads (never email unsubscribed leads)
     const { data: leads } = await supabase
       .from("leads")
-      .select("*")
+      .select("id, email")
       .eq("campaign_id", campaignId)
       .eq("status", "new")
       .eq("unsubscribed", false)
-      .limit(Math.min(BATCH_SIZE * 4, remainingToday));
+      .limit(Math.min(BATCH_SIZE, remainingToday));
 
     if (!leads || leads.length === 0) {
       return json({ queued: 0, message: "No new leads to email" });
@@ -387,7 +367,7 @@ serve(async (req) => {
       return json({ queued: 0, message: `${dupeIds.size} duplicates skipped` });
     }
 
-    // 📡 MX validation: verify each domain can actually receive mail before spending a send
+    // 📡 MX validation before spending a send
     const invalidLeadIds: string[] = [];
     const domainCache = new Map<string, boolean>();
     for (const l of freshLeads) {
@@ -411,11 +391,9 @@ serve(async (req) => {
       return json({ queued: 0, message: `${invalidLeadIds.length} undeliverable emails skipped` });
     }
 
-    // Only queue leads whose local business morning has arrived — the rest wait
     const eligible = deliverable.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
     const waiting = deliverable.length - eligible.length;
 
-    // 📥 QUEUE: persist jobs and return instantly — sending happens in the background
     const rows = eligible.map((l: { id: string }, i: number) => ({
       user_id: userId,
       campaign_id: campaignId,
@@ -432,14 +410,10 @@ serve(async (req) => {
       inserted = insertedRows?.length ?? 0;
     }
 
-    // Kick the background worker without blocking the HTTP response
+    // Kick the background drain without blocking the response
     const kickoff = drainQueue(supabase);
     const et = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
-    if (et?.waitUntil) {
-      et.waitUntil(kickoff);
-    } else {
-      kickoff.catch(() => {});
-    }
+    if (et?.waitUntil) et.waitUntil(kickoff); else kickoff.catch(() => {});
 
     const parts: string[] = [];
     if (inserted > 0) parts.push(`${inserted} email${inserted === 1 ? "" : "s"} queued — sending one by one in the background`);
@@ -453,8 +427,181 @@ serve(async (req) => {
       remainingToday: Math.max(remainingToday - inserted, 0),
     });
 
-
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+
+  async function processJob(supabase: ReturnType<typeof createClient>, job: QueueJob, ctx: UserCtx): Promise<boolean> {
+    const { data: lead } = await supabase.from("leads").select("*").eq("id", job.lead_id).single();
+    if (!lead || lead.unsubscribed) return false;
+
+    let variant = job.variant;
+    if (variant === "B") {
+      const subs = await getAltSubjects(job.campaign_id, String(ctx.profile.offer ?? "our services"));
+      if (subs.length === 0) variant = null;
+    }
+
+    let gen = await generateEmail(
+      lead.name ?? "there",
+      lead.company ?? "your company",
+      lead.job_title ?? "professional",
+      String(ctx.profile.offer ?? "our service"),
+      "",
+      isArabicLead(lead.country)
+    );
+    if (variant === "B") {
+      const subs = abCache.get(job.campaign_id)?.subs ?? [];
+      if (subs.length > 0) gen.subject = subs[Math.floor(Math.random() * subs.length)];
+    }
+
+    let check = localSpamScore(gen.subject, gen.body);
+    if (check.score < 60 && check.hint) {
+      try {
+        const retry = await generateEmail(
+          lead.name ?? "there",
+          lead.company ?? "your company",
+          lead.job_title ?? "professional",
+          String(ctx.profile.offer ?? "our service"),
+          check.hint,
+          isArabicLead(lead.country)
+        );
+        const retryCheck = localSpamScore(retry.subject, retry.body);
+        if (retryCheck.score > check.score) gen = retry;
+      } catch {
+        // keep original draft
+      }
+    }
+
+    const bodyText = `${gen.body}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
+
+--
+
+⚡ Fun fact: this email was found, written and sent automatically by an AI agent.
+Want an AI agent doing this for YOUR sales pipeline? → ${SITE}
+
+Reply with UNSUBSCRIBE to opt out.
+One click: ${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}${ctx.profile.booking_link ? `\n📅 Book time with me directly: ${ctx.profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
+
+    const { data: emailRow, error: insertErr } = await supabase
+      .from("emails_sent")
+      .insert({
+        user_id: job.user_id,
+        lead_id: lead.id,
+        campaign_id: job.campaign_id,
+        subject: gen.subject,
+        body: bodyText,
+        variant,
+        follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        sequence: 1,
+        follow_up_sent: false,
+      })
+      .select("id")
+      .single();
+
+    const pixel = emailRow?.id && !insertErr
+      ? `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${emailRow.id}" width="1" height="1" alt="" style="display:none;border:0" />`
+      : undefined;
+
+    const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}`;
+    await sendGmail(
+      ctx.accessToken,
+      buildRawEmail(lead.email, gen.subject, bodyText, buildHtmlBody(bodyText, pixel), String(ctx.profile.gmail_email ?? ""), unsubUrl)
+    );
+    await supabase.from("leads").update({ status: "emailed" }).eq("id", lead.id);
+
+    ctx.sentToday++;
+    if (ctx.sentToday % 3 === 0) {
+      await supabase.from("profiles").update({
+        emails_sent_today: ctx.sentToday,
+        emails_sent_date: ctx.today,
+      }).eq("id", job.user_id);
+    }
+    return true;
+  }
+
+  async function getUserCtx(supabase: ReturnType<typeof createClient>, uid: string): Promise<UserCtx | null> {
+    const { data: profile } = await supabase.from("profiles").select("*").eq("id", uid).single();
+    if (!profile) return null;
+    const { data: tokenRow } = await supabase
+      .from("gmail_tokens")
+      .select("refresh_token")
+      .eq("profile_id", uid)
+      .single();
+    if (!profile.gmail_connected || !tokenRow?.refresh_token) return null;
+
+    const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+    const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
+    const today = new Date().toISOString().split("T")[0];
+    const sentToday = profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0;
+    const accessToken = await refreshGmailToken(tokenRow.refresh_token);
+    await supabase.from("gmail_tokens").upsert({
+      profile_id: uid,
+      refresh_token: tokenRow.refresh_token,
+      access_token: accessToken,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "profile_id" });
+
+    return {
+      profile,
+      accessToken,
+      dailyCap: Math.min(limits.dailyEmails, 5 + daysWarm * 5),
+      today,
+      sentToday,
+      exhausted: false,
+      offer: () => String(profile.offer ?? "our services"),
+    };
+  }
+
+  async function drainQueue(supabase: ReturnType<typeof createClient>): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < 50_000) {
+      let jobs: QueueJob[] | null = null;
+      try {
+        const { data } = await supabase.rpc("claim_queue_jobs", { p_limit: 3 });
+        jobs = data as QueueJob[] | null;
+      } catch (e) {
+        console.error("[queue] claim failed:", e instanceof Error ? e.message : e);
+        break;
+      }
+      if (!jobs || jobs.length === 0) break;
+
+      for (const job of jobs) {
+        try {
+          let ctx = drainCtxs.get(job.user_id);
+          if (!ctx) {
+            const fresh = await getUserCtx(supabase, job.user_id);
+            if (!fresh) {
+              await supabase.from("send_queue").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", job.id);
+              continue;
+            }
+            ctx = fresh;
+            drainCtxs.set(job.user_id, ctx);
+          }
+          if (ctx.exhausted || ctx.sentToday >= ctx.dailyCap) {
+            ctx.exhausted = true;
+            await supabase.from("send_queue").update({ status: "pending", updated_at: new Date().toISOString() }).eq("id", job.id);
+            continue;
+          }
+          const ok = await processJob(supabase, job, ctx);
+          await supabase.from("send_queue").update({ status: ok ? "done" : "failed", updated_at: new Date().toISOString() }).eq("id", job.id);
+          await new Promise((r) => setTimeout(r, DELAY_MS));
+        } catch (e) {
+          console.error("[queue] job failed:", e instanceof Error ? e.message : e);
+          const nextAttempts = job.attempts + 1;
+          await supabase.from("send_queue").update({
+            status: nextAttempts >= 3 ? "failed" : "pending",
+            attempts: nextAttempts,
+            updated_at: new Date().toISOString(),
+          }).eq("id", job.id);
+        }
+      }
+    }
+    for (const [uid, ctx] of drainCtxs) {
+      await supabase.from("profiles").update({
+        emails_sent_today: ctx.sentToday,
+        emails_sent_date: ctx.today,
+      }).eq("id", uid);
+    }
+    drainCtxs.clear();
   }
 });
