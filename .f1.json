@@ -1,0 +1,1 @@
+{"query": "select q.status as q_status, l.email from send_queue q join leads l on l.id=q.lead_id\nwhere q.lead_id in ('4476e522-dc5c-4cdb-9ffb-fb761a06bdad','3d23f4b7-f7ca-403c-aae5-4bcd872628e7')"}

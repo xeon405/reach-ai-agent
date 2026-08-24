@@ -1,0 +1,1 @@
+{"query": "select l.email, l.status as lead_status, e.id is not null as has_email_row\nfrom leads l left join emails_sent e on e.lead_id=l.id\nwhere l.id in ('4476e522-dc5c-4cdb-9ffb-fb761a06bdad','3d23f4b7-f7ca-403c-aae5-4bcd872628e7')"}
