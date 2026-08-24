@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
 
     const { data: leads } = await supabase
       .from("leads")
-      .select("id, email")
+      .select("id, email, country, created_at")
       .eq("campaign_id", campaignId)
       .eq("status", "new")
       .eq("unsubscribed", false)
@@ -428,7 +428,8 @@ Deno.serve(async (req) => {
 
     const parts: string[] = [];
     if (inserted > 0) parts.push(`${inserted} email${inserted === 1 ? "" : "s"} queued — sending one by one in the background`);
-    if (waiting > 0) parts.push(`${waiting} waiting for their local morning`);
+    const dbg = (deliverable[0] as { country?: string | null; created_at?: string; id?: string } | undefined);
+    if (waiting > 0) parts.push(`${waiting} waiting for their local morning [dbg country=${JSON.stringify(dbg?.country ?? null)} added=${dbg?.created_at ? new Date(dbg.created_at).toISOString().slice(11, 19) : "?"} id=${(dbg?.id ?? "?").slice(0, 8)} utc=${new Date().getUTCHours()}]`);
     if (invalidLeadIds.length > 0) parts.push(`${invalidLeadIds.length} undeliverable skipped`);
     if (dupeIds.size > 0) parts.push(`${dupeIds.size} duplicates skipped`);
 
