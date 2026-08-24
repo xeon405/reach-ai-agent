@@ -376,6 +376,8 @@ Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero 
               method: "POST",
               headers: {
                 "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+                "apikey": Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({ campaign_id: camp.id, user_id: pilot.id }),
@@ -535,6 +537,33 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
       } catch (e) {
         console.error(`Follow-up failed for email ${email.id}:`, e instanceof Error ? e.message : e);
       }
+    }
+
+    // ♻️ QUEUE REVIVAL: nudge any pending send_queue jobs so nothing ever sits stuck
+    try {
+      const { data: pendingCamps } = await supabase
+        .from("send_queue")
+        .select("user_id, campaign_id")
+        .eq("status", "pending")
+        .limit(50);
+      const seen = new Set<string>();
+      for (const row of pendingCamps ?? []) {
+        const key = `${row.user_id}:${row.campaign_id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-campaign`, {
+          method: "POST",
+          headers: {
+            "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+            "apikey": Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ campaign_id: row.campaign_id, user_id: row.user_id }),
+        });
+      }
+    } catch (reviveErr) {
+      console.error("[follow-up] queue revival failed:", reviveErr instanceof Error ? reviveErr.message : reviveErr);
     }
 
     return json({ sent, repliesFound, unsubscribes });
