@@ -105,7 +105,7 @@ function SecurityPage() {
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
             Write to us and a human answers — usually within 24 hours.
           </p>
-          <a href="mailto:support@outreach-ochre-sigma.vercel.app?subject=Security%20question">
+          <a href="mailto:outreachai.team@gmail.comsupportoutreachai.team@gmail.com?subject=Security%20question">
             <Button className="mt-5 bg-gradient-primary">Contact us</Button>
           </a>
         </div>

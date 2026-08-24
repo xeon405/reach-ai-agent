@@ -135,7 +135,7 @@ function HonestyPage() {
         </div>
 
         <p className="pt-2 text-center text-xs text-muted-foreground">
-          Found us falling short of any rule? <a href="mailto:support@outreach-ochre-sigma.vercel.app" className="underline hover:text-foreground">Tell us directly</a> — we answer personally.
+          Found us falling short of any rule? <a href="mailto:outreachai.team@gmail.comsupportoutreachai.team@gmail.com" className="underline hover:text-foreground">Tell us directly</a> — we answer personally.
         </p>
       </section>
     </div>

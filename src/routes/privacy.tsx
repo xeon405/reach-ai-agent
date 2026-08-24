@@ -63,13 +63,13 @@ function Privacy() {
             <h2 className="text-lg font-semibold">5. Your rights</h2>
             <p className="mt-2">
               Depending on your location you may have rights to access, correct, export, or delete
-              your personal data. Contact support@outreachai.app to exercise them.
+              your personal data. Contact outreachai.team@gmail.com to exercise them.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold">6. Contact</h2>
-            <p className="mt-2">Privacy questions? Email support@outreachai.app.</p>
+            <p className="mt-2">Privacy questions? Email outreachai.team@gmail.com.</p>
           </section>
         </div>
       </div>

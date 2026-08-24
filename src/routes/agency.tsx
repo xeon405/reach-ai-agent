@@ -41,12 +41,12 @@ function AgencyPage() {
           <strong className="text-foreground">$299/month</strong>. No ads. No cold calls.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <a href="mailto:hello@outreach-ochre-sigma.vercel.app?subject=I%20want%20more%20sales%20calls&body=Tell%20me%20about%20your%20industry%2C%20target%20country%20and%20offer.%0A%0AIndustry:%0ACountry:%0AOffer:">
+          <a href="mailto:outreachai.team@gmail.comhellooutreachai.team@gmail.com?subject=I%20want%20more%20sales%20calls&body=Tell%20me%20about%20your%20industry%2C%20target%20country%20and%20offer.%0A%0AIndustry:%0ACountry:%0AOffer:">
             <Button size="lg" className="bg-gradient-primary px-8 text-base shadow-lg">
               Get my first campaign 🚀
             </Button>
           </a>
-          <a href="mailto:hello@outreach-ochre-sigma.vercel.app?subject=Question%20about%20DFY%20service">
+          <a href="mailto:outreachai.team@gmail.comhellooutreachai.team@gmail.com?subject=Question%20about%20DFY%20service">
             <Button size="lg" variant="outline" className="px-8 text-base">Ask a question</Button>
           </a>
         </div>
@@ -81,7 +81,7 @@ function AgencyPage() {
                 <li>✅ Automated follow-ups</li>
                 <li>✅ Weekly report</li>
               </ul>
-              <a href="mailto:hello@outreach-ochre-sigma.vercel.app?subject=Launch%20plan%20—%20$299/mo">
+              <a href="mailto:outreachai.team@gmail.comhellooutreachai.team@gmail.com?subject=Launch%20plan%20—%20$299/mo">
                 <Button className="mt-7 w-full" variant="outline">Start Launch</Button>
               </a>
             </div>
@@ -98,7 +98,7 @@ function AgencyPage() {
                 <li>✅ Priority reply handling</li>
                 <li>✅ Dedicated manager</li>
               </ul>
-              <a href="mailto:hello@outreach-ochre-sigma.vercel.app?subject=Growth%20plan%20—%20$699/mo">
+              <a href="mailto:outreachai.team@gmail.comhellooutreachai.team@gmail.com?subject=Growth%20plan%20—%20$699/mo">
                 <Button className="mt-7 w-full bg-gradient-primary">Start Growth</Button>
               </a>
             </div>
