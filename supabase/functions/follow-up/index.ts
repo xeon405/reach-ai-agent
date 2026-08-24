@@ -104,27 +104,21 @@ serve(async (req) => {
     // -----------------------------------------------------------------
     let repliesFound = 0;
     let unsubscribes = 0;
-    const dbgInfo: Record<string, unknown> = {};
 
     try {
-      const { data: openEmails, error: oeErr } = await supabase
+      const { data: openEmails } = await supabase
         .from("emails_sent")
         .select("id, user_id, sent_at, lead:leads(id, email, unsubscribed)")
         .eq("replied", false)
         .order("sent_at", { ascending: false })
         .limit(60);
-      dbgInfo.openEmails = openEmails?.length ?? null;
-      dbgInfo.openEmailsErr = oeErr?.message ?? null;
 
       const scanUserIds = [...new Set((openEmails ?? []).map((e) => e.user_id))];
-      dbgInfo.usersScanned = scanUserIds.length;
       const { data: scanProfiles } = scanUserIds.length
         ? await supabase.from("profiles").select("*").in("id", scanUserIds)
         : { data: [] };
       const scanProfileMap = Object.fromEntries((scanProfiles ?? []).map((p) => [p.id, p]));
-      dbgInfo.profilesFound = Object.keys(scanProfileMap).length;
       const scanTokens = await fetchTokenMap(supabase, scanUserIds);
-      dbgInfo.tokensFound = Object.keys(scanTokens).length;
 
       // 💥 Bounce sweep: delivery failures from mailer-daemon/postmaster mean dead
       // addresses. Mark those leads bounced (unsubscribed=true reuses all suppression).
@@ -172,13 +166,6 @@ serve(async (req) => {
         const profile = scanProfileMap[email.user_id];
         const lead = Array.isArray(email.lead) ? email.lead[0] : email.lead;
         const refreshToken = scanTokens[email.user_id];
-        dbgInfo.lastLoop = {
-          hasProfile: !!profile,
-          hasToken: !!refreshToken,
-          leadEmail: lead?.email ?? null,
-          leadId: lead?.id ?? null,
-          unsubscribed: lead?.unsubscribed ?? null,
-        };
         if (!profile || !refreshToken || !lead?.email || lead.unsubscribed) continue;
 
         const afterEpoch = Math.floor(new Date(email.sent_at).getTime() / 1000);
@@ -187,11 +174,9 @@ serve(async (req) => {
           `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
           { headers: { Authorization: `Bearer ${await refreshGmailToken(refreshToken)}` } }
         );
-        if (!searchRes.ok) { dbgInfo.lastSearchStatus = searchRes.status; continue; }
+        if (!searchRes.ok) continue;
         const searchData = await searchRes.json();
         const hits = searchData.messages ?? [];
-        dbgInfo.lastSearchHits = hits.length;
-        dbgInfo.lastQuery = q;
         if (hits.length === 0) continue;
 
         repliesFound++;
@@ -456,12 +441,7 @@ Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero 
       .lte("follow_up_at", now);
 
     if (!emails || emails.length === 0) {
-      return json({
-        message: "No follow-ups due",
-        repliesFound,
-        unsubscribes,
-        dbg: dbgInfo,
-      });
+      return json({ message: "No follow-ups due", repliesFound, unsubscribes });
     }
 
     // Fetch profiles separately (avoids the broken FK embed)
@@ -586,12 +566,7 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
       console.error("[follow-up] queue revival failed:", reviveErr instanceof Error ? reviveErr.message : reviveErr);
     }
 
-    return json({
-      sent,
-      repliesFound,
-      unsubscribes,
-      dbg: dbgInfo,
-    });
+    return json({ sent, repliesFound, unsubscribes });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
