@@ -88,7 +88,7 @@ serve(async (req) => {
     if (action === "validate") {
       const emails = body.emails;
       if (!Array.isArray(emails) || emails.length === 0 || emails.length > 25) {
-        return json({ error: "Send between 1 and 25 emails." }, 400);
+        return json({ error: "Provide 'emails' as an array of 1-25 addresses to validate." }, 400);
       }
       const results = [];
       for (const raw of emails.slice(0, 25)) {
