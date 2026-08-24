@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Download, Search, Plus, Upload, Sparkles, Loader2 } from "lucide-react";
+import { Download, Search, Plus, Upload, Sparkles, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -59,6 +59,14 @@ function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [q, setQ] = useState("");
+
+  async function deleteLead(id: string) {
+    if (!window.confirm("Delete this lead? This cannot be undone.")) return;
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+    const { error } = await supabase.from("leads").delete().eq("id", id);
+    if (error) { toast.error("Could not delete lead"); void load(); }
+    else toast.success("Lead deleted");
+  }
 
   async function setLeadStatus(id: string, next: string) {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: next } : l)));
@@ -398,11 +406,12 @@ function LeadsPage() {
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-16 text-center text-muted-foreground">
+              <tr><td colSpan={8} className="px-4 py-16 text-center text-muted-foreground">
                 No leads yet. Use "Find Leads with AI" or add manually.
               </td></tr>
             ) : filtered.map((l) => (
@@ -434,6 +443,15 @@ function LeadsPage() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{new Date(l.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => void deleteLead(l.id)}
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Delete lead"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
