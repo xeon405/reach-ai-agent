@@ -15,10 +15,12 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StatusRouteImport } from './routes/status'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SecurityRouteImport } from './routes/security'
+import { Route as RefundsRouteImport } from './routes/refunds'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as HonestyRouteImport } from './routes/honesty'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AgencyRouteImport } from './routes/agency'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GmailCallbackRouteImport } from './routes/gmail.callback'
@@ -62,6 +64,11 @@ const SecurityRoute = SecurityRouteImport.update({
   path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RefundsRoute = RefundsRouteImport.update({
+  id: '/refunds',
+  path: '/refunds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -80,6 +87,11 @@ const AuthRoute = AuthRouteImport.update({
 const AgencyRoute = AgencyRouteImport.update({
   id: '/agency',
   path: '/agency',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -144,10 +156,12 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/honesty': typeof HonestyRoute
   '/privacy': typeof PrivacyRoute
+  '/refunds': typeof RefundsRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
   '/status': typeof StatusRoute
@@ -167,10 +181,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/honesty': typeof HonestyRoute
   '/privacy': typeof PrivacyRoute
+  '/refunds': typeof RefundsRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
   '/status': typeof StatusRoute
@@ -192,10 +208,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/about': typeof AboutRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/honesty': typeof HonestyRoute
   '/privacy': typeof PrivacyRoute
+  '/refunds': typeof RefundsRoute
   '/security': typeof SecurityRoute
   '/stats': typeof StatsRoute
   '/status': typeof StatusRoute
@@ -217,10 +235,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/about'
     | '/agency'
     | '/auth'
     | '/honesty'
     | '/privacy'
+    | '/refunds'
     | '/security'
     | '/stats'
     | '/status'
@@ -240,10 +260,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/about'
     | '/agency'
     | '/auth'
     | '/honesty'
     | '/privacy'
+    | '/refunds'
     | '/security'
     | '/stats'
     | '/status'
@@ -264,10 +286,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/about'
     | '/agency'
     | '/auth'
     | '/honesty'
     | '/privacy'
+    | '/refunds'
     | '/security'
     | '/stats'
     | '/status'
@@ -289,10 +313,12 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  AboutRoute: typeof AboutRoute
   AgencyRoute: typeof AgencyRoute
   AuthRoute: typeof AuthRouteWithChildren
   HonestyRoute: typeof HonestyRoute
   PrivacyRoute: typeof PrivacyRoute
+  RefundsRoute: typeof RefundsRoute
   SecurityRoute: typeof SecurityRoute
   StatsRoute: typeof StatsRoute
   StatusRoute: typeof StatusRoute
@@ -346,6 +372,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/refunds': {
+      id: '/refunds'
+      path: '/refunds'
+      fullPath: '/refunds'
+      preLoaderRoute: typeof RefundsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -372,6 +405,13 @@ declare module '@tanstack/react-router' {
       path: '/agency'
       fullPath: '/agency'
       preLoaderRoute: typeof AgencyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -500,10 +540,12 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  AboutRoute: AboutRoute,
   AgencyRoute: AgencyRoute,
   AuthRoute: AuthRouteWithChildren,
   HonestyRoute: HonestyRoute,
   PrivacyRoute: PrivacyRoute,
+  RefundsRoute: RefundsRoute,
   SecurityRoute: SecurityRoute,
   StatsRoute: StatsRoute,
   StatusRoute: StatusRoute,

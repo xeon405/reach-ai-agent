@@ -58,6 +58,11 @@ const CHARTER = [
     link: { to: "/terms", label: "Refund policy" },
   },
   {
+    rule: "Reviews will only ever be real",
+    detail:
+      "When we add customer reviews, they will come from verified paid accounts only. We will never delete a genuine negative review, incentivise positive ones, or seed fake testimonials. Until real customers exist, we show no reviews at all.",
+  },
+  {
     rule: "Your data is a sacred trust",
     detail:
       "We never sell, rent, or share your data. Gmail tokens live in an isolated vault. Export or permanently delete everything with one click, anytime.",

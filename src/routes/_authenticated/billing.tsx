@@ -106,8 +106,9 @@ function BillingPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-2xl border border-border bg-card/60 px-6 py-4 text-sm text-muted-foreground">
-        <span>✅ No hidden fees</span>
+        <span>✅ No hidden fees · taxes shown at checkout before you pay</span>
         <span>✅ Exact email caps — hard stop, never overage</span>
+        <span>✅ Prices never change based on your activity</span>
         <span>✅ 14-day money-back, no questions asked</span>
         <a href="/honesty" target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-4">🤝 Our Honesty Charter →</a>
       </div>
