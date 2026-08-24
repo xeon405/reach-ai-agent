@@ -19,6 +19,13 @@ Deno.serve(async (req) => {
     if (!leadId || !/^[0-9a-f-]{36}$/i.test(leadId)) {
       return new Response(JSON.stringify({ error: "missing lead" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
     }
+    // RFC 8058: mailbox providers one-click via POST with no interaction.
+    // Humans who land here via GET get redirected to the branded confirmation page instead.
+    if (req.method === "GET") {
+      const target = new URL("https://outreach-ochre-sigma.vercel.app/unsubscribe");
+      target.searchParams.set("l", leadId);
+      return new Response(null, { status: 302, headers: { Location: target.toString() } });
+    }
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const { data: lead } = await admin.from("leads").select("*").eq("id", leadId).maybeSingle();

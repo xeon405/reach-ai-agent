@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory, type Niche } from "../_shared/osm.ts";
+import { insertAudit } from "../_shared/audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,7 +66,9 @@ serve(async (req) => {
         ...l,
         status: "new",
       }));
+      // lead.created audit events are emitted by the trg_audit_lead_created DB trigger.
       await supabase.from("leads").insert(rows);
+      await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "lead.imported", payload: { count: leads.length, source: "open-business-directory" } });
     }
 
     return json({

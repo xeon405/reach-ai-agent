@@ -63,15 +63,32 @@ export async function getAccessToken(
   }
   try {
     const accessToken = await mintAccessToken(plain);
+    // Successful mint → connection healthy again; clear any degraded state.
+    try {
+      await admin.from("profiles").update({ gmail_state: "CONNECTED" }).eq("id", userId);
+    } catch (_e) { /* cosmetic only */ }
     return { accessToken, row };
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith("token_refresh_failed:400")) {
-      // revoked / reconsent required → mark disconnected so UI prompts reconnect
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith("token_refresh_failed:400") && msg.includes("invalid_grant")) {
+      // Google revoked/expired the grant — user must re-consent.
       try {
         await admin.from("gmail_tokens").delete().eq("user_id", userId);
+        await admin.from("profiles").update({ gmail_connected: false, gmail_state: "ACCESS_REVOKED" }).eq("id", userId);
       } catch (_e) { /* best effort */ }
+      throw new Error("GMAIL_ACCESS_REVOKED");
     }
-    throw err;
+    if (msg === "credential_decrypt_failed") {
+      try {
+        await admin.from("profiles").update({ gmail_state: "REAUTH_REQUIRED" }).eq("id", userId);
+      } catch (_e) { /* best effort */ }
+      throw new Error("OAUTH_REAUTH_REQUIRED");
+    }
+    // Transient (network/5xx/401) — keep credentials, mark degraded, retryable.
+    try {
+      await admin.from("profiles").update({ gmail_state: "TOKEN_REFRESH_FAILED" }).eq("id", userId);
+    } catch (_e) { /* best effort */ }
+    throw new Error(`GMAIL_TOKEN_REFRESH_FAILED:${msg.slice(0, 120)}`);
   }
 }
 
@@ -97,9 +114,13 @@ export async function sendGmail(accessToken: string, raw: string): Promise<void>
   await sendGmailRaw(accessToken, raw);
 }
 
-export function buildRawEmail(to: string, subject: string, body: string, from: string): string {
-  const header = `To: ${to}\r\nFrom: ${from}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\n`;
-  return btoa(unescape(encodeURIComponent(header + body)))
+export function buildRawEmail(to: string, subject: string, body: string, from: string, unsubUrl?: string): string {
+  let header = `To: ${to}\r\nFrom: ${from}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset="UTF-8"\r\n`;
+  if (unsubUrl) {
+    // RFC 2369 + RFC 8058 one-click (provider POSTs this URL directly).
+    header += `List-Unsubscribe: <mailto:${to}?subject=unsubscribe>, <${unsubUrl}>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n`;
+  }
+  return btoa(unescape(encodeURIComponent(header + "\r\n" + body)))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");

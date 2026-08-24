@@ -2,7 +2,7 @@
 // INBOX AGENT — inbound intelligence ONLY. Never sends cold email.
 // Inbox scan → strip quoted → dedupe → classify (structured JSON)
 // → POLICY ENGINE decides → controlled actions.
-// Also hosts: 05:00 UTC autopilot top-up, 04:00 UTC daily digest.
+// Also hosts: 05:00 UTC autopilot top-up. (Daily digest lives in its own scheduled fn.)
 // Auth: CRON_SECRET header or service-role bearer only.
 // ============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -23,6 +23,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const SITE = "https://outreach-ochre-sigma.vercel.app";
+const CONFIDENCE_FLOOR = 0.55;
+const MAX_AI_REPLIES_PER_LEAD_24H = 5;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -208,13 +210,18 @@ Deno.serve(async (req) => {
               groqFail = String(ce).slice(0, 160);
             }
           }
-          await supabase.from("ai_classifications").insert({
+          // CONFIDENCE FLOOR: heuristic fallback scores 0.3 → auto-routes to human review.
+          if (!cls.confidence || cls.confidence < CONFIDENCE_FLOOR) {
+            cls.requires_human = true;
+          }
+          const { error: clsErr } = await supabase.from("ai_classifications").insert({
             user_id: email.user_id, lead_id: lead.id, message_id: hits[0].id,
             intent: cls.intent, confidence: cls.confidence, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
             suggested_action: cls.suggested_action, raw: { subject: replySubject.slice(0, 150) },
           });
+          if (clsErr && String(clsErr.message ?? "").includes("duplicate key")) continue;
           await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, confidence: cls.confidence, source: "first_reply" } });
           await supabase.from("emails_sent").update({ reply_sentiment: cls.sentiment }).eq("id", email.id);
 
@@ -282,7 +289,8 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               lead.email,
               replySubject.startsWith("Re:") ? replySubject : `Re: ${replySubject}`,
               `${draft}\n\n--\nReply with UNSUBSCRIBE to stop further emails.`,
-              profile.gmail_email || profile.email
+              profile.gmail_email || profile.email,
+              `${SITE}/unsubscribe?l=${lead.id}`
             )).catch(() => null);
             if (ids) {
               aiRepliesSent++;
@@ -448,6 +456,33 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           }
           const subj = (msg.payload?.headers ?? []).find((h: { name: string }) => h.name === "Subject")?.value ?? "";
 
+          // ---- LOOP GUARD 1: vacation/autoresponder bots — never spend a turn ----
+          const AUTO_RE = /^(auto(:|matic)?\s*reply|automatic response|out of office|away from (the )?office)/i;
+          if (AUTO_RE.test(subj) || /i am (currently )?(out of (the )?office|on vacation|unavailable until)|this is an auto(matic)?[- ]repl/i.test(theirWords.slice(0, 300))) {
+            await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+            await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "review", title: `🤖 Autoresponder detected: ${lead.name ?? lead.email}`, body: subj.slice(0, 120) || theirWords.slice(0, 120), priority: "normal" });
+            continue;
+          }
+
+          // ---- LOOP GUARD 2: rolling AI-reply budget per lead (24h) ----
+          const { count: aiLast24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
+            .eq("user_id", t.user_id).eq("lead_id", lead.id).eq("event", "ai.reply_sent")
+            .gte("created_at", new Date(Date.now() - 86400000).toISOString());
+          if ((aiLast24 ?? 0) >= MAX_AI_REPLIES_PER_LEAD_24H) {
+            await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+            await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
+            await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "review", title: `🔁 Reply loop stopped: ${lead.name ?? lead.email}`, body: `AI already replied ${aiLast24}× in 24h — thread paused for review.`, priority: "high" });
+            await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "loop.stopped", payload: { kind: "reply_budget", count: aiLast24 } });
+            continue;
+          }
+
+          // ---- LOOP GUARD 3: echo/quoted-text failure — they mirrored our last AI send back
+          const normEcho = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 100);
+          if (t.ai_draft && normEcho(theirWords).startsWith(normEcho(String(t.ai_draft)).slice(0, 60))) {
+            await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+            continue;
+          }
+
           // Structured classification of THIS turn
           let cls: Classification = parseClassification("", `${subj}\n${theirWords}`);
           if (groqKeys().length > 0) {
@@ -459,13 +494,22 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               cls = parseClassification(raw, `${subj}\n${theirWords}`);
             } catch (ce) { groqFail = groqFail || String(ce).slice(0, 160); }
           }
-          await supabase.from("ai_classifications").insert({
+          // CONFIDENCE FLOOR: low-confidence or heuristic-fallback verdicts route to a human, never to an AI send.
+          if (!cls.confidence || cls.confidence < CONFIDENCE_FLOOR) {
+            cls.requires_human = true;
+          }
+          const { error: clsErr } = await supabase.from("ai_classifications").insert({
             user_id: t.user_id, lead_id: lead.id, message_id: hits[0].id,
             intent: cls.intent, confidence: cls.confidence, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
             suggested_action: cls.suggested_action, raw: { subject: subj.slice(0, 150) },
           });
+          if (clsErr) {
+            // Duplicate message id → already processed by a previous run; just advance the pointer.
+            await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+            continue;
+          }
           await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, source: "conversation_turn" } });
 
           const campInfo = convCampMap[t.campaign_id];
@@ -532,7 +576,8 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
                   lead.email,
                   subj.startsWith("Re:") ? subj : `Re: ${subj}`,
                   `${aiReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
-                  profile.gmail_email || profile.email
+                  profile.gmail_email || profile.email,
+                  `${SITE}/unsubscribe?l=${lead.id}`
                 )).catch(() => null);
                 if (ids) {
                   aiRepliesSent++;
@@ -576,89 +621,6 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
       }
     } catch (cmErr) {
       console.error("[inbox] conversation mode failed:", cmErr instanceof Error ? cmErr.message : cmErr);
-    }
-
-    // =====================================================================
-    // ☀️ DAILY DIGEST @ 04:00 UTC — full observability report
-    // =====================================================================
-    if (new Date().getUTCHours() === 4) {
-      try {
-        const today = new Date().toISOString().split("T")[0];
-        const since = new Date(Date.now() - 86400000).toISOString();
-        const { data: digestProfiles } = await supabase
-          .from("profiles")
-          .select("id, email, gmail_email, last_digest_date")
-          .neq("last_digest_date", today);
-        for (const dp of digestProfiles ?? []) {
-          try {
-            const { data: sentRows } = await supabase
-              .from("emails_sent")
-              .select("id, replied, opened, reply_sentiment, autoreplied, campaign_id")
-              .eq("user_id", dp.id)
-              .gte("sent_at", since)
-              .limit(500);
-            if (!sentRows || sentRows.length === 0) continue;
-
-            const { count: failed24 } = await supabase.from("send_queue").select("id", { count: "exact", head: true })
-              .eq("user_id", dp.id).in("status", ["failed", "dead"]).gte("updated_at", since);
-            const { count: bounced24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
-              .eq("user_id", dp.id).eq("event", "email.bounced").gte("created_at", since);
-            const { count: unsubs24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
-              .eq("user_id", dp.id).in("event", ["lead.unsubscribed", "lead.suppressed"]).gte("created_at", since);
-            const { count: bookings24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
-              .eq("user_id", dp.id).eq("event", "booking.detected").gte("created_at", since);
-            const { count: takeovers24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
-              .eq("user_id", dp.id).eq("event", "human.takeover").gte("created_at", since);
-
-            const opens = sentRows.filter((r: { opened?: boolean }) => r.opened).length;
-            const replies = sentRows.filter((r: { replied: boolean }) => r.replied);
-            const hot = replies.filter((r: { reply_sentiment?: string }) => r.reply_sentiment === "INTERESTED").length;
-            const aiSent = sentRows.filter((r: { autoreplied?: boolean }) => r.autoreplied).length;
-
-            const perCamp = new Map<string, { s: number; r: number }>();
-            for (const r of sentRows) {
-              const k = r.campaign_id ?? "none";
-              const cur = perCamp.get(k) ?? { s: 0, r: 0 };
-              cur.s++; if (r.replied) cur.r++;
-              perCamp.set(k, cur);
-            }
-            const campLines = [...perCamp.entries()].map(([cid, v]) => `   • ${cid.slice(0, 8)}…: ${v.s} sent · ${v.r} replies`).join("\n");
-
-            const self = dp.gmail_email || dp.email;
-            if (!self) continue;
-            const tok = await getAccessToken(supabase, dp.id);
-            if (!tok) continue;
-            await sendGmailRaw(tok.accessToken, buildRawEmail(self,
-              `☀️ Your agent's last 24h: ${sentRows.length} sent · ${replies.length} replies · ${hot} hot 🔥`,
-              `Morning report from your OutreachAI agent:
-
-• Emails sent: ${sentRows.length}
-• Failed/dead queue jobs: ${failed24 ?? 0}
-• Bounces: ${bounced24 ?? 0}
-• Opens: ${opens}
-• Replies: ${replies.length}
-• 🔥 Interested: ${hot}
-• 📅 Booking-intent conversations: ${bookings24 ?? 0}
-• 🚫 Unsubscribes: ${unsubs24 ?? 0}
-• 🤖 AI replies sent: ${aiSent}
-• 🤝 Human takeovers: ${takeovers24 ?? 0}
-
-Campaign performance (last 24h):
-${campLines || "   • (none)"}
-
-${hot > 0 || (bookings24 ?? 0) > 0 ? "You have HOT leads waiting — check Gmail now!" : "Keep the pipeline full — import fresh leads today."}
-
-— OutreachAI Agent`,
-              self));
-            await supabase.from("profiles").update({ last_digest_date: today }).eq("id", dp.id);
-            await insertAudit(supabase, { user_id: dp.id, event: "digest.sent", payload: { sent: sentRows.length, replies: replies.length, hot } });
-          } catch (digestErr) {
-            console.error("[inbox] digest failed:", digestErr instanceof Error ? digestErr.message : digestErr);
-          }
-        }
-      } catch (outerErr) {
-        console.error("[inbox] digest pass failed:", outerErr instanceof Error ? outerErr.message : outerErr);
-      }
     }
 
     return json({ ok: true, repliesFound, unsubscribes, bookings, aiRepliesSent, handoffs, groqFail: groqFail || undefined });

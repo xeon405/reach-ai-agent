@@ -271,7 +271,19 @@ Deno.serve(async (req) => {
             if (!fresh) { await failJob(supabase, job, "gmail_disconnected", MAX_ATTEMPTS); failed++; continue; }
             ctx = fresh; ctxs.set(job.user_id, ctx);
           }
-          if (ctx.exhausted || ctx.sentToday >= ctx.dailyCap) {
+          if (ctx.exhausted) {
+            await supabase.from("send_queue").update({
+              status: "pending", lease_until: null,
+              next_retry_at: new Date(Date.now() + 3600_000).toISOString(),
+              updated_at: new Date().toISOString(),
+            }).eq("id", job.id);
+            retried++;
+            continue;
+          }
+
+          // ATOMIC daily-cap reservation — no read/then/write race across workers.
+          const { data: reserved } = await supabase.rpc("reserve_send_slot", { p_user: job.user_id, p_cap: ctx.dailyCap });
+          if (!reserved) {
             ctx!.exhausted = true;
             await supabase.from("send_queue").update({
               status: "pending", lease_until: null,
@@ -283,8 +295,12 @@ Deno.serve(async (req) => {
           }
 
           const ok = await processJob(supabase, job, ctx!, startedAt);
-          if (ok) { sent++; }
-          else { failed++; }
+          if (ok) { sent++; ctx!.sentToday++; }
+          else {
+            // Send didn't happen — give the reserved slot back.
+            try { await supabase.rpc("release_send_slot", { p_user: job.user_id }); } catch (_e) { /* best effort */ }
+            failed++;
+          }
           await new Promise((r) => setTimeout(r, DELAY_MS));
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -296,10 +312,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Flush counters + usage_limits mirror
+    // usage_limits mirror only — profiles counters are owned by reserve_send_slot RPC.
     for (const [uid, ctx] of ctxs) {
-      await supabase.from("profiles").update({ emails_sent_today: ctx.sentToday, emails_sent_date: ctx.today }).eq("id", uid);
-      await supabase.from("usage_limits").upsert({ user_id: uid, emails_sent_today: ctx.sentToday, limit_date: ctx.today, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      if (ctx.sentToday > 0) {
+        try {
+          await supabase.from("usage_limits").upsert({ user_id: uid, emails_sent_today: ctx.sentToday, limit_date: ctx.today, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+        } catch (_e) { /* mirror only */ }
+      }
     }
 
     return json({ ok: true, sent, failed, retried, dead, ...fuStats });
@@ -318,7 +337,7 @@ Deno.serve(async (req) => {
     const today = new Date().toISOString().split("T")[0];
     return {
       profile,
-      dailyCap: Math.min(limits.dailyEmails, 5 + daysWarm * 5),
+      dailyCap: Math.min(limits.dailyEmails, 5 + daysWarm * 5, profile.gmail_account_type === "workspace" ? 2000 : 500),
       today,
       sentToday: profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0,
       exhausted: false,
@@ -469,9 +488,6 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     }).eq("id", lead.id);
 
     ctx.sentToday++;
-    if (ctx.sentToday % 3 === 0) {
-      await db.from("profiles").update({ emails_sent_today: ctx.sentToday, emails_sent_date: ctx.today }).eq("id", job.user_id);
-    }
     await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: emailRow.id, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80) } });
     return true;
   }
@@ -510,12 +526,6 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         if (!camp || camp.status !== "active") reasons.push("campaign_inactive");
         const { data: sup } = await db.from("suppressions").select("id").eq("user_id", email.user_id).ilike("email", lead.email).limit(1).maybeSingle();
         if (sup) reasons.push("suppression_list");
-        const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
-        const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
-        const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
-        const today = new Date().toISOString().split("T")[0];
-        const used = profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0;
-        if (used >= cap) reasons.push("daily_limit");
 
         if (reasons.length > 0) {
           // Cancel the scheduled step — conditions changed
@@ -528,10 +538,31 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
           continue;
         }
 
-        const tok = await getAccessToken(db, email.user_id);
-        if (!tok) { followupsCancelled++; continue; }
-
+        // IDEMPOTENCY: skip if this step already recorded (crash-retry protection).
         const step = email.sequence === 1 ? 2 : 3;
+        const { data: existingStep } = await db.from("emails_sent")
+          .select("id").eq("campaign_id", email.campaign_id).eq("lead_id", lead.id).eq("sequence", step).limit(1).maybeSingle();
+        if (existingStep) {
+          await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
+          continue;
+        }
+
+        // ATOMIC daily-cap reservation (concurrency-safe). Cap hit → DEFER an hour, never cancel.
+        const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+        const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
+        const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
+        const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5, baseCap);
+        const { data: reserved } = await db.rpc("reserve_send_slot", { p_user: email.user_id, p_cap: cap });
+        if (!reserved) {
+          await db.from("emails_sent").update({ follow_up_at: new Date(Date.now() + 3600_000).toISOString() }).eq("id", email.id);
+          continue;
+        }
+
+        if (!tok) {
+          await db.rpc("release_send_slot", { p_user: email.user_id });
+          followupsCancelled++;
+          continue;
+        }
         const firstName = (lead.name ?? "there").split(" ")[0];
         const subject = String(email.subject ?? "").startsWith("Re: ") ? String(email.subject) : `Re: ${email.subject}`;
         const footer = `--
@@ -573,11 +604,14 @@ ${footer}`;
           });
         }
         await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
-        await db.from("profiles").update({ emails_sent_today: used + 1, emails_sent_date: today }).eq("id", email.user_id);
         followupsSent++;
         await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "email.sent", payload: { kind: "followup", step, email_id: email.id, gmail_message_id: ids.id } });
       } catch (e) {
-        console.error(`[send-worker] follow-up failed for ${email.id}:`, e instanceof Error ? e.message : e);
+        // Slot was reserved but the send failed — give it back.
+        try { await db.rpc("release_send_slot", { p_user: email.user_id }); } catch (_e) { /* best effort */ }
+        try {
+          await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: email.lead_id ?? null, event: "email.failed", payload: { kind: "followup", error: e instanceof Error ? e.message : String(e) } });
+        } catch (_e) { /* best effort */ }
       }
     }
     return { followupsSent, followupsCancelled };

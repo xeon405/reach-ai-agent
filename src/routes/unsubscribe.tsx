@@ -15,7 +15,7 @@ function UnsubscribePage() {
     if (!l) { setState("error"); return; }
     fetch(
       `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/unsubscribe?l=${encodeURIComponent(l)}&c=${encodeURIComponent(params.get("c") ?? "")}`,
-      { headers: { apikey: "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM" } }
+      { method: "POST", headers: { apikey: "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM" } }
     )
       .then((r) => setState(r.ok ? "done" : "error"))
       .catch(() => setState("error"));
