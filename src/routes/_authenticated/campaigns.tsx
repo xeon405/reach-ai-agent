@@ -13,11 +13,12 @@ export const Route = createFileRoute("/_authenticated/campaigns")({
   component: CampaignsPage,
 });
 
-type Campaign = { id: string; name: string; status: string; created_at: string };
+type Campaign = { id: string; name: string; status: string; created_at: string; ab_test?: boolean; autopilot?: boolean };
 
 function CampaignsPage() {
   const [items, setItems] = useState<Campaign[]>([]);
   const [stats, setStats] = useState<Record<string, { leads: number; emails: number; replies: number }>>({});
+  const [abStats, setAbStats] = useState<Record<string, { a: number; aOpen: number; b: number; bOpen: number }> | null>(null);
   const [open, setOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [name, setName] = useState("");
@@ -39,6 +40,7 @@ function CampaignsPage() {
     setItems((data as Campaign[]) ?? []);
     if (data && data.length) {
       const s: typeof stats = {};
+      const ab: Record<string, { a: number; aOpen: number; b: number; bOpen: number }> = {};
       for (const c of data) {
         const [l, e, r] = await Promise.all([
           supabase.from("leads").select("id", { count: "exact", head: true }).eq("campaign_id", c.id),
@@ -46,9 +48,31 @@ function CampaignsPage() {
           supabase.from("emails_sent").select("id", { count: "exact", head: true }).eq("campaign_id", c.id).eq("replied", true),
         ]);
         s[c.id] = { leads: l.count ?? 0, emails: e.count ?? 0, replies: r.count ?? 0 };
+        const [va, vb] = await Promise.all([
+          supabase.from("emails_sent").select("opened").eq("campaign_id", c.id).eq("variant", "A"),
+          supabase.from("emails_sent").select("opened").eq("campaign_id", c.id).eq("variant", "B"),
+        ]);
+        if (c.ab_test) {
+          const rowsA = (va.data as { opened: boolean }[] | null) ?? [];
+          const rowsB = (vb.data as { opened: boolean }[] | null) ?? [];
+          ab[c.id] = {
+            a: rowsA.length,
+            aOpen: rowsA.filter((x) => x.opened).length,
+            b: rowsB.length,
+            bOpen: rowsB.filter((x) => x.opened).length,
+          };
+        }
       }
       setStats(s);
+      setAbStats(ab);
     }
+  }
+
+  async function setFlag(c: Campaign, key: "ab_test" | "autopilot", value: boolean) {
+    const { error } = await supabase.from("campaigns").update({ [key]: value }).eq("id", c.id);
+    if (error) toast.error(error.message);
+    else toast.success(value ? "Enabled" : "Disabled");
+    load();
   }
 
   async function create() {
@@ -291,6 +315,30 @@ function CampaignsPage() {
                     <Stat label="Leads targeted" value={s.leads} />
                     <Stat label="Emails sent" value={s.emails} />
                     <Stat label="Reply rate" value={`${replyRate}%`} />
+                  </div>
+                  {abStats && (abStats.a > 0 || abStats.b > 0) ? (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      A/B: A opened {abStats.aOpen}/{abStats.a} · B opened {abStats.bOpen}/{abStats.b}
+                      {abStats.a >= 10 && abStats.b >= 10
+                        ? ` — winner: ${abStats.aOpen / abStats.a >= abStats.bOpen / abStats.b ? "A" : "B"}`
+                        : " — need 10+ sends each for a winner"}
+                    </div>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFlag(c, "ab_test", !c.ab_test)}
+                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.ab_test ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                    >
+                      🧪 A/B subjects {c.ab_test ? "ON" : "OFF"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlag(c, "autopilot", !c.autopilot)}
+                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.autopilot ? "border-success bg-success/10 text-success" : "border-border text-muted-foreground hover:text-foreground"}`}
+                    >
+                      🤖 Autopilot replies {c.autopilot ? "ON" : "OFF"}
+                    </button>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">

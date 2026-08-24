@@ -115,6 +115,9 @@ const DICT: Record<string, { en: string; ar: string }> = {
   btn_launch: { en: "Launch", ar: "إطلاق" },
 };
 
+  perk_ab: { en: "A/B tested subject lines", ar: "اختبار A/B لعناوين الرسائل" },
+  perk_auto: { en: "Autopilot AI replies", ar: "ردود تلقائية بالذكاء الاصطناعي" },
+
 interface LangCtx {
   lang: Lang;
   setLang: (l: Lang) => void;

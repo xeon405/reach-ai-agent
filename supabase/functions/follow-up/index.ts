@@ -249,6 +249,33 @@ Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero 
             } catch (saveErr) {
               console.error("[follow-up] Draft save failed:", saveErr instanceof Error ? saveErr.message : saveErr);
             }
+
+            // 🚀 AUTOPILOT: campaign opted in → send the reply automatically
+            if (sentiment === "INTERESTED") {
+              try {
+                const { data: camp } = await supabase
+                  .from("campaigns")
+                  .select("autopilot")
+                  .eq("id", email.campaign_id)
+                  .maybeSingle();
+                if (camp?.autopilot) {
+                  const accessToken2 = await refreshGmailToken(refreshToken);
+                  const selfEmail = profile.gmail_email || profile.email;
+                  await sendGmail(
+                    accessToken2,
+                    buildRawEmail(
+                      lead.email,
+                      replySubject.startsWith("Re:") ? replySubject : `Re: ${replySubject}`,
+                      `${draft}\n\n--\nReply with UNSUBSCRIBE to stop further emails.`,
+                      selfEmail
+                    )
+                  );
+                  await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: draft }).eq("id", email.id);
+                }
+              } catch (autoErr) {
+                console.error("[follow-up] Autopilot send failed:", autoErr instanceof Error ? autoErr.message : autoErr);
+              }
+            }
           }
         }
 

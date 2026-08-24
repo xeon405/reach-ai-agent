@@ -243,7 +243,7 @@ serve(async (req) => {
     // Verify the campaign belongs to this user and is active
     const { data: campaign } = await supabase
       .from("campaigns")
-      .select("id, status")
+      .select("id, status, ab_test")
       .eq("id", campaignId)
       .eq("user_id", userId)
       .single();
@@ -258,6 +258,21 @@ serve(async (req) => {
       .single();
 
     if (!profile) throw new Error("Profile not found");
+
+    // A/B test: pre-generate alternative subject lines for variant B
+    let altSubjects: string[] = [];
+    if (campaign.ab_test) {
+      try {
+        const altText = await groqChat([{
+          role: "user",
+          content: `Our cold outreach offer: ${sanitizeForPrompt(profile.offer ?? "our services", 300)}
+Write 5 alternative email subject lines for this offer. Rules: max 8 words each, curious but never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
+        }], { maxTokens: 200, temperature: 0.9 });
+        altSubjects = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5);
+      } catch (_e) {
+        // fall back to single-variant run if generation fails
+      }
+    }
 
     const { data: tokenRow } = await supabase
       .from("gmail_tokens")
@@ -426,8 +441,15 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
   return { score: Math.max(0, Math.min(100, s)), hint: hints.join(" ") };
 }
 
-    for (const lead of eligible) {
+    for (let leadIdx = 0; leadIdx < eligible.length; leadIdx++) {
+      const lead = eligible[leadIdx];
       try {
+        // A/B split: even leads = A (AI per-lead subject), odd leads = B (alt subjects, rotating)
+        let variant: string | null = null;
+        if (campaign.ab_test && altSubjects.length > 0) {
+          variant = leadIdx % 2 === 0 ? "A" : "B";
+        }
+
         let { subject, body: aiBody } = await generateEmail(
           lead.name ?? "there",
           lead.company ?? "your company",
@@ -436,6 +458,7 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
           "",
           isArabicLead(lead.country)
         );
+        if (variant === "B") subject = altSubjects[sent % altSubjects.length];
 
         // 🛡️ Pre-send deliverability guard: regenerate once if draft looks spammy
         let check = localSpamScore(subject, aiBody);
@@ -480,6 +503,7 @@ One click: https://outreach-ochre-sigma.vercel.app/unsubscribe?l=${lead.id}&c=${
             campaign_id: campaignId,
             subject,
             body,
+            variant,
             follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
             sequence: 1,
             follow_up_sent: false,

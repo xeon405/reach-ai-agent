@@ -50,14 +50,14 @@ const plans = [
     nameKey: "plan_growth",
     price: 79,
     capKey: "cap_growth",
-    perkKeys: ["perk_ai","perk_5camp","perk_reply","perk_tz"],
+    perkKeys: ["perk_ai","perk_5camp","perk_reply","perk_ab","perk_tz"],
     featured: true,
   },
   {
     nameKey: "plan_agency",
     price: 149,
     capKey: "cap_agency",
-    perkKeys: ["perk_unlim","perk_arabic","perk_bulk","badge_support"],
+    perkKeys: ["perk_unlim","perk_arabic","perk_bulk","perk_auto","badge_support"],
   },
 ];
 
