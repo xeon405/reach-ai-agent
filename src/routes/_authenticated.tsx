@@ -53,9 +53,11 @@ function AuthenticatedLayout() {
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
         <Sidebar collapsible="icon">
-          <SidebarHeader className="flex flex-row items-center justify-between border-b border-sidebar-border px-4 py-4">
-            <Logo />
-            <ThemeToggle />
+          <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
+            <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+              <Logo />
+              <ThemeToggle className="shrink-0 group-data-[collapsible=icon]:hidden" />
+            </div>
           </SidebarHeader>
           <SidebarContent>
             <SidebarGroup>
