@@ -7,6 +7,9 @@
   </url>
   <url>
     <loc>https://outreach-ochre-sigma.vercel.app/tools</loc>
+  </url>
+  <url>
+    <loc>https://outreach-ochre-sigma.vercel.app/agency</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>

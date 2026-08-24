@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/sidebar";
 import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut, Loader2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { SupportChat } from "@/components/support-chat";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -88,6 +89,7 @@ function AuthenticatedLayout() {
           <main className="flex-1 p-6 md:p-8">
             <Outlet />
           </main>
+          <SupportChat />
         </div>
       </div>
     </SidebarProvider>

@@ -77,6 +77,7 @@ function Landing() {
             <a href="#features" className="hover:text-foreground">Features</a>
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
             <Link to="/tools" className="hover:text-foreground">Free tools</Link>
+            <Link to="/agency" className="font-medium text-primary hover:text-foreground">Hire us — done-for-you</Link>
             <Link to="/stats" className="hover:text-foreground">Live stats</Link>
           </nav>
           <div className="flex items-center gap-2">

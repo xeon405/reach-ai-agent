@@ -243,6 +243,13 @@ Write a 3-4 sentence human reply on behalf of the sender. Warm, confident, zero 
           } catch (draftErr) {
             console.error("[follow-up] Draft failed:", draftErr instanceof Error ? draftErr.message : draftErr);
           }
+          if (draft) {
+            try {
+              await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
+            } catch (saveErr) {
+              console.error("[follow-up] Draft save failed:", saveErr instanceof Error ? saveErr.message : saveErr);
+            }
+          }
         }
 
         // Alert the user from their own inbox (free, no SMTP needed)

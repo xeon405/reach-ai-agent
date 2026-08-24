@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Edit, Pause, Play, Plus, Trash2, Sparkles, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
+import { TEMPLATES } from "@/lib/templates";
 
 export const Route = createFileRoute("/_authenticated/campaigns")({
   component: CampaignsPage,
@@ -151,6 +152,29 @@ function CampaignsPage() {
                 <DialogTitle>✨ AI Email Generator</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">📚 Start from a proven template</label>
+                  <select
+                    className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value=""
+                    onChange={(e) => {
+                      const t = TEMPLATES[Number(e.target.value)];
+                      if (!t) return;
+                      setAiForm({ ...aiForm, yourOffer: t.body.slice(0, 300) });
+                      setGeneratedEmail(t.body.replace(/{{booking_link}}/g, "https://cal.com/you/15min"));
+                      toast.success(`Template loaded: ${t.name}`);
+                    }}
+                  >
+                    <option value="">Choose a niche template…</option>
+                    {Array.from(new Set(TEMPLATES.map((t) => t.niche))).map((niche) => (
+                      <optgroup key={niche} label={niche}>
+                        {TEMPLATES.map((t, i) =>
+                          t.niche === niche ? <option key={t.name} value={i}>{t.name}</option> : null
+                        )}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium">Lead Name</label>
