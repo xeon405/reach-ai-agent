@@ -53,17 +53,31 @@ serve(async (req) => {
     }
     if (groqKeys().length === 0) throw new Error("No GROQ API keys configured");
 
+    // Sender identity: real name/signature so the AI never signs "[Your Name]"
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("name, company, signature, booking_link")
+      .eq("id", userId)
+      .single();
+    const senderName = sanitizeForPrompt(prof?.name ?? "", 60);
+    const senderSig = sanitizeForPrompt(prof?.signature ?? "", 200);
+    const bookingLink = sanitizeForPrompt(prof?.booking_link ?? "", 300);
+
     const content = await groqChat([{
       role: "user",
-      content: `Write a short, personalized cold email from ${sanitizeForPrompt(yourCompany ?? "our company", 120)} to ${sanitizeForPrompt(leadName, 80)} who is a ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
-Our offer: ${sanitizeForPrompt(yourOffer ?? "our service")}
+      content: `Write a short, personalized cold email from ${senderName || "a representative"} at ${sanitizeForPrompt(yourCompany ?? prof?.company ?? "our company", 120)} to ${sanitizeForPrompt(leadName, 80)} who is a ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
+Our offer: ${sanitizeForPrompt(yourOffer ?? "our service")}${bookingLink ? `
+Booking link you can mention for scheduling: ${bookingLink}` : ""}
 Rules:
 - Maximum 5 sentences
 - Sound human and genuine, not salesy
 - Reference their specific role
 - End with a simple question
 - No subject line, just the email body
-- Sign off with "Best regards"`,
+- Sign off exactly as: Best regards,
+${senderName || `${sanitizeForPrompt(yourCompany ?? "the team", 120)} team`}
+- NEVER use placeholders like [Your Name] or [Company] — use only real details given above${senderSig ? `
+- Append this signature block verbatim at the end:\n${senderSig}` : ""}`,
     }], { maxTokens: 800 });
 
     return json({ content });

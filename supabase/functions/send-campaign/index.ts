@@ -185,7 +185,7 @@ Rules for subject:
 - No spam words, no ALL CAPS words, no emojis, no "Re:"/"Fwd:" prefixes.
 Rules for body:
 - 60-120 words max. Short paragraphs (1-3 sentences each).
-- Open with something specific to their role/company. No "Dear Sir/Madam", no "Hope this finds you well".
+- Open with something tied to their role or industry. NEVER invent news, events, product launches, or claims about their company that were not provided — generic role-based openers are safer than fabricated facts.
 - Explain our offer in one clear sentence tied to THEIR pain.
 - End with a soft question asking if this is worth a quick chat.
 - Sign off as "Best regards".

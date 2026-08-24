@@ -571,6 +571,7 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
                 last_ai_msg_at: new Date().toISOString(),
                 last_lead_msg_at: new Date(msgDateMs).toISOString(),
                 autoreplied: true,
+                ai_draft: aiReply.trim(),
               }).eq("id", t.id);
               // Routine turns stay SILENT — only alert at final handoff
               if (newTurns >= 3) {
