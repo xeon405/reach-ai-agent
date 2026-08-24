@@ -25,13 +25,28 @@ const STATUS_COLORS: Record<string, string> = {
   new: "bg-primary/15 text-primary",
   emailed: "bg-secondary text-secondary-foreground",
   replied: "bg-success/15 text-success",
+  won: "bg-success text-success-foreground font-semibold",
   booked: "bg-warning/15 text-warning",
 };
+
+const PIPELINE_STATUSES = ["new", "emailed", "replied", "won"] as const;
+const SYSTEM_STATUSES = ["bounced", "unsubscribed", "invalid", "skipped"];
 
 function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [q, setQ] = useState("");
+
+  async function setLeadStatus(id: string, next: string) {
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: next } : l)));
+    const { error } = await supabase.from("leads").update({ status: next }).eq("id", id);
+    if (error) {
+      toast.error("Could not update status");
+      void load();
+    } else if (next === "won") {
+      toast.success("🏆 Marked as won — great job!");
+    }
+  }
   const [country, setCountry] = useState("all");
   const [status, setStatus] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
@@ -41,6 +56,7 @@ function LeadsPage() {
   const [form, setForm] = useState({
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
+  const [bulkText, setBulkText] = useState("");
   const [findForm, setFindForm] = useState({
     jobTitle: "Marketing Manager",
     industry: "",
@@ -59,9 +75,37 @@ function LeadsPage() {
   }
 
   async function addLead() {
-    if (!form.email) { toast.error("Email is required"); return; }
+    if (!form.email && !bulkText.trim()) { toast.error("Email is required"); return; }
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
+
+    // Bulk import: one lead per line — "email" or "name, email" or "name, email, company"
+    if (bulkText.trim()) {
+      const rows = bulkText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 500);
+      const inserts = rows.map((line) => {
+        const parts = line.split(/[,;\t]/).map((p) => p.trim());
+        const email = parts.find((p) => p.includes("@")) ?? "";
+        const rest = parts.filter((p) => p !== email);
+        return {
+          user_id: u.user!.id,
+          name: rest[0] || null,
+          email,
+          company: rest[1] || null,
+          campaign_id: form.campaign_id || null,
+          status: "new",
+        };
+      }).filter((r) => r.email.includes("@"));
+      if (inserts.length === 0) { toast.error("No valid emails found"); return; }
+      const { error } = await supabase.from("leads").insert(inserts);
+      if (error) { toast.error(error.message); return; }
+      toast.success(`${inserts.length} leads imported!`);
+      setBulkText("");
+      setForm({ ...form, email: "" });
+      setAddOpen(false);
+      load();
+      return;
+    }
+
     const { error } = await supabase.from("leads").insert({
       user_id: u.user.id,
       name: form.name || null,
@@ -268,6 +312,21 @@ function LeadsPage() {
                     {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <div className="rounded-xl border border-dashed border-border p-3">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    📥 Bulk import — paste a list (up to 500)
+                  </label>
+                  <textarea
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                    rows={5}
+                    placeholder={"john@acme.com\nSarah Miller, sarah@bigco.com, BigCo"}
+                    className="mt-2 w-full rounded-lg border border-input bg-background p-2.5 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    One lead per line: email — or name, email, company
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button onClick={addLead} className="bg-gradient-primary">Add Lead</Button>
@@ -298,6 +357,7 @@ function LeadsPage() {
             <SelectItem value="emailed">Emailed</SelectItem>
             <SelectItem value="replied">Replied</SelectItem>
             <SelectItem value="booked">Booked</SelectItem>
+            <SelectItem value="won">🏆 Won</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -328,7 +388,20 @@ function LeadsPage() {
                 <td className="px-4 py-3">{l.country ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{l.email ?? "—"}</td>
                 <td className="px-4 py-3">
-                  <Badge className={STATUS_COLORS[l.status] ?? ""} variant="secondary">{l.status}</Badge>
+                  {SYSTEM_STATUSES.includes(l.status) ? (
+                    <Badge className={STATUS_COLORS[l.status] ?? ""} variant="secondary">{l.status}</Badge>
+                  ) : (
+                    <select
+                      value={PIPELINE_STATUSES.includes(l.status as never) ? l.status : "new"}
+                      onChange={(e) => void setLeadStatus(l.id, e.target.value)}
+                      className={`cursor-pointer rounded-full border-0 px-2.5 py-1 text-xs font-medium outline-none ${STATUS_COLORS[l.status] ?? "bg-primary/15 text-primary"}`}
+                    >
+                      <option value="new">New</option>
+                      <option value="emailed">Contacted</option>
+                      <option value="replied">Replied</option>
+                      <option value="won">🏆 Won</option>
+                    </select>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{new Date(l.created_at).toLocaleDateString()}</td>
               </tr>

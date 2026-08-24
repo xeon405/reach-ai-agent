@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Users, Send, Reply, CalendarCheck, Plus, Mail } from "lucide-react";
+import { Users, Send, Reply, Trophy, Plus, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -33,7 +33,7 @@ function Dashboard() {
       supabase.from("leads").select("id", { count: "exact", head: true }),
       supabase.from("emails_sent").select("id", { count: "exact", head: true }),
       supabase.from("emails_sent").select("id", { count: "exact", head: true }).eq("replied", true),
-      supabase.from("meetings").select("id", { count: "exact", head: true }),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "won"),
       supabase.from("campaigns").select("*").order("created_at", { ascending: false }).limit(1),
       supabase.from("emails_sent").select("id, subject, sent_at, lead:leads(name,email)").order("sent_at", { ascending: false }).limit(8),
     ]);
@@ -55,7 +55,7 @@ function Dashboard() {
     { label: "Total Leads Found", value: stats.leads, icon: Users, color: "text-primary" },
     { label: "Emails Sent", value: stats.emails, icon: Send, color: "text-primary-glow" },
     { label: "Replies Received", value: stats.replies, icon: Reply, color: "text-success" },
-    { label: "Meetings Booked", value: stats.meetings, icon: CalendarCheck, color: "text-warning" },
+    { label: "🏆 Meetings Won", value: stats.meetings, icon: Trophy, color: "text-success" },
   ];
 
   return (
