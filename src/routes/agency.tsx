@@ -42,7 +42,7 @@ function AgencyPage() {
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <a href="mailto:hello@outreach-ochre-sigma.vercel.app?subject=I%20want%20more%20sales%20calls&body=Tell%20me%20about%20your%20industry%2C%20target%20country%20and%20offer.%0A%0AIndustry:%0ACountry:%0AOffer:">
-            <Button size="lg" className="bg-gradient-to-r from-blue-500 to-cyan-500 px-8 text-base shadow-lg">
+            <Button size="lg" className="bg-gradient-to-r from-zinc-900 to-neutral-700 px-8 text-base shadow-lg">
               Get my first campaign 🚀
             </Button>
           </a>
@@ -86,7 +86,7 @@ function AgencyPage() {
               </a>
             </div>
             <div className="relative rounded-3xl border-2 border-primary bg-card p-8 shadow-glow">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 px-3 py-1 text-xs font-bold text-white">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-zinc-900 to-neutral-700 px-3 py-1 text-xs font-bold text-white">
                 MOST POPULAR
               </div>
               <div className="text-sm font-semibold uppercase tracking-wide text-primary">Growth</div>
@@ -99,7 +99,7 @@ function AgencyPage() {
                 <li>✅ Dedicated manager</li>
               </ul>
               <a href="mailto:hello@outreach-ochre-sigma.vercel.app?subject=Growth%20plan%20—%20$699/mo">
-                <Button className="mt-7 w-full bg-gradient-to-r from-blue-500 to-cyan-500">Start Growth</Button>
+                <Button className="mt-7 w-full bg-gradient-to-r from-zinc-900 to-neutral-700">Start Growth</Button>
               </a>
             </div>
           </div>

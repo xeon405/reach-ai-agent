@@ -16,7 +16,7 @@ type Email = {
 };
 
 const SENTIMENT_STYLE: Record<string, { label: string; cls: string }> = {
-  INTERESTED: { label: "🔥 Interested", cls: "bg-green-500/10 text-green-500 border-green-500/30" },
+  INTERESTED: { label: "🔥 Interested", cls: "bg-green-500/10 text-emerald-700 dark:text-green-400 border-current" },
   MAYBE: { label: "😴 Maybe later", cls: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30" },
   NOT_INTERESTED: { label: "❌ Not interested", cls: "bg-red-500/10 text-red-500 border-red-500/30" },
 };
@@ -91,7 +91,7 @@ function EmailsPage() {
 
             {e.ai_draft && (
               <div className="mt-4 rounded-xl border border-green-500/30 bg-green-500/5 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-green-600">
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-success">
                   🤖 AI-drafted reply — ready to send
                 </div>
                 <textarea
@@ -103,7 +103,7 @@ function EmailsPage() {
                 <Button
                   onClick={() => sendReply(e)}
                   disabled={sending === e.id}
-                  className="mt-3 w-full bg-gradient-to-r from-blue-500 to-cyan-500 sm:w-auto"
+                  className="mt-3 w-full bg-primary sm:w-auto"
                 >
                   {sending === e.id
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…</>

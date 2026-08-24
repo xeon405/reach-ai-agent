@@ -50,7 +50,7 @@ export function IosInstallBanner() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <div className="relative mx-auto max-w-md overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-zinc-900 via-zinc-900 to-purple-950/80 p-4 shadow-2xl shadow-purple-900/40 backdrop-blur-xl">
+      <div className="relative mx-auto max-w-md overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-zinc-900 via-zinc-900 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
         <button
           onClick={dismiss}
           aria-label="Dismiss"
@@ -67,7 +67,7 @@ export function IosInstallBanner() {
         </button>
 
         <div className="flex items-start gap-3 pr-8">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-lg font-bold text-white shadow-lg shadow-violet-900/50">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-zinc-700 to-zinc-900 text-lg font-bold text-white shadow-lg shadow-black/50">
             O
           </div>
           <div>
@@ -118,7 +118,7 @@ export function IosInstallBanner() {
 
         <button
           onClick={dismiss}
-          className="mt-4 w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/50 transition-transform active:scale-[0.98]"
+          className="mt-4 w-full rounded-xl bg-gradient-to-r from-zinc-800 to-black py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/50 transition-transform active:scale-[0.98]"
         >
           Got it
         </button>
