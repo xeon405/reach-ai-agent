@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ function StatusPage() {
 
   return (
     <div className="min-h-screen bg-background">
+        <EnOnlyNotice />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
         <Link to="/" className="text-lg font-bold">Outreach<span className="text-primary">AI</span></Link>
         <div className="flex items-center gap-2">

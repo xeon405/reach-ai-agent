@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/terms")({
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/terms")({
 function Terms() {
   return (
     <div className="min-h-screen bg-background">
+        <EnOnlyNotice />
       <div className="mx-auto max-w-3xl px-4 py-12">
         <div className="mb-10"><Logo /></div>
         <h1 className="text-3xl font-bold tracking-tight">Terms of Service</h1>

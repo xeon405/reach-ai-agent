@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +19,7 @@ const INCLUDED = [
 function AgencyPage() {
   return (
     <div className="min-h-screen bg-background">
+        <EnOnlyNotice />
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <Link to="/" className="text-lg font-bold">Outreach<span className="text-primary">AI</span></Link>
         <div className="flex items-center gap-2">

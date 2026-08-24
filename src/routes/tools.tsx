@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { useState } from "react";
 import { Check, Copy, Loader2, MailCheck, Sparkles, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -64,6 +65,7 @@ function ToolsPage() {
 
   return (
     <div className="min-h-screen bg-background">
+        <EnOnlyNotice />
       <header className="border-b border-border/50">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Logo />
