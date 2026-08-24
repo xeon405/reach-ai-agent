@@ -42,7 +42,7 @@ function StatusPage() {
     await Promise.allSettled([
       ping(0, () => fetch(window.location.origin).then((res) => { if (!res.ok) throw new Error(); })),
       ping(1, () => fetch("https://zvohdvopmvzsujktrdmu.supabase.co/auth/v1/health", { headers: key }).then((res) => { if (!res.ok) throw new Error(); })),
-      ping(2, () => supabase.rpc("public_stats")),
+      ping(2, async () => { await supabase.rpc("public_stats"); }),
       ping(3, () => fetch(`${FN}/support-chat`, { method: "POST", headers: { ...key, "Content-Type": "application/json" }, body: "{}" })),
       ping(4, () => fetch(`${FN}/follow-up`, { method: "POST", headers: { ...key, "Content-Type": "application/json" }, body: "{}" })),
       ping(5, () => fetch(`${FN}/gmail-oauth`, { method: "POST", headers: { ...key, "Content-Type": "application/json" }, body: "{}" })),

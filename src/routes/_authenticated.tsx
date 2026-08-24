@@ -65,7 +65,7 @@ function AuthenticatedLayout() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {nav.map((item) => (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.tKey}>
                       <SidebarMenuButton asChild isActive={path === item.url}>
                         <Link to={item.url} className="flex items-center gap-2">
                           <item.icon className="h-4 w-4" />

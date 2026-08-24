@@ -35,7 +35,7 @@ function StatsPage() {
 
   useEffect(() => {
     supabase.rpc("public_stats").then(({ data }) => {
-      if (data) setStats(data as { emails_sent: number; agents: number; replies_detected?: number });
+      if (data) setStats(Array.isArray(data) ? data[0] as { emails_sent: number; agents: number; replies_detected?: number } : data as { emails_sent: number; agents: number; replies_detected?: number });
     });
   }, []);
 

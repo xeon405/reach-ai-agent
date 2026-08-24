@@ -69,7 +69,8 @@ function CampaignsPage() {
   }
 
   async function setFlag(c: Campaign, key: "ab_test" | "autopilot", value: boolean) {
-    const { error } = await supabase.from("campaigns").update({ [key]: value }).eq("id", c.id);
+    const patch = key === "ab_test" ? { ab_test: value } : { autopilot: value };
+    const { error } = await supabase.from("campaigns").update(patch).eq("id", c.id);
     if (error) toast.error(error.message);
     else toast.success(value ? "Enabled" : "Disabled");
     load();
@@ -294,6 +295,7 @@ function CampaignsPage() {
         )}
         {items.map((c) => {
           const s = stats[c.id] ?? { leads: 0, emails: 0, replies: 0 };
+          const ab = abStats?.[c.id];
           const replyRate = s.emails ? Math.round((s.replies / s.emails) * 100) : 0;
           return (
             <div key={c.id} className="rounded-2xl border border-border bg-card p-6 shadow-card">
@@ -310,11 +312,11 @@ function CampaignsPage() {
                     <Stat label="Emails sent" value={s.emails} />
                     <Stat label="Reply rate" value={`${replyRate}%`} />
                   </div>
-                  {abStats && (abStats.a > 0 || abStats.b > 0) ? (
+                  {ab && (ab.a > 0 || ab.b > 0) ? (
                     <div className="mt-2 text-xs text-muted-foreground">
-                      A/B: A opened {abStats.aOpen}/{abStats.a} · B opened {abStats.bOpen}/{abStats.b}
-                      {abStats.a >= 10 && abStats.b >= 10
-                        ? ` — winner: ${abStats.aOpen / abStats.a >= abStats.bOpen / abStats.b ? "A" : "B"}`
+                      A/B: A opened {ab.aOpen}/{ab.a} · B opened {ab.bOpen}/{ab.b}
+                      {ab.a >= 10 && ab.b >= 10
+                        ? ` — winner: ${ab.aOpen / ab.a >= ab.bOpen / ab.b ? "A" : "B"}`
                         : " — need 10+ sends each for a winner"}
                     </div>
                   ) : null}

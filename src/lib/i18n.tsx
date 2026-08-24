@@ -79,7 +79,6 @@ const DICT: Record<string, { en: string; ar: string }> = {
   nav_tools: { en: "Free tools", ar: "أدوات مجانية" },
   nav_hire: { en: "Hire us — done-for-you", ar: "وظّفنا — خدمة كاملة" },
   nav_stats: { en: "Live stats", ar: "إحصائيات مباشرة" },
-  sec_features: { en: "Everything you need to fill your pipeline", ar: "كل ما تحتاجه لتعبئة خط مبيعاتك" },
   roi_title: { en: "What could this do for YOU?", ar: "ماذا يمكن أن يفعل هذا من أجلك؟" },
   roi_sub: { en: "Drag the sliders — see your potential pipeline in real numbers.", ar: "اسحب المؤشرات — وشاهد خط مبيعاتك المحتمل بالأرقام الحقيقية." },
   roi_leads: { en: "Leads contacted per day", ar: "عملاء يتم التواصل معهم يومياً" },
