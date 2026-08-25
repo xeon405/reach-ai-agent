@@ -59,30 +59,16 @@ serve(async (req) => {
     const niche = nicheFor(String(jobTitle));
     const leads = await searchDirectory(niche, iso, cappedLimit);
 
-    if (leads.length > 0) {
-      const rows = leads.map((l) => ({
-        user_id: userId,
-        campaign_id: campaignId ?? null,
-        ...l,
-        status: "new",
-      }));
-      // Insert one by one so a single duplicate doesn't crash the whole batch.
-      let saved = 0;
-      for (const row of rows) {
-        const { error: insErr } = await supabase.from("leads").insert(row);
-        if (!insErr) saved++;
-      }
-      await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "lead.imported", payload: { count: leads.length, saved, source: "open-business-directory" } });
-    }
+    await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "lead.searched", payload: { count: leads.length, country: iso, jobTitle, source: "open-business-directory" } });
 
     return json({
-      found: leads.length,
-      saved: leads.length,
+      leads,
+      count: leads.length,
       source: "open-business-directory",
       message:
         leads.length === 0
-          ? `No public emails listed for "${jobTitle}" in ${country}. Try another niche (dentist, gym, restaurant, salon, lawyer…) or import a CSV.`
-          : `Found ${leads.length} businesses with public emails and saved them to your leads.`,
+          ? `No public emails found for "${jobTitle}" in ${country}. Try another niche (dentist, gym, restaurant, salon, lawyer…) or import a CSV.`
+          : `Found ${leads.length} businesses with public emails. Review and add the ones you want.`,
     });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);

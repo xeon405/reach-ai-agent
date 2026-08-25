@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Download, Search, Plus, Upload, Sparkles, Loader2, Trash2 } from "lucide-react";
+import { Download, Search, Plus, Upload, Sparkles, Loader2, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -20,6 +20,8 @@ type Lead = {
 };
 
 type Campaign = { id: string; name: string };
+
+type FoundLead = { name: string; email: string; company: string; job_title: string; country: string; website: string };
 
 const STATUS_COLORS: Record<string, string> = {
   new: "bg-primary/15 text-primary",
@@ -86,6 +88,9 @@ function LeadsPage() {
   const [importing, setImporting] = useState(false);
   const [finding, setFinding] = useState(false);
   const [findElapsed, setFindElapsed] = useState(0);
+  const [findResults, setFindResults] = useState<FoundLead[]>([]);
+  const [findSelected, setFindSelected] = useState<Set<number>>(new Set());
+  const [savingLeads, setSavingLeads] = useState(false);
   const [form, setForm] = useState({
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
@@ -161,8 +166,9 @@ function LeadsPage() {
 
     setFinding(true);
     setFindElapsed(0);
+    setFindResults([]);
+    setFindSelected(new Set());
     const elapsedInterval = setInterval(() => setFindElapsed((s) => s + 1), 1000);
-    toast.info("Searching for public business emails (this may take a minute for large countries)...");
 
     try {
       const { data, error } = await supabase.functions.invoke("find-leads", {
@@ -178,19 +184,57 @@ function LeadsPage() {
       if (error) {
         const msg = error.message || "";
         if (msg.includes("non-2xx") || msg.includes("FunctionsHttpError")) {
-          throw new Error("Search timed out. Large countries like the US can be slow — try a smaller country or import leads via CSV instead.");
+          throw new Error("Search timed out. Large countries can be slow — try a smaller country or fewer leads.");
         }
         throw new Error(msg);
       }
 
-      toast.success(`✅ Found ${data.found} leads, saved ${data.saved ?? data.found} of them!`);
-      setFindOpen(false);
-      load();
+      const leads: FoundLead[] = data.leads ?? [];
+      if (leads.length === 0) {
+        toast.info(data.message ?? "No leads found. Try a different niche or country.");
+      } else {
+        setFindResults(leads);
+        setFindSelected(new Set(leads.map((_, i) => i)));
+        toast.success(`Found ${leads.length} leads — review and add the ones you want.`);
+      }
     } catch (e: any) {
       toast.error(e.message ?? "Failed to find leads");
     } finally {
       clearInterval(elapsedInterval);
       setFinding(false);
+    }
+  }
+
+  async function saveSelectedLeads() {
+    if (findSelected.size === 0) { toast.error("Select at least one lead"); return; }
+    setSavingLeads(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      const rows = [...findSelected].map((i) => ({
+        user_id: u.user.id,
+        name: findResults[i].name || null,
+        email: findResults[i].email,
+        company: findResults[i].company || null,
+        job_title: findResults[i].job_title || null,
+        country: findResults[i].country || null,
+        campaign_id: findForm.campaign_id || null,
+        status: "new" as const,
+      }));
+      let saved = 0;
+      for (const row of rows) {
+        const { error: insErr } = await supabase.from("leads").insert(row);
+        if (!insErr) saved++;
+      }
+      toast.success(`Added ${saved} lead${saved !== 1 ? "s" : ""}!`);
+      setFindResults([]);
+      setFindSelected(new Set());
+      setFindOpen(false);
+      load();
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save leads");
+    } finally {
+      setSavingLeads(false);
     }
   }
 
@@ -278,13 +322,12 @@ function LeadsPage() {
                 <Sparkles className="mr-2 h-4 w-4" /> Find Leads with AI
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>✨ AI Lead Finder</DialogTitle></DialogHeader>
+            <DialogContent className="max-h-[85vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>AI Lead Finder</DialogTitle></DialogHeader>
               <p className="text-sm text-muted-foreground">
                 Searches open business directories for real businesses with public email
-                addresses — 100% free, no credits needed. Best niches: dentists, doctors,
-                gyms, restaurants, salons, lawyers, real estate, insurance, accountants,
-                vets, schools, car services, construction, photographers, IT agencies.
+                addresses — 100% free, no credits needed. Results appear below for you to
+                review before adding.
               </p>
               <div className="space-y-3 py-2">
                 <div>
@@ -294,7 +337,7 @@ function LeadsPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium">Country</label>
-                  <Input placeholder="e.g. United States, United Kingdom" value={findForm.country}
+                  <Input placeholder="e.g. United States, United Kingdom, India" value={findForm.country}
                     onChange={(e) => setFindForm({ ...findForm, country: e.target.value })} />
                 </div>
                 <div>
@@ -305,7 +348,6 @@ function LeadsPage() {
                       <SelectItem value="10">10 leads</SelectItem>
                       <SelectItem value="25">25 leads</SelectItem>
                       <SelectItem value="50">50 leads</SelectItem>
-                      <SelectItem value="100">100 leads</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -319,13 +361,64 @@ function LeadsPage() {
                   </Select>
                 </div>
               </div>
-              <DialogFooter>
-                <Button onClick={findLeads} disabled={finding} className="w-full bg-gradient-primary">
-                  {finding
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching… {findElapsed}s</>
-                    : <><Sparkles className="mr-2 h-4 w-4" /> Find Leads</>}
-                </Button>
-              </DialogFooter>
+
+              {!finding && findResults.length === 0 && (
+                <DialogFooter>
+                  <Button onClick={findLeads} className="w-full bg-gradient-primary">
+                    <Sparkles className="mr-2 h-4 w-4" /> Find Leads
+                  </Button>
+                </DialogFooter>
+              )}
+
+              {finding && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Searching public directories… {findElapsed}s
+                  </div>
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-full animate-pulse rounded-full bg-primary/40" style={{ width: `${Math.min((findElapsed / 45) * 100, 100)}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {!finding && findResults.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{findResults.length} leads found</span>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setFindSelected(new Set(findResults.map((_, i) => i)))}>Select all</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setFindSelected(new Set())}>Deselect all</Button>
+                    </div>
+                  </div>
+                  <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-lg border p-2">
+                    {findResults.map((l, i) => (
+                      <label key={i} className={`flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors ${findSelected.has(i) ? "bg-primary/5" : "hover:bg-muted/50"}`}>
+                        <input
+                          type="checkbox"
+                          checked={findSelected.has(i)}
+                          onChange={() => {
+                            const next = new Set(findSelected);
+                            next.has(i) ? next.delete(i) : next.add(i);
+                            setFindSelected(next);
+                          }}
+                          className="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{l.name || l.email}</div>
+                          <div className="truncate text-xs text-muted-foreground">{l.email}{l.company ? ` — ${l.company}` : ""}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={saveSelectedLeads} disabled={savingLeads || findSelected.size === 0} className="w-full bg-gradient-primary">
+                      {savingLeads
+                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding…</>
+                        : <><Check className="mr-2 h-4 w-4" /> Add {findSelected.size} Lead{findSelected.size !== 1 ? "s" : ""}</>}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
 

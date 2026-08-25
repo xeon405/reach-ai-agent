@@ -70,17 +70,14 @@ interface OsmEl {
 
 export async function searchDirectory(niche: Niche, iso: string, limit: number) {
   const body = "data=" + encodeURIComponent(buildQuery(niche, iso, limit));
-  const totalStart = Date.now();
-  const TOTAL_BUDGET_MS = 42_000; // edge function hard-limit ≈50s; leave margin for parse + insert
-  const PER_MIRROR_MS = 30_000;
+  const PER_MIRROR_MS = 35_000;
   let lastErr: unknown = new Error("no endpoint attempted");
   for (const endpoint of [
-    "https://overpass.kumi.systems/api/interpreter",
     "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.osm.jp/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   ]) {
-    if (Date.now() - totalStart > TOTAL_BUDGET_MS) break;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), PER_MIRROR_MS);
     try {
@@ -104,7 +101,8 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
       clearTimeout(timer);
     }
   }
-  throw lastErr;
+  // All mirrors failed or timed out — return empty instead of crashing the caller
+  return [];
 }
 
 function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string) {
