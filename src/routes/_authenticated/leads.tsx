@@ -322,7 +322,7 @@ function LeadsPage() {
                 <Sparkles className="mr-2 h-4 w-4" /> Find Leads with AI
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[85vh] overflow-y-auto">
+            <DialogContent className="max-h-[85vh] w-full max-w-lg overflow-y-auto">
               <DialogHeader><DialogTitle>AI Lead Finder</DialogTitle></DialogHeader>
               <p className="text-sm text-muted-foreground">
                 Searches open business directories for real businesses with public email
@@ -355,8 +355,12 @@ function LeadsPage() {
                   <label className="text-sm font-medium">Assign to campaign (optional)</label>
                   <Select value={findForm.campaign_id} onValueChange={(v) => setFindForm({ ...findForm, campaign_id: v })}>
                     <SelectTrigger><SelectValue placeholder="Select campaign" /></SelectTrigger>
-                    <SelectContent>
-                      {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    <SelectContent className="max-w-[400px]">
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="block truncate">{c.name}</span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -428,7 +432,7 @@ function LeadsPage() {
                 <Plus className="mr-2 h-4 w-4" /> Add Lead
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="w-full max-w-lg">
               <DialogHeader><DialogTitle>Add Lead</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <Input placeholder="Full name" value={form.name}
@@ -465,8 +469,12 @@ function LeadsPage() {
                 </select>
                 <Select value={form.campaign_id} onValueChange={(v) => setForm({ ...form, campaign_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Assign to campaign (optional)" /></SelectTrigger>
-                  <SelectContent>
-                    {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  <SelectContent className="max-w-[400px]">
+                    {campaigns.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="block truncate">{c.name}</span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <div className="rounded-xl border border-dashed border-border p-3">
