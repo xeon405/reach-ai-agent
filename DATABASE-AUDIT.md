@@ -84,49 +84,44 @@ Fixed by adding `'review'` to the CHECK constraint.
 
 ---
 
-## DEAD COLUMNS (never read or written by code)
+## DEAD COLUMNS (fixed in 2d19c53)
 
-| Table | Column | Notes |
+| Table | Column | Status |
 |---|---|---|
-| `send_queue` | `status_new` | Unused by all code |
-| `usage_limits` | `ai_calls_today` | Upserted alongside `emails_sent_today` but never read |
-| `gmail_tokens` | `access_token` | Always set to null; tokens minted on-demand via `getAccessToken()` |
+| `send_queue` | `status_new` | ✅ Dropped |
+| `usage_limits` | `ai_calls_today` | ✅ Dropped |
+| `gmail_tokens` | `access_token` | ✅ Dropped |
 
 ## DEAD TABLES
 
 | Table | Status |
 |---|---|
-| `meetings` | Only referenced in `delete-account` cleanup. No app logic creates rows. |
-| `referrals` | Only read for export. No insert logic exists. Half-built feature. |
+| `meetings` | Referenced in delete-account cleanup + dashboard counts via leads.status='won'. Kept. |
+| `referrals` | Active — settings page queries it for referral data. Kept. |
 
 ## DEAD FUNCTIONS
 
 | Function | Status |
 |---|---|
-| `claim_queue_jobs` (v1) | Superseded by `claim_queue_jobs_v2`. No code calls v1. |
+| `claim_queue_jobs` (v1) | ✅ Dropped — superseded by `claim_queue_jobs_v2` |
 
 ---
 
-## MISSING INDEXES (performance recommendations)
+## MISSING INDEXES (added in 2d19c53)
 
-These queries would benefit from composite indexes but currently don't have them:
-
-| Query Pattern | File | Recommended Index |
+| Query Pattern | File | Index |
 |---|---|---|
-| `leads WHERE campaign_id AND status = 'new'` | send-campaign | `(campaign_id, status)` |
-| `emails_sent WHERE user_id AND replied = false` | inbox-agent | `(user_id, replied)` |
-| `emails_sent WHERE ai_paused = false AND ai_turns < 3` | inbox-agent | `(ai_paused, ai_turns)` |
-| `emails_sent WHERE user_id ORDER BY sent_at DESC` | daily-digest | `(user_id, sent_at)` |
+| `leads WHERE campaign_id AND status = 'new'` | send-campaign | ✅ `idx_leads_campaign_status` |
+| `emails_sent WHERE user_id AND replied = false` | inbox-agent | ✅ `idx_emails_user_replied` |
+| `emails_sent WHERE ai_paused AND ai_turns` | inbox-agent | ✅ `idx_emails_ai_paused_turns` |
+| `emails_sent WHERE user_id ORDER BY sent_at` | daily-digest | ✅ `idx_emails_user_sent` |
 | `audit_events WHERE user_id AND lead_id AND event` | inbox-agent | `(user_id, lead_id, event, created_at)` |
 
 These are NOT bugs — the existing indexes work. These are performance recommendations for scale.
 
 ---
 
-## types.ts DESYNC (frontend type safety)
+## types.ts DESYNC (fixed in 2d19c53)
 
-`src/integrations/supabase/types.ts` only covers 8 of 16 tables and is missing 22+ columns that the edge functions read/write. This doesn't affect runtime but means TypeScript won't catch column-name bugs in the frontend.
-
-Missing table types: `ai_classifications`, `audit_events`, `email_threads`, `owner_alerts`, `suppressions`, `usage_limits`, `meetings`, `referrals`.
-
-Missing column types on existing tables: `leads.lifecycle`, `leads.conv_mode`, `leads.normalized_email`, `emails_sent.ai_turns`, `emails_sent.last_lead_msg_at`, `emails_sent.last_ai_msg_at`, `emails_sent.ai_paused`, `emails_sent.gmail_message_id`, `emails_sent.gmail_thread_id`, `emails_sent.opened_at`, `send_queue.last_error`, `send_queue.next_retry_at`, `send_queue.lease_until`, `send_queue.updated_at`, `profiles.gmail_account_type`, `profiles.gmail_state`, `profiles.signature`.
+Regenerated `src/integrations/supabase/types.ts` from live DB via `supabase gen types typescript --project-id zvohdvopmvzsujktrdmu --schema public`.
+Now covers all 16 tables with correct columns (was previously missing 8 tables + 22 columns).
