@@ -85,6 +85,7 @@ function LeadsPage() {
   const [findOpen, setFindOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [finding, setFinding] = useState(false);
+  const [findElapsed, setFindElapsed] = useState(0);
   const [form, setForm] = useState({
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
@@ -159,7 +160,9 @@ function LeadsPage() {
     if (!findForm.jobTitle) { toast.error("Job title is required"); return; }
 
     setFinding(true);
-    toast.info("AI is searching for leads...");
+    setFindElapsed(0);
+    const elapsedInterval = setInterval(() => setFindElapsed((s) => s + 1), 1000);
+    toast.info("Searching for public business emails (this may take a minute for large countries)...");
 
     try {
       const { data, error } = await supabase.functions.invoke("find-leads", {
@@ -180,6 +183,7 @@ function LeadsPage() {
     } catch (e: any) {
       toast.error(e.message ?? "Failed to find leads");
     } finally {
+      clearInterval(elapsedInterval);
       setFinding(false);
     }
   }
@@ -312,7 +316,7 @@ function LeadsPage() {
               <DialogFooter>
                 <Button onClick={findLeads} disabled={finding} className="w-full bg-gradient-primary">
                   {finding
-                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching...</>
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching… {findElapsed}s</>
                     : <><Sparkles className="mr-2 h-4 w-4" /> Find Leads</>}
                 </Button>
               </DialogFooter>

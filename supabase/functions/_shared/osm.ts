@@ -79,7 +79,7 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   ]) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 50_000);
+      const timer = setTimeout(() => ctrl.abort(), 80_000);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
