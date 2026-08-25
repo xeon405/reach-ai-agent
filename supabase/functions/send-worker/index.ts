@@ -162,7 +162,7 @@ Rules for body:
 - 60-120 words max. Short paragraphs (1-3 sentences each).
 - Open with something tied to their role or industry. NEVER invent news, events, product launches, or claims about their company that were not provided — generic role-based openers are safer than fabricated facts.
 - Explain our offer in one clear sentence tied to THEIR pain.
-- Sell in this first message: state the offer plainly and end with one clear call-to-action.${bookingLink ? `\n- Include this booking link exactly as written so they can book without replying first: ${sanitizeForPrompt(bookingLink, 200)}` : "\n- End by inviting a one-word reply (e.g. \"yes\") if they want details."}
+- Sell in this first message: state the offer plainly and end with one clear call-to-action.${bookingLink ? `\n- A booking link is added automatically right AFTER your text — do NOT type any URL yourself. Close with a line that points to it (e.g. "grab a time via the link below").` : "\n- End by inviting a one-word reply (e.g. \"yes\") if they want details."}
 - Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.
 Return ONLY a JSON object with this exact format:
 {"subject":"...","body":"line1\\nline2\\nline3"}

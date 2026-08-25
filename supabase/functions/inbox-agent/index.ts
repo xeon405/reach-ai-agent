@@ -275,10 +275,10 @@ Deno.serve(async (req) => {
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 900)}"
 You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${profile.booking_link ? `
-Their booking link: ${profile.booking_link} — invite them to book there.` : ""}
+Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${cls.sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly and honestly — never invent pricing or facts you don't know; offer to cover exact details on a quick call. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
@@ -567,9 +567,9 @@ Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lea
 Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
 Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}
 You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${profile.booking_link ? `
-Booking link: ${profile.booking_link} — suggest it naturally when timing fits.` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
+Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Address anything specific they asked. Ask exactly one question. Sign off as "Best regards". Return only the reply text.`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and honestly — never invent pricing or facts; if unsure, offer to cover specifics on a call. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);
