@@ -271,13 +271,18 @@ export type Database = {
           autopilot_niche: string | null
           booking_link: string | null
           website_url: string | null
+          business_description: string | null
           company: string | null
+          communication_style: string | null
           created_at: string
+          cities: string[] | null
+          dont_claim: string | null
           email: string | null
           emails_sent_date: string | null
           emails_sent_today: number
           gmail_connected: boolean
           gmail_email: string | null
+          has_product_image: boolean | null
           icp: Json | null
           id: string
           last_digest_date: string | null
@@ -286,9 +291,11 @@ export type Database = {
           offer: string | null
           onboarded: boolean
           plan: string
+          problem_solved: string | null
           referral_code: string | null
           referred_by: string | null
           signature: string | null
+          target_customer: string | null
         }
         Insert: {
           ai_generated_date?: string | null
@@ -298,13 +305,18 @@ export type Database = {
           autopilot_niche?: string | null
           booking_link?: string | null
           website_url?: string | null
+          business_description?: string | null
           company?: string | null
+          communication_style?: string | null
           created_at?: string
+          cities?: string[] | null
+          dont_claim?: string | null
           email?: string | null
           emails_sent_date?: string | null
           emails_sent_today?: number
           gmail_connected?: boolean
           gmail_email?: string | null
+          has_product_image?: boolean | null
           icp?: Json | null
           id: string
           last_digest_date?: string | null
@@ -313,9 +325,11 @@ export type Database = {
           offer?: string | null
           onboarded?: boolean
           plan?: string
+          problem_solved?: string | null
           referral_code?: string | null
           referred_by?: string | null
           signature?: string | null
+          target_customer?: string | null
         }
         Update: {
           ai_generated_date?: string | null
@@ -325,13 +339,18 @@ export type Database = {
           autopilot_niche?: string | null
           booking_link?: string | null
           website_url?: string | null
+          business_description?: string | null
           company?: string | null
+          communication_style?: string | null
           created_at?: string
+          cities?: string[] | null
+          dont_claim?: string | null
           email?: string | null
           emails_sent_date?: string | null
           emails_sent_today?: number
           gmail_connected?: boolean
           gmail_email?: string | null
+          has_product_image?: boolean | null
           icp?: Json | null
           id?: string
           last_digest_date?: string | null
@@ -340,9 +359,11 @@ export type Database = {
           offer?: string | null
           onboarded?: boolean
           plan?: string
+          problem_solved?: string | null
           referral_code?: string | null
           referred_by?: string | null
           signature?: string | null
+          target_customer?: string | null
         }
         Relationships: []
       }

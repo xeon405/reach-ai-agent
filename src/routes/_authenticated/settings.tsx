@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { AlertTriangle, Check } from "lucide-react";
@@ -30,6 +32,18 @@ function SettingsPage() {
   const [referral, setReferral] = useState<string | null>(null);
   const [invited, setInvited] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [company, setCompany] = useState("");
+  const [businessDescription, setBusinessDescription] = useState("");
+  const [offer, setOffer] = useState("");
+  const [problemSolved, setProblemSolved] = useState("");
+  const [targetCustomer, setTargetCustomer] = useState("");
+  const [jobTitles, setJobTitles] = useState("");
+  const [industries, setIndustries] = useState("");
+  const [companySize, setCompanySize] = useState("1-50");
+  const [countries, setCountries] = useState<string[]>([]);
+  const [cities, setCities] = useState("");
+  const [communicationStyle, setCommunicationStyle] = useState("");
+  const [dontClaim, setDontClaim] = useState("");
 
   async function exportData() {
     setExporting(true);
@@ -87,6 +101,18 @@ function SettingsPage() {
         setAutopilot(p.autopilot ?? false);
         setApCountry(p.autopilot_country ?? "");
         setApNiche(p.autopilot_niche ?? "");
+        setCompany(p.company ?? "");
+        setBusinessDescription(p.business_description ?? "");
+        setOffer(p.offer ?? "");
+        setProblemSolved(p.problem_solved ?? "");
+        setTargetCustomer(p.target_customer ?? "");
+        setCountries((p.icp as Record<string, string[]> | null)?.countries ?? []);
+        setCities((p.cities ?? []).join(", "));
+        setCompanySize((p.icp as Record<string, string> | null)?.companySize ?? "1-50");
+        setJobTitles((p.icp as Record<string, string> | null)?.jobTitle ?? "");
+        setIndustries((p.icp as Record<string, string> | null)?.industry ?? "");
+        setCommunicationStyle(p.communication_style ?? "");
+        setDontClaim(p.dont_claim ?? "");
         if (p.referral_code) {
           setReferral(p.referral_code);
           const { count } = await supabase.rpc("referral_count").single();
@@ -123,6 +149,7 @@ function SettingsPage() {
       .from("profiles")
       .update({
         name,
+        company: company || null,
         notify_replies: notify,
         booking_link: booking.trim() || null,
         website_url: websiteUrl.trim() || null,
@@ -130,6 +157,14 @@ function SettingsPage() {
         autopilot: autopilot && apCountry.trim().length > 0 && apNiche.trim().length > 0,
         autopilot_country: apCountry.trim() || null,
         autopilot_niche: apNiche.trim() || null,
+        offer: offer.trim() || null,
+        business_description: businessDescription.trim() || null,
+        problem_solved: problemSolved.trim() || null,
+        target_customer: targetCustomer.trim() || null,
+        icp: { jobTitle: jobTitles || null, industry: industries || null, companySize, countries },
+        cities: cities.split(",").map((c) => c.trim()).filter(Boolean) || null,
+        communication_style: communicationStyle.trim() || null,
+        dont_claim: dontClaim.trim() || null,
       })
       .eq("id", u.user.id);
     setSaving(false);
@@ -164,8 +199,72 @@ function SettingsPage() {
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-1.5">
+          <Label>Company</Label>
+          <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
+        </div>
+        <div className="space-y-1.5">
           <Label>Email</Label>
           <Input value={email} disabled />
+        </div>
+      </Section>
+
+      <Section title="Business Intelligence">
+        <p className="text-xs text-muted-foreground -mt-2 mb-2">The AI uses everything below to write personalized outreach. It will not invent facts — only use what you tell it here.</p>
+        <div className="space-y-1.5">
+          <Label>What is your business?</Label>
+          <Textarea rows={2} value={businessDescription} onChange={(e) => setBusinessDescription(e.target.value)}
+            placeholder="e.g. We build AI-powered sales automation software for B2B companies." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>What product or service are you selling?</Label>
+          <Textarea rows={2} value={offer} onChange={(e) => setOffer(e.target.value)}
+            placeholder="e.g. A monthly SaaS subscription that automates cold email outreach." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>What problem does it solve?</Label>
+          <Textarea rows={2} value={problemSolved} onChange={(e) => setProblemSolved(e.target.value)}
+            placeholder="e.g. Sales teams waste hours writing cold emails that get ignored." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Who is your ideal customer?</Label>
+          <Textarea rows={2} value={targetCustomer} onChange={(e) => setTargetCustomer(e.target.value)}
+            placeholder="e.g. Marketing directors at mid-size SaaS companies." />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Job titles</Label>
+            <Input value={jobTitles} onChange={(e) => setJobTitles(e.target.value)} placeholder="e.g. Marketing Manager, CEO" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Industries</Label>
+            <Input value={industries} onChange={(e) => setIndustries(e.target.value)} placeholder="e.g. SaaS, E-commerce" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Company size</Label>
+            <Select value={companySize} onValueChange={setCompanySize}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1-10">1-10</SelectItem>
+                <SelectItem value="10-50">10-50</SelectItem>
+                <SelectItem value="50-200">50-200</SelectItem>
+                <SelectItem value="200+">200+</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Cities (optional)</Label>
+            <Input value={cities} onChange={(e) => setCities(e.target.value)} placeholder="New York, London" />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>What should OutreachAI communicate?</Label>
+          <Textarea rows={2} value={communicationStyle} onChange={(e) => setCommunicationStyle(e.target.value)}
+            placeholder="e.g. Be direct, lead with ROI, sound like a peer." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>What should OutreachAI NEVER claim?</Label>
+          <Textarea rows={2} value={dontClaim} onChange={(e) => setDontClaim(e.target.value)}
+            placeholder="e.g. Never promise specific revenue numbers." />
         </div>
       </Section>
 

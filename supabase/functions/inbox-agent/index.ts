@@ -23,6 +23,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const SITE = "https://outreach-ochre-sigma.vercel.app";
+
+/** Build structured business intelligence context for AI prompts. */
+function buildBIContext(profile: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (profile.business_description) parts.push(`Business: ${sanitizeForPrompt(String(profile.business_description), 300)}`);
+  if (profile.offer) parts.push(`Product/Service: ${sanitizeForPrompt(String(profile.offer), 300)}`);
+  if (profile.problem_solved) parts.push(`Problem we solve: ${sanitizeForPrompt(String(profile.problem_solved), 300)}`);
+  if (profile.target_customer) parts.push(`Ideal customer: ${sanitizeForPrompt(String(profile.target_customer), 300)}`);
+  if (profile.communication_style) parts.push(`Tone & style: ${sanitizeForPrompt(String(profile.communication_style), 200)}`);
+  if (profile.dont_claim) parts.push(`HARD RULES — never say or promise: ${sanitizeForPrompt(String(profile.dont_claim), 300)}`);
+  if (parts.length === 0) return "";
+  return `BUSINESS CONTEXT:\n${parts.join("\n")}\n\n`;
+}
 const CONFIDENCE_FLOOR = 0.55;
 const MAX_AI_REPLIES_PER_LEAD_24H = 5;
 
@@ -301,7 +314,7 @@ Deno.serve(async (req) => {
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 600)}"
 What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
-COMPANY KNOWLEDGE BASE (factual only — never invent anything beyond it): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
+COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factually; never invent anything not written here or above): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
 Your site — direct them there to get started: ${sanitizeForPrompt(profile.website_url, 200)}
 
 Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. Sign off as "Best regards". Return only the reply text.`,
@@ -327,12 +340,12 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
 
           // Generate a draft for warm replies (AUTO_REPLY or ALERT_OWNER)
           if (cls.interested || cls.sentiment !== "NOT_INTERESTED") {
-            tag = cls.sentiment === "INTERESTED" ? "🔥 INTERESTED" : cls.sentiment === "MAYBE" ? "😴 Maybe later" : "❌ Not interested";
+            tag = cls.sentiment === "INTERESTED" ? "INTERESTED" : cls.sentiment === "MAYBE" ? "Maybe later" : "Not interested";
             const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
             try {
               draft = await groqChat([{
                 role: "user",
-                content: `A reply arrived to a cold email you sent.
+                content: `${buildBIContext(profile)}A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 900)}"
 You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
@@ -617,9 +630,9 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                 // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
                 try {
                   const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
-                  const bReply = await groqChat([{
+                   const bReply = await groqChat([{
                     role: "user",
-                    content: `A lead just replied asking how to get started / book a meeting.
+                    content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
 Their newest message: "${sanitizeForPrompt(theirWords, 600)}"
 What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
@@ -664,7 +677,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                 const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
                 aiReply = await groqChat([{
                   role: "user",
-                  content: `Ongoing email conversation with a lead.
+                   content: `${buildBIContext(profile)}Ongoing email conversation with a lead.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
 Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
 Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}

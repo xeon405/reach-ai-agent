@@ -29,6 +29,19 @@ const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
 
 const SITE = "https://outreach-ochre-sigma.vercel.app";
 
+/** Build structured business intelligence context for AI prompts. */
+function buildBIContext(profile: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (profile.business_description) parts.push(`Business: ${sanitizeForPrompt(String(profile.business_description), 300)}`);
+  if (profile.offer) parts.push(`Product/Service: ${sanitizeForPrompt(String(profile.offer), 300)}`);
+  if (profile.problem_solved) parts.push(`Problem we solve: ${sanitizeForPrompt(String(profile.problem_solved), 300)}`);
+  if (profile.target_customer) parts.push(`Ideal customer: ${sanitizeForPrompt(String(profile.target_customer), 300)}`);
+  if (profile.communication_style) parts.push(`Tone & style: ${sanitizeForPrompt(String(profile.communication_style), 200)}`);
+  if (profile.dont_claim) parts.push(`HARD RULES — never say or promise: ${sanitizeForPrompt(String(profile.dont_claim), 300)}`);
+  if (parts.length === 0) return "";
+  return `BUSINESS CONTEXT:\n${parts.join("\n")}\n\n`;
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -146,11 +159,12 @@ async function generateEmail(
   userOffer: string,
   avoidHint = "",
   arabic = false,
-  bookingLink = ""
+  bookingLink = "",
+  biContext = ""
 ): Promise<{ subject: string; body: string }> {
   const text = await groqChat([{
     role: "user",
-    content: `Write a short cold email to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
+    content: `${biContext}Write a short cold email to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 The sender's name is ${sanitizeForPrompt(senderName, 60)} — sign off with their actual name, never a placeholder.
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
@@ -205,14 +219,14 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
 }
 
 const abCache = new Map<string, { subs: string[]; at: number }>();
-async function getAltSubjects(campaignId: string, offer: string): Promise<string[]> {
+async function getAltSubjects(campaignId: string, offer: string, biContext = ""): Promise<string[]> {
   const hit = abCache.get(campaignId);
   if (hit && Date.now() - hit.at < 600_000) return hit.subs;
   let subs: string[] = [];
   try {
     const altText = await groqChat([{
       role: "user",
-      content: `Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
+      content: `${biContext}Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
 Write 5 alternative email subject lines for this offer. Rules: max 8 words each, CLEAR and concrete about what we deliver — a busy person should understand the offer from the subject alone. No riddles, no vague curiosity hooks. Never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
     }], { maxTokens: 200, temperature: 0.9 });
     subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5);
@@ -429,11 +443,12 @@ Deno.serve(async (req) => {
 
     let variant = job.variant;
     if (variant === "B") {
-      const subs = await getAltSubjects(job.campaign_id, String(ctx.profile.offer ?? "our services"));
+      const subs = await getAltSubjects(job.campaign_id, String(ctx.profile.offer ?? "our services"), biCtx);
       if (subs.length === 0) variant = null;
     }
 
     const destLink = String(ctx.profile.website_url || ctx.profile.booking_link || "");
+    const biCtx = buildBIContext(ctx.profile);
     let gen = await generateEmail(
       String(ctx.profile.name ?? "Best regards"),
       lead.name ?? "there",
@@ -442,7 +457,8 @@ Deno.serve(async (req) => {
       String(ctx.profile.offer ?? "our service"),
       "",
       isArabicLead(lead.country),
-      destLink
+      destLink,
+      biCtx
     );
     if (variant === "B") {
       const subs = abCache.get(job.campaign_id)?.subs ?? [];
@@ -451,7 +467,7 @@ Deno.serve(async (req) => {
     let check = localSpamScore(gen.subject, gen.body);
     if (check.score < 60 && check.hint) {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country), String(ctx.profile.website_url || ctx.profile.booking_link || ""));
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country), String(ctx.profile.website_url || ctx.profile.booking_link || ""), biCtx);
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
