@@ -145,7 +145,8 @@ async function generateEmail(
   leadJobTitle: string,
   userOffer: string,
   avoidHint = "",
-  arabic = false
+  arabic = false,
+  bookingLink = ""
 ): Promise<{ subject: string; body: string }> {
   const text = await groqChat([{
     role: "user",
@@ -154,13 +155,14 @@ Our offer: ${sanitizeForPrompt(userOffer)}
 The sender's name is ${sanitizeForPrompt(senderName, 60)} — sign off with their actual name, never a placeholder.
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
 Rules for subject:
-- Under 50 characters, lowercase-friendly, curious not salesy.
+- Under 50 characters. CLEAR and concrete about the outcome we deliver — a busy person should know what we do from the subject alone.
+- No riddles, no curiosity-only hooks like "what if...", no vague teasers.
 - No spam words, no ALL CAPS words, no emojis, no "Re:"/"Fwd:" prefixes.
 Rules for body:
 - 60-120 words max. Short paragraphs (1-3 sentences each).
 - Open with something tied to their role or industry. NEVER invent news, events, product launches, or claims about their company that were not provided — generic role-based openers are safer than fabricated facts.
 - Explain our offer in one clear sentence tied to THEIR pain.
-- End with a soft question asking if this is worth a quick chat.
+- Sell in this first message: state the offer plainly and end with one clear call-to-action.${bookingLink ? `\n- Include this booking link exactly as written so they can book without replying first: ${sanitizeForPrompt(bookingLink, 200)}` : "\n- End by inviting a one-word reply (e.g. \"yes\") if they want details."}
 - Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.
 Return ONLY a JSON object with this exact format:
 {"subject":"...","body":"line1\\nline2\\nline3"}
@@ -211,7 +213,7 @@ async function getAltSubjects(campaignId: string, offer: string): Promise<string
     const altText = await groqChat([{
       role: "user",
       content: `Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
-Write 5 alternative email subject lines for this offer. Rules: max 8 words each, curious but never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
+Write 5 alternative email subject lines for this offer. Rules: max 8 words each, CLEAR and concrete about what we deliver — a busy person should understand the offer from the subject alone. No riddles, no vague curiosity hooks. Never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
     }], { maxTokens: 200, temperature: 0.9 });
     subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5);
   } catch (_e) { /* variant B falls back to A */ }
@@ -438,7 +440,8 @@ Deno.serve(async (req) => {
       lead.job_title ?? "professional",
       String(ctx.profile.offer ?? "our service"),
       "",
-      isArabicLead(lead.country)
+      isArabicLead(lead.country),
+      String(ctx.profile.booking_link ?? "")
     );
     if (variant === "B") {
       const subs = abCache.get(job.campaign_id)?.subs ?? [];
@@ -447,12 +450,12 @@ Deno.serve(async (req) => {
     let check = localSpamScore(gen.subject, gen.body);
     if (check.score < 60 && check.hint) {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country));
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country), String(ctx.profile.booking_link ?? ""));
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
 
-    const bodyText = `${gen.body}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
+    const bodyText = `${gen.body}${ctx.profile.booking_link ? `\n\n📅 Want details or a quick demo? Book a time that suits you: ${ctx.profile.booking_link}` : ""}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
 
 PS: I use an AI assistant (OutreachAI) to help manage my outreach — this note was drafted with its help.
 Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
