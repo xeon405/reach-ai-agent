@@ -270,6 +270,7 @@ export type Database = {
           autopilot_country: string | null
           autopilot_niche: string | null
           booking_link: string | null
+          website_url: string | null
           company: string | null
           created_at: string
           email: string | null
@@ -296,6 +297,7 @@ export type Database = {
           autopilot_country?: string | null
           autopilot_niche?: string | null
           booking_link?: string | null
+          website_url?: string | null
           company?: string | null
           created_at?: string
           email?: string | null
@@ -322,6 +324,7 @@ export type Database = {
           autopilot_country?: string | null
           autopilot_niche?: string | null
           booking_link?: string | null
+          website_url?: string | null
           company?: string | null
           created_at?: string
           email?: string | null

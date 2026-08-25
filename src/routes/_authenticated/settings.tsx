@@ -21,6 +21,7 @@ function SettingsPage() {
   const [gmailEmail, setGmailEmail] = useState("");
   const [notify, setNotify] = useState(true);
   const [booking, setBooking] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [signature, setSignature] = useState("");
   const [autopilot, setAutopilot] = useState(false);
   const [apCountry, setApCountry] = useState("");
@@ -81,6 +82,7 @@ function SettingsPage() {
         setGmailEmail(p.gmail_email ?? "");
         setNotify(p.notify_replies ?? true);
         setBooking(p.booking_link ?? "");
+        setWebsiteUrl(p.website_url ?? "");
         setSignature(p.signature ?? "");
         setAutopilot(p.autopilot ?? false);
         setApCountry(p.autopilot_country ?? "");
@@ -123,6 +125,7 @@ function SettingsPage() {
         name,
         notify_replies: notify,
         booking_link: booking.trim() || null,
+        website_url: websiteUrl.trim() || null,
         signature: signature.trim() || null,
         autopilot: autopilot && apCountry.trim().length > 0 && apNiche.trim().length > 0,
         autopilot_country: apCountry.trim() || null,
@@ -215,6 +218,16 @@ function SettingsPage() {
             placeholder="https://cal.com/you/15min"
             value={booking}
             onChange={(e) => setBooking(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Have a website or app? Add it below — the AI will read it, answer lead questions itself, and send them to your site.
+          </p>
+          <Label htmlFor="websiteUrl">Your website or app (optional)</Label>
+          <Input
+            id="websiteUrl"
+            placeholder="https://yourproduct.com"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
             Added to every email — interested leads can book a meeting with one click.

@@ -433,6 +433,7 @@ Deno.serve(async (req) => {
       if (subs.length === 0) variant = null;
     }
 
+    const destLink = String(ctx.profile.website_url || ctx.profile.booking_link || "");
     let gen = await generateEmail(
       String(ctx.profile.name ?? "Best regards"),
       lead.name ?? "there",
@@ -441,7 +442,7 @@ Deno.serve(async (req) => {
       String(ctx.profile.offer ?? "our service"),
       "",
       isArabicLead(lead.country),
-      String(ctx.profile.booking_link ?? "")
+      destLink
     );
     if (variant === "B") {
       const subs = abCache.get(job.campaign_id)?.subs ?? [];
@@ -450,12 +451,13 @@ Deno.serve(async (req) => {
     let check = localSpamScore(gen.subject, gen.body);
     if (check.score < 60 && check.hint) {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country), String(ctx.profile.booking_link ?? ""));
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country), String(ctx.profile.website_url || ctx.profile.booking_link || ""));
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
 
-    const bodyText = `${gen.body}${ctx.profile.booking_link ? `\n\n📅 Want details or a quick demo? Book a time that suits you: ${ctx.profile.booking_link}` : ""}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
+    const destLink2 = String(ctx.profile.website_url || ctx.profile.booking_link || "");
+    const bodyText = `${gen.body}${destLink2 ? (ctx.profile.website_url ? `\n\n🔗 See how it works & get started: ${destLink2}` : `\n\n📅 Want details or a quick demo? Book a time that suits you: ${destLink2}`) : ""}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
 
 PS: I use an AI assistant (OutreachAI) to help manage my outreach — this note was drafted with its help.
 Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;

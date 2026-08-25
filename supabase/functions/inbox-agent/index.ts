@@ -62,6 +62,32 @@ function stripQuoted(text: string): string {
   return out.trim();
 }
 
+/** Fetches the owner's website and reduces it to a compact text knowledge
+ *  base so the AI can answer prospect questions about the business itself.
+ *  Fails soft: any problem returns "" and prompts fall back to current behavior. */
+async function fetchSiteKnowledge(url: string): Promise<string> {
+  if (!url || !/^https?:\/\//i.test(url)) return "";
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; OutreachAI/1.0)" }, redirect: "follow" });
+    clearTimeout(timer);
+    if (!res.ok) return "";
+    const html = (await res.text()).slice(0, 200_000);
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text.slice(0, 1500);
+  } catch {
+    return "";
+  }
+}
+
 async function fetchTokenMap(db: ReturnType<typeof createClient>, ids: string[]): Promise<Record<string, string>> {
   if (ids.length === 0) return {};
   const { data } = await db.from("gmail_tokens").select("profile_id, refresh_token").in("profile_id", ids);
@@ -268,17 +294,20 @@ Deno.serve(async (req) => {
           // Generate a draft for warm replies (AUTO_REPLY or ALERT_OWNER)
           if (cls.interested || cls.sentiment !== "NOT_INTERESTED") {
             tag = cls.sentiment === "INTERESTED" ? "🔥 INTERESTED" : cls.sentiment === "MAYBE" ? "😴 Maybe later" : "❌ Not interested";
+            const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
             try {
               draft = await groqChat([{
                 role: "user",
                 content: `A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 900)}"
-You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${profile.booking_link ? `
+You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
+COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factually; never invent anything not written here or above):
+"${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${cls.sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly and honestly — never invent pricing or facts you don't know; offer to cover exact details on a quick call. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — never invent pricing or facts. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
@@ -560,16 +589,19 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             case "AUTO_REPLY": {
               let aiReply: string | null = null;
               try {
+                const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
                 aiReply = await groqChat([{
                   role: "user",
                   content: `Ongoing email conversation with a lead.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
 Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
 Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}
-You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${profile.booking_link ? `
+You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
+COMPANY KNOWLEDGE BASE (from your website — answer questions factually from this; never invent anything not written here or above):
+"${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
 Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and honestly — never invent pricing or facts; if unsure, offer to cover specifics on a call. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);
