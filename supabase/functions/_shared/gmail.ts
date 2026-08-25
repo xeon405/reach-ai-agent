@@ -73,7 +73,7 @@ export async function getAccessToken(
     if (msg.startsWith("token_refresh_failed:400") && msg.includes("invalid_grant")) {
       // Google revoked/expired the grant — user must re-consent.
       try {
-        await admin.from("gmail_tokens").delete().eq("user_id", userId);
+        await admin.from("gmail_tokens").delete().eq("profile_id", userId);
         await admin.from("profiles").update({ gmail_connected: false, gmail_state: "ACCESS_REVOKED" }).eq("id", userId);
       } catch (_e) { /* best effort */ }
       throw new Error("GMAIL_ACCESS_REVOKED");
