@@ -12,33 +12,89 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      ai_classifications: {
+        Row: {
+          booking_intent: boolean | null
+          confidence: number | null
+          created_at: string
+          id: number
+          intent: string | null
+          interested: boolean | null
+          lead_id: string | null
+          message_id: string | null
+          raw: Json | null
+          requires_human: boolean | null
+          sentiment: string | null
+          suggested_action: string | null
+          unsubscribe: boolean | null
+          user_id: string
+        }
+        Insert: {
+          booking_intent?: boolean | null
+          confidence?: number | null
+          created_at?: string
+          id?: never
+          intent?: string | null
+          interested?: boolean | null
+          lead_id?: string | null
+          message_id?: string | null
+          raw?: Json | null
+          requires_human?: boolean | null
+          sentiment?: string | null
+          suggested_action?: string | null
+          unsubscribe?: boolean | null
+          user_id: string
+        }
+        Update: {
+          booking_intent?: boolean | null
+          confidence?: number | null
+          created_at?: string
+          id?: never
+          intent?: string | null
+          interested?: boolean | null
+          lead_id?: string | null
+          message_id?: string | null
+          raw?: Json | null
+          requires_human?: boolean | null
+          sentiment?: string | null
+          suggested_action?: string | null
+          unsubscribe?: boolean | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      audit_events: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          event: string
+          id: number
+          lead_id: string | null
+          payload: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          event: string
+          id?: never
+          lead_id?: string | null
+          payload?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          event?: string
+          id?: never
+          lead_id?: string | null
+          payload?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       campaigns: {
         Row: {
           ab_test: boolean
@@ -72,17 +128,65 @@ export type Database = {
         }
         Relationships: []
       }
+      email_threads: {
+        Row: {
+          gmail_thread_id: string | null
+          high_priority: boolean
+          id: string
+          last_message_id: string | null
+          lead_id: string | null
+          turn_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          gmail_thread_id?: string | null
+          high_priority?: boolean
+          id?: string
+          last_message_id?: string | null
+          lead_id?: string | null
+          turn_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          gmail_thread_id?: string | null
+          high_priority?: boolean
+          id?: string
+          last_message_id?: string | null
+          lead_id?: string | null
+          turn_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_threads_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       emails_sent: {
         Row: {
           ai_draft: string | null
+          ai_paused: boolean
+          ai_turns: number
           autoreplied: boolean
           body: string | null
           campaign_id: string | null
           follow_up_at: string | null
           follow_up_sent: boolean
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
           id: string
+          last_ai_msg_at: string | null
+          last_lead_msg_at: string | null
           lead_id: string | null
           opened: boolean
+          opened_at: string | null
           replied: boolean
           reply_sentiment: string | null
           sent_at: string
@@ -93,14 +197,21 @@ export type Database = {
         }
         Insert: {
           ai_draft?: string | null
+          ai_paused?: boolean
+          ai_turns?: number
           autoreplied?: boolean
           body?: string | null
           campaign_id?: string | null
           follow_up_at?: string | null
           follow_up_sent?: boolean
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
+          last_ai_msg_at?: string | null
+          last_lead_msg_at?: string | null
           lead_id?: string | null
           opened?: boolean
+          opened_at?: string | null
           replied?: boolean
           reply_sentiment?: string | null
           sent_at?: string
@@ -111,14 +222,21 @@ export type Database = {
         }
         Update: {
           ai_draft?: string | null
+          ai_paused?: boolean
+          ai_turns?: number
           autoreplied?: boolean
           body?: string | null
           campaign_id?: string | null
           follow_up_at?: string | null
           follow_up_sent?: boolean
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
           id?: string
+          last_ai_msg_at?: string | null
+          last_lead_msg_at?: string | null
           lead_id?: string | null
           opened?: boolean
+          opened_at?: string | null
           replied?: boolean
           reply_sentiment?: string | null
           sent_at?: string
@@ -146,19 +264,16 @@ export type Database = {
       }
       gmail_tokens: {
         Row: {
-          access_token: string | null
           profile_id: string
           refresh_token: string
           updated_at: string
         }
         Insert: {
-          access_token?: string | null
           profile_id: string
           refresh_token: string
           updated_at?: string
         }
         Update: {
-          access_token?: string | null
           profile_id?: string
           refresh_token?: string
           updated_at?: string
@@ -177,12 +292,15 @@ export type Database = {
         Row: {
           campaign_id: string | null
           company: string | null
+          conv_mode: string
           country: string | null
           created_at: string
           email: string | null
           id: string
           job_title: string | null
+          lifecycle: string
           name: string | null
+          normalized_email: string | null
           status: string
           unsubscribed: boolean
           user_id: string
@@ -190,12 +308,15 @@ export type Database = {
         Insert: {
           campaign_id?: string | null
           company?: string | null
+          conv_mode?: string
           country?: string | null
           created_at?: string
           email?: string | null
           id?: string
           job_title?: string | null
+          lifecycle?: string
           name?: string | null
+          normalized_email?: string | null
           status?: string
           unsubscribed?: boolean
           user_id: string
@@ -203,12 +324,15 @@ export type Database = {
         Update: {
           campaign_id?: string | null
           company?: string | null
+          conv_mode?: string
           country?: string | null
           created_at?: string
           email?: string | null
           id?: string
           job_title?: string | null
+          lifecycle?: string
           name?: string | null
+          normalized_email?: string | null
           status?: string
           unsubscribed?: boolean
           user_id?: string
@@ -262,6 +386,42 @@ export type Database = {
           },
         ]
       }
+      owner_alerts: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: number
+          kind: string
+          lead_id: string | null
+          priority: string
+          read: boolean
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: never
+          kind: string
+          lead_id?: string | null
+          priority?: string
+          read?: boolean
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: never
+          kind?: string
+          lead_id?: string | null
+          priority?: string
+          read?: boolean
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           ai_generated_date: string | null
@@ -270,18 +430,19 @@ export type Database = {
           autopilot_country: string | null
           autopilot_niche: string | null
           booking_link: string | null
-          website_url: string | null
           business_description: string | null
-          company: string | null
-          communication_style: string | null
-          created_at: string
           cities: string[] | null
+          communication_style: string | null
+          company: string | null
+          created_at: string
           dont_claim: string | null
           email: string | null
           emails_sent_date: string | null
           emails_sent_today: number
+          gmail_account_type: string
           gmail_connected: boolean
           gmail_email: string | null
+          gmail_state: string
           has_product_image: boolean | null
           icp: Json | null
           id: string
@@ -296,6 +457,7 @@ export type Database = {
           referred_by: string | null
           signature: string | null
           target_customer: string | null
+          website_url: string | null
         }
         Insert: {
           ai_generated_date?: string | null
@@ -304,18 +466,19 @@ export type Database = {
           autopilot_country?: string | null
           autopilot_niche?: string | null
           booking_link?: string | null
-          website_url?: string | null
           business_description?: string | null
-          company?: string | null
-          communication_style?: string | null
-          created_at?: string
           cities?: string[] | null
+          communication_style?: string | null
+          company?: string | null
+          created_at?: string
           dont_claim?: string | null
           email?: string | null
           emails_sent_date?: string | null
           emails_sent_today?: number
+          gmail_account_type?: string
           gmail_connected?: boolean
           gmail_email?: string | null
+          gmail_state?: string
           has_product_image?: boolean | null
           icp?: Json | null
           id: string
@@ -330,6 +493,7 @@ export type Database = {
           referred_by?: string | null
           signature?: string | null
           target_customer?: string | null
+          website_url?: string | null
         }
         Update: {
           ai_generated_date?: string | null
@@ -338,18 +502,19 @@ export type Database = {
           autopilot_country?: string | null
           autopilot_niche?: string | null
           booking_link?: string | null
-          website_url?: string | null
           business_description?: string | null
-          company?: string | null
-          communication_style?: string | null
-          created_at?: string
           cities?: string[] | null
+          communication_style?: string | null
+          company?: string | null
+          created_at?: string
           dont_claim?: string | null
           email?: string | null
           emails_sent_date?: string | null
           emails_sent_today?: number
+          gmail_account_type?: string
           gmail_connected?: boolean
           gmail_email?: string | null
+          gmail_state?: string
           has_product_image?: boolean | null
           icp?: Json | null
           id?: string
@@ -364,6 +529,7 @@ export type Database = {
           referred_by?: string | null
           signature?: string | null
           target_customer?: string | null
+          website_url?: string | null
         }
         Relationships: []
       }
@@ -400,7 +566,10 @@ export type Database = {
           campaign_id: string
           created_at: string
           id: string
+          last_error: string | null
           lead_id: string
+          lease_until: string | null
+          next_retry_at: string | null
           status: string
           updated_at: string | null
           user_id: string
@@ -411,7 +580,10 @@ export type Database = {
           campaign_id: string
           created_at?: string
           id?: string
+          last_error?: string | null
           lead_id: string
+          lease_until?: string | null
+          next_retry_at?: string | null
           status?: string
           updated_at?: string | null
           user_id: string
@@ -422,7 +594,10 @@ export type Database = {
           campaign_id?: string
           created_at?: string
           id?: string
+          last_error?: string | null
           lead_id?: string
+          lease_until?: string | null
+          next_retry_at?: string | null
           status?: string
           updated_at?: string | null
           user_id?: string
@@ -438,6 +613,44 @@ export type Database = {
           },
           {
             foreignKeyName: "send_queue_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppressions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          lead_id: string | null
+          reason: string
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          lead_id?: string | null
+          reason: string
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          lead_id?: string | null
+          reason?: string
+          source?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppressions_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
@@ -466,19 +679,81 @@ export type Database = {
         }
         Relationships: []
       }
+      tracking_events: {
+        Row: {
+          campaign_id: string | null
+          email_id: string | null
+          event: string
+          id: number
+          lead_id: string | null
+          occurred_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          email_id?: string | null
+          event: string
+          id?: never
+          lead_id?: string | null
+          occurred_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string | null
+          email_id?: string | null
+          event?: string
+          id?: never
+          lead_id?: string | null
+          occurred_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_events_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "emails_sent"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_limits: {
+        Row: {
+          emails_sent_today: number
+          limit_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          emails_sent_today?: number
+          limit_date?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          emails_sent_today?: number
+          limit_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      claim_queue_jobs: {
-        Args: { p_limit?: number }
+      claim_queue_jobs_v2: {
+        Args: { p_lease_minutes?: number; p_limit?: number }
         Returns: {
           attempts: number
           campaign_id: string
           created_at: string
           id: string
+          last_error: string | null
           lead_id: string
+          lease_until: string | null
+          next_retry_at: string | null
           status: string
           updated_at: string | null
           user_id: string
@@ -501,6 +776,11 @@ export type Database = {
         }[]
       }
       referral_count: { Args: never; Returns: number }
+      release_send_slot: { Args: { p_user: string }; Returns: undefined }
+      reserve_send_slot: {
+        Args: { p_cap: number; p_user: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -629,9 +909,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
