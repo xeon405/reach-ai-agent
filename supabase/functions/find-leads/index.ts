@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { COUNTRY_ISO, nicheFor, searchDirectory, type Niche } from "../_shared/osm.ts";
+import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
+import { searchGoogleMaps, isGoogleMapsAvailable } from "../_shared/google-maps.ts";
 import { insertAudit } from "../_shared/audit.ts";
 
 const corsHeaders = {
@@ -50,25 +51,63 @@ serve(async (req) => {
       if (!campaign) throw new Error("Campaign not found");
     }
 
-    const iso =
-      COUNTRY_ISO[String(country ?? "").toLowerCase().trim()] ??
-      (String(country ?? "").length === 2 ? String(country).toUpperCase() : null);
-    if (!iso) throw new Error(`Unsupported country "${country}". Try e.g. United States, United Kingdom, India…`);
-
     const cappedLimit = Math.max(1, Math.min(Number(limit) || 25, 50));
-    const niche = nicheFor(String(jobTitle));
-    const leads = await searchDirectory(niche, iso, cappedLimit);
+    let leads: Array<{
+      name: string; email: string; company: string;
+      job_title: string; country: string; website: string;
+    }> = [];
+    let source = "open-business-directory";
 
-    await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "lead.searched", payload: { count: leads.length, country: iso, jobTitle, source: "open-business-directory" } });
+    // Try Google Maps first if API key is configured
+    if (isGoogleMapsAvailable()) {
+      try {
+        const googleLeads = await searchGoogleMaps(jobTitle, country ?? "United States", cappedLimit);
+        if (googleLeads.length > 0) {
+          leads = googleLeads.map((l) => ({
+            name: l.name,
+            email: l.email,
+            company: l.company,
+            job_title: l.job_title,
+            country: l.country,
+            website: l.website,
+          }));
+          source = "google-maps";
+        }
+      } catch (err) {
+        // Google Maps failed — fallback to OSM below
+        console.error("Google Maps search failed, falling back to OSM:", err);
+      }
+    }
+
+    // Fallback to OSM if Google Maps returned nothing or isn't configured
+    if (leads.length === 0) {
+      const iso =
+        COUNTRY_ISO[String(country ?? "").toLowerCase().trim()] ??
+        (String(country ?? "").length === 2 ? String(country).toUpperCase() : null);
+      if (iso) {
+        const niche = nicheFor(String(jobTitle));
+        leads = await searchDirectory(niche, iso, cappedLimit);
+        source = "open-business-directory";
+      }
+    }
+
+    await insertAudit(supabase, {
+      user_id: userId,
+      campaign_id: campaignId,
+      event: "lead.searched",
+      payload: { count: leads.length, country, jobTitle, source },
+    });
 
     return json({
       leads,
       count: leads.length,
-      source: "open-business-directory",
+      source,
       message:
         leads.length === 0
-          ? `No public emails found for "${jobTitle}" in ${country}. Try another niche (dentist, gym, restaurant, salon, lawyer…) or import a CSV.`
-          : `Found ${leads.length} businesses with public emails. Review and add the ones you want.`,
+          ? source === "google-maps"
+            ? `No businesses with public emails found for "${jobTitle}" in ${country}. Try another niche or country, or import a CSV.`
+            : `No public emails found for "${jobTitle}" in ${country}. Try "dentist", "gym", "restaurant", "salon", "lawyer" — or import a CSV.`
+          : `Found ${leads.length} businesses with public emails (${source}). Review and add the ones you want.`,
     });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
