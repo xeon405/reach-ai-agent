@@ -70,6 +70,9 @@ async function fetchTokenMap(db: ReturnType<typeof createClient>, ids: string[])
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "GET" && new URL(req.url).searchParams.has("health")) {
+    return json({ ok: true, service: "inbox-agent" });
+  }
 
   const secret = Deno.env.get("CRON_SECRET");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -216,7 +219,7 @@ Deno.serve(async (req) => {
           }
           const { error: clsErr } = await supabase.from("ai_classifications").insert({
             user_id: email.user_id, lead_id: lead.id, message_id: hits[0].id,
-            intent: cls.intent, confidence: cls.confidence, interested: cls.interested,
+            intent: cls.intent, confidence: cls.confidence ?? 0.5, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
             suggested_action: cls.suggested_action, raw: { subject: replySubject.slice(0, 150) },
@@ -500,7 +503,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           }
           const { error: clsErr } = await supabase.from("ai_classifications").insert({
             user_id: t.user_id, lead_id: lead.id, message_id: hits[0].id,
-            intent: cls.intent, confidence: cls.confidence, interested: cls.interested,
+            intent: cls.intent, confidence: cls.confidence ?? 0.5, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
             suggested_action: cls.suggested_action, raw: { subject: subj.slice(0, 150) },

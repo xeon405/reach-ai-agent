@@ -238,6 +238,9 @@ interface UserCtx {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "GET" && new URL(req.url).searchParams.has("health")) {
+    return json({ ok: true, service: "send-worker" });
+  }
 
   const secret = Deno.env.get("CRON_SECRET");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
