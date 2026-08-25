@@ -48,7 +48,7 @@ export function nicheFor(jobTitleRaw: string): Niche {
 
 export function buildQuery(niche: Niche, iso: string, limit: number): string {
   const head =
-    `[out:json][timeout:60];\narea["ISO3166-1"="${iso}"][admin_level=2]->.a;\n(\n`;
+    `[out:json][timeout:25];\narea["ISO3166-1"="${iso}"][admin_level=2]->.a;\n(\n`;
   const tagLines = niche.tags
     .map((tg) => `  nwr[${tg}]["email"](area.a);\n  nwr[${tg}]["contact:email"](area.a);\n`)
     .join("");
@@ -70,7 +70,9 @@ interface OsmEl {
 
 export async function searchDirectory(niche: Niche, iso: string, limit: number) {
   const body = "data=" + encodeURIComponent(buildQuery(niche, iso, limit));
-  // Primary instance is slow under load (40s+ country scans) — try mirrors in order
+  const totalStart = Date.now();
+  const TOTAL_BUDGET_MS = 42_000; // edge function hard-limit ≈50s; leave margin for parse + insert
+  const PER_MIRROR_MS = 30_000;
   let lastErr: unknown = new Error("no endpoint attempted");
   for (const endpoint of [
     "https://overpass.kumi.systems/api/interpreter",
@@ -78,8 +80,9 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
     "https://overpass.osm.jp/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   ]) {
+    if (Date.now() - totalStart > TOTAL_BUDGET_MS) break;
     const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 80_000);
+    const timer = setTimeout(() => ctrl.abort(), PER_MIRROR_MS);
     try {
       const res = await fetch(endpoint, {
         method: "POST",

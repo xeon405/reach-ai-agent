@@ -175,7 +175,13 @@ function LeadsPage() {
       });
 
       if (data?.error) throw new Error(data.error);
-      if (error) throw new Error(error.message);
+      if (error) {
+        const msg = error.message || "";
+        if (msg.includes("non-2xx") || msg.includes("FunctionsHttpError")) {
+          throw new Error("Search timed out. Large countries like the US can be slow — try a smaller country or import leads via CSV instead.");
+        }
+        throw new Error(msg);
+      }
 
       toast.success(`✅ Found ${data.found} leads, saved ${data.saved ?? data.found} of them!`);
       setFindOpen(false);
