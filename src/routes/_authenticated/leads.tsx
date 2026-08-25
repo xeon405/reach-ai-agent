@@ -171,10 +171,10 @@ function LeadsPage() {
         },
       });
 
-      if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
+      if (error) throw new Error(error.message);
 
-      toast.success(`✅ Found ${data.found} leads, added ${data.added} new ones!`);
+      toast.success(`✅ Found ${data.found} leads, saved ${data.saved ?? data.found} of them!`);
       setFindOpen(false);
       load();
     } catch (e: any) {

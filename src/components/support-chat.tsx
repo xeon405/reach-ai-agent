@@ -10,15 +10,31 @@ const SUGGESTIONS = [
   "Is my Gmail safe?",
 ];
 
+const CHAT_KEY = "outreachai_support_chat";
+const WELCOME: Msg = {
+  role: "assistant",
+  content:
+    "Hey! I'm your OutreachAI guide. Ask me anything — how to find leads, launch campaigns, send replies, anything at all.",
+};
+
+function loadMessages(): Msg[] {
+  try {
+    const raw = localStorage.getItem(CHAT_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch { /* corrupted → reset */ }
+  return [WELCOME];
+}
+
+function persistMessages(msgs: Msg[]) {
+  try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-40))); } catch { /* quota — trim oldest */ }
+}
+
 export function SupportChat() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      role: "assistant",
-      content:
-        "Hey! 👋 I'm your OutreachAI guide. Ask me anything — how to find leads, launch campaigns, send replies, anything at all.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Msg[]>(loadMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -26,6 +42,8 @@ export function SupportChat() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
+
+  useEffect(() => { persistMessages(messages); }, [messages]);
 
   async function send(text?: string) {
     const q = (text ?? input).trim();

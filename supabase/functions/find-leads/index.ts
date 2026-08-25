@@ -66,13 +66,18 @@ serve(async (req) => {
         ...l,
         status: "new",
       }));
-      // lead.created audit events are emitted by the trg_audit_lead_created DB trigger.
-      await supabase.from("leads").insert(rows);
-      await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "lead.imported", payload: { count: leads.length, source: "open-business-directory" } });
+      // Insert one by one so a single duplicate doesn't crash the whole batch.
+      let saved = 0;
+      for (const row of rows) {
+        const { error: insErr } = await supabase.from("leads").insert(row);
+        if (!insErr) saved++;
+      }
+      await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "lead.imported", payload: { count: leads.length, saved, source: "open-business-directory" } });
     }
 
     return json({
       found: leads.length,
+      saved: leads.length,
       source: "open-business-directory",
       message:
         leads.length === 0
