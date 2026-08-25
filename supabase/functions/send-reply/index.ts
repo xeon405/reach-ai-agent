@@ -140,7 +140,7 @@ IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft,
     const SITE = "https://outreach-ochre-sigma.vercel.app";
     const leadIdForUnsub = leadRow?.id ?? row.lead_id;
     const raw = buildRawEmail(toEmail, subject, replyBody, profile.gmail_email ?? "", leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}` : undefined);
-    const ids = await sendGmailRaw(accessToken, toBase64Url(raw));
+    const ids = await sendGmailRaw(accessToken, raw);
 
     await admin.from("emails_sent").update({ ai_draft: null, gmail_message_id: ids.id, gmail_thread_id: ids.threadId }).eq("id", emailId);
 

@@ -600,6 +600,16 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
           continue;
         }
 
+        // ATOMIC CLAIM: prevents two workers from sending the same follow-up.
+        // CAS sets follow_up_sent=true; if another worker already claimed it, this returns nothing.
+        const { data: claimed } = await db.from("emails_sent")
+          .update({ follow_up_sent: true }, { count: "exact" })
+          .eq("id", email.id)
+          .eq("follow_up_sent", false)
+          .select("id")
+          .maybeSingle();
+        if (!claimed) continue;
+
         // ATOMIC daily-cap reservation (concurrency-safe). Cap hit → DEFER an hour, never cancel.
         const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
         const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
