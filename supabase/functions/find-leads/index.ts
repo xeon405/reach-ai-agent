@@ -70,6 +70,10 @@ serve(async (req) => {
             job_title: l.job_title,
             country: l.country,
             website: l.website,
+            phone: l.phone,
+            address: l.address,
+            rating: l.rating,
+            source: l.source,
           }));
           source = "google-maps";
         }

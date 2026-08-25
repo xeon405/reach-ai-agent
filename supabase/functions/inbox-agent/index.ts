@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
           const profile = profileMap[email.user_id];
           const lead = Array.isArray(email.lead) ? email.lead[0] : email.lead;
           const rt = scanTokens[email.user_id];
-          if (!profile || !rt || !lead?.email || lead.unsubscribed || ["UNSUBSCRIVED", "UNSUBSCRIBED", "BOUNCED", "SUPPRESSED"].includes(lead.status ?? "")) continue;
+          if (!profile || !rt || !lead?.email || lead.unsubscribed || ["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED"].includes(lead.status ?? "")) continue;
           if ((lead.lifecycle ?? "") && ["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED", "HUMAN_TAKEOVER"].includes(lead.lifecycle)) continue;
 
           const tok = await getAccessToken(supabase, email.user_id);
@@ -329,8 +329,20 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                   )).catch(() => null);
                   if (ids) {
                     aiRepliesSent++;
-                    await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: bDraft.trim(), gmail_thread_id: ids.threadId, last_ai_msg_at: new Date().toISOString(), last_lead_msg_at: new Date().toISOString() }).eq("id", email.id);
-                    await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve" } });
+                    const newTurns = (email.ai_turns ?? 0) + 1;
+                    await supabase.from("emails_sent").update({
+                      autoreplied: true, ai_draft: bDraft.trim(),
+                      gmail_thread_id: ids.threadId,
+                      last_ai_msg_at: new Date().toISOString(),
+                      last_lead_msg_at: new Date().toISOString(),
+                      ai_turns: newTurns,
+                      ...(newTurns >= 3 ? { ai_paused: true } : {}),
+                    }).eq("id", email.id);
+                    if (newTurns >= 3) {
+                      await supabase.from("emails_sent").update({ conv_mode: "PAUSED" }).eq("id", email.id);
+                      await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "handoff", title: "AI turn budget reached", body: "3 AI turns used — thread paused for human review.", priority: "high" });
+                    }
+                    await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurns } });
                   }
                 }
               } catch (_be) { /* alert already sent — owner can still close manually */ }

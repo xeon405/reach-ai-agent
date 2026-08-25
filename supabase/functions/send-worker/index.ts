@@ -496,7 +496,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         subject: gen.subject,
         body: "(pending)",
         variant,
-        follow_up_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         sequence: 1,
         follow_up_sent: false,
       });
@@ -664,7 +664,7 @@ ${footer}`;
           await db.from("emails_sent").insert({
             user_id: email.user_id, lead_id: lead.id, campaign_id: email.campaign_id,
             subject, body: "(scheduled step 3)", sequence: 3, follow_up_sent: false,
-            follow_up_at: new Date(Date.now() + 4 * 86400000).toISOString(), // Follow-up #2 at +4 days
+            follow_up_at: new Date(Date.now() + 5 * 86400000).toISOString(), // Follow-up #2 at +5 days from step 2 (+7 total)
           });
         }
         await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);

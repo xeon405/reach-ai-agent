@@ -57,6 +57,8 @@ function burstConfetti() {
   }
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -114,7 +116,8 @@ function LeadsPage() {
   }
 
   async function addLead() {
-    if (!form.email && !bulkText.trim()) { toast.error("Email is required"); return; }
+    if (!form.email) { toast.error("Email is required"); return; }
+    if (!EMAIL_RE.test(form.email)) { toast.error("Please enter a valid email address"); return; }
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
 
@@ -133,7 +136,7 @@ function LeadsPage() {
           campaign_id: form.campaign_id || null,
           status: "new",
         };
-      }).filter((r) => r.email.includes("@"));
+      }).filter((r) => r.email.includes("@") && EMAIL_RE.test(r.email));
       if (inserts.length === 0) { toast.error("No valid emails found"); return; }
       const { error } = await supabase.from("leads").insert(inserts);
       if (error) { toast.error(error.message); return; }
@@ -260,7 +263,7 @@ function LeadsPage() {
     let imported = 0;
     for (const row of rows) {
       const email = row["email"] || row["email address"] || row["e-mail"];
-      if (!email) continue;
+      if (!email || !EMAIL_RE.test(email)) continue;
       await supabase.from("leads").insert({
         user_id: u.user.id,
         email,

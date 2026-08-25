@@ -36,6 +36,23 @@ function AuthenticatedLayout() {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
 
+  // Onboarding guard: redirect to /onboarding if profile is incomplete
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("onboarded")
+        .eq("id", user.id)
+        .single();
+      if (!cancelled && data && !data.onboarded) {
+        navigate({ to: "/onboarding" });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [loading, user, navigate]);
+
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">

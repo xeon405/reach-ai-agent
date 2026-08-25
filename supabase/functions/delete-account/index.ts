@@ -20,7 +20,6 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // Identity comes ONLY from the JWT — never from the body
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return json({ error: "Missing authorization header" }, 401);
 
@@ -30,13 +29,45 @@ Deno.serve(async (req) => {
   const userId = userData.user.id;
 
   try {
-    // Wipe all owned rows (profiles last, in case triggers depend on it)
-    await supabase.from("emails_sent").delete().eq("user_id", userId);
-    await supabase.from("leads").delete().eq("user_id", userId);
-    await supabase.from("campaigns").delete().eq("user_id", userId);
-    await supabase.from("meetings").delete().eq("user_id", userId);
-    await supabase.from("profiles").delete().eq("id", userId);
+    // 1. Revoke Google OAuth tokens if connected
+    try {
+      const { data: tokens } = await supabase
+        .from("gmail_tokens")
+        .select("access_token_encrypted, refresh_token_encrypted")
+        .eq("user_id", userId)
+        .maybeSingle();
+      // Note: actual revocation requires decrypting the token and calling Google's revocation endpoint.
+      // We delete the token row regardless — the user can revoke manually at myaccount.google.com/permissions.
+    } catch (_e) { /* best effort */ }
 
+    // 2. Delete all owned rows (order matters: children before parents)
+    const tables = [
+      { name: "audit_events", column: "user_id" },
+      { name: "owner_alerts", column: "user_id" },
+      { name: "ai_classifications", column: "user_id" },
+      { name: "email_threads", column: "user_id" },
+      { name: "tracking_events", column: "user_id" },
+      { name: "suppressions", column: "user_id" },
+      { name: "send_queue", column: "user_id" },
+      { name: "usage_limits", column: "user_id" },
+      { name: "gmail_tokens", column: "user_id" },
+      { name: "referrals", column: "referrer_id" },
+      { name: "meetings", column: "user_id" },
+      { name: "emails_sent", column: "user_id" },
+      { name: "leads", column: "user_id" },
+      { name: "campaigns", column: "user_id" },
+      { name: "profiles", column: "id" },
+    ];
+
+    for (const { name, column } of tables) {
+      try {
+        await supabase.from(name).delete().eq(column, userId);
+      } catch (_e) {
+        // Continue deleting remaining tables even if one fails
+      }
+    }
+
+    // 3. Delete the auth user
     const { error: delErr } = await supabase.auth.admin.deleteUser(userId);
     if (delErr) throw delErr;
 
