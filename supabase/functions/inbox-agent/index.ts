@@ -642,18 +642,30 @@ Your site — direct them there to get started: ${sanitizeForPrompt(profile.webs
 Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. Sign off as "Best regards". Return only the reply text.`,
                   }], { maxTokens: 400, temperature: 0.8 });
                   if (bReply?.trim()) {
-                    const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
-                      lead.email,
-                      subj.startsWith("Re:") ? subj : `Re: ${subj}`,
-                      `${bReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
-                      profile.gmail_email || profile.email,
-                      `${SITE}/unsubscribe?l=${lead.id}`
-                    )).catch(() => null);
-                    if (ids) {
-                      aiRepliesSent++;
-                      const newTurnsB = (t.ai_turns ?? 0) + 1;
-                      await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: bReply.trim(), gmail_thread_id: ids.threadId, ai_turns: newTurnsB, last_ai_msg_at: new Date().toISOString() }).eq("id", t.id);
-                      await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurnsB } });
+                    const newTurnsB = (t.ai_turns ?? 0) + 1;
+                    // Enforce turn limit — don't send if budget exhausted
+                    if (newTurnsB > 3) {
+                      await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+                      await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
+                      await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: "3 AI turns used.", priority: "high" });
+                    } else {
+                      const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
+                        lead.email,
+                        subj.startsWith("Re:") ? subj : `Re: ${subj}`,
+                        `${bReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
+                        profile.gmail_email || profile.email,
+                        `${SITE}/unsubscribe?l=${lead.id}`
+                      )).catch(() => null);
+                      if (ids) {
+                        aiRepliesSent++;
+                        await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: bReply.trim(), gmail_thread_id: ids.threadId, ai_turns: newTurnsB, last_ai_msg_at: new Date().toISOString() }).eq("id", t.id);
+                        await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurnsB } });
+                        if (newTurnsB >= 3) {
+                          await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
+                          await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
+                          await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: "3 AI turns used.", priority: "high" });
+                        }
+                      }
                     }
                   }
                 } catch (_be2) { /* alert already sent — owner can still close manually */ }
