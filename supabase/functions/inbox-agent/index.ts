@@ -279,15 +279,49 @@ Deno.serve(async (req) => {
 
           if (decision.action === "NOTIFY_OWNER_BOOKING") {
             bookings++;
-            await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", email.id);
             await supabase.from("leads").update({ lifecycle: nextLifecycle(newLifecycle, "booking.detected") }).eq("id", lead.id);
             await supabase.from("email_threads").upsert({
               user_id: email.user_id, lead_id: lead.id, gmail_thread_id: null,
               last_message_id: hits[0].id, high_priority: true, updated_at: new Date().toISOString(),
             }, { onConflict: "user_id,lead_id" });
-            await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "booking", title: `🔥 HOT: ${lead.name ?? lead.email} wants to book!`, body: `They said: "${(fullReplyText || snippet).slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.`, priority: "high" });
-            await notifySelf(tok.accessToken, profile, `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${(fullReplyText || snippet).slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.\n→ ${SITE}/emails`);
+            await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "booking", title: `🔥 HOT: ${lead.name ?? lead.email} wants to book!`, body: `They said: "${(fullReplyText || snippet).slice(0, 150)}"\n${profile.website_url ? "AI answered with your site link — thread stays on autopilot." : "AI stepped back — reply from your Gmail to close."}`, priority: "high" });
+            await notifySelf(tok.accessToken, profile, `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${(fullReplyText || snippet).slice(0, 150)}"\n${profile.website_url ? "AI replied pointing them to your site." : "AI stepped back — reply from your Gmail to close."}\n→ ${SITE}/emails`);
             await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "booking.detected", payload: {} });
+
+            if (!profile.website_url) {
+              // No self-serve destination — park the thread; the human must close.
+              await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", email.id);
+            } else {
+              // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
+              try {
+                const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
+                const bDraft = await groqChat([{
+                  role: "user",
+                  content: `A lead just replied asking how to get started / book a meeting.
+Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
+Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 600)}"
+What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
+COMPANY KNOWLEDGE BASE (factual only — never invent anything beyond it): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
+Your site — direct them there to get started: ${sanitizeForPrompt(profile.website_url, 200)}
+
+Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. Sign off as "Best regards". Return only the reply text.`,
+                }], { maxTokens: 400, temperature: 0.8 });
+                if (bDraft?.trim()) {
+                  const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
+                    lead.email,
+                    replySubject.startsWith("Re:") ? replySubject : `Re: ${replySubject}`,
+                    `${bDraft.trim()}\n\n--\nReply with UNSUBSCRIBE to stop further emails.`,
+                    profile.gmail_email || profile.email,
+                    `${SITE}/unsubscribe?l=${lead.id}`
+                  )).catch(() => null);
+                  if (ids) {
+                    aiRepliesSent++;
+                    await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: bDraft.trim(), gmail_thread_id: ids.threadId, last_ai_msg_at: new Date().toISOString(), last_lead_msg_at: new Date().toISOString() }).eq("id", email.id);
+                    await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve" } });
+                  }
+                }
+              } catch (_be) { /* alert already sent — owner can still close manually */ }
+            }
             continue;
           }
 
@@ -307,7 +341,7 @@ COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factu
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${cls.sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — never invent pricing or facts. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
@@ -565,15 +599,53 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             }
             case "NOTIFY_OWNER_BOOKING": {
               bookings++;
-              await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
               await supabase.from("leads").update({ lifecycle: nextLifecycle(lead.lifecycle ?? "REPLIED", "booking.detected") }).eq("id", lead.id);
               await supabase.from("email_threads").upsert({
                 user_id: t.user_id, lead_id: lead.id, gmail_thread_id: hits[0].threadId ?? null,
                 last_message_id: hits[0].id, high_priority: true, updated_at: new Date().toISOString(),
               }, { onConflict: "user_id,lead_id" });
-              await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "booking", title: `🔥 HOT: ${lead.name ?? lead.email} wants to book!`, body: `They said: "${theirWords.slice(0, 150)}"`, priority: "high" });
-              ownerNote = `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.\n→ ${SITE}/emails`;
+              await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "booking", title: `🔥 HOT: ${lead.name ?? lead.email} wants to book!`, body: `They said: "${theirWords.slice(0, 150)}"${profile.website_url ? "\nAI answered with your site link — thread stays on autopilot." : ""}`, priority: "high" });
+              ownerNote = profile.website_url
+                ? `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI replied pointing them to your site.\n→ ${SITE}/emails`
+                : `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.\n→ ${SITE}/emails`;
               await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "booking.detected", payload: {} });
+
+              if (!profile.website_url) {
+                // No self-serve destination — park the thread; the human must close.
+                await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+              } else {
+                // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
+                try {
+                  const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
+                  const bReply = await groqChat([{
+                    role: "user",
+                    content: `A lead just replied asking how to get started / book a meeting.
+Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
+Their newest message: "${sanitizeForPrompt(theirWords, 600)}"
+What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
+COMPANY KNOWLEDGE BASE (factual only — never invent anything beyond it): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
+Your site — direct them there to get started: ${sanitizeForPrompt(profile.website_url, 200)}
+
+Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. Sign off as "Best regards". Return only the reply text.`,
+                  }], { maxTokens: 400, temperature: 0.8 });
+                  if (bReply?.trim()) {
+                    const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
+                      lead.email,
+                      subj.startsWith("Re:") ? subj : `Re: ${subj}`,
+                      `${bReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
+                      profile.gmail_email || profile.email,
+                      `${SITE}/unsubscribe?l=${lead.id}`
+                    )).catch(() => null);
+                    if (ids) {
+                      aiRepliesSent++;
+                      const newTurnsB = (t.ai_turns ?? 0) + 1;
+                      await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: bReply.trim(), gmail_thread_id: ids.threadId, ai_turns: newTurnsB, last_ai_msg_at: new Date().toISOString() }).eq("id", t.id);
+                      await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurnsB } });
+                    }
+                  }
+                } catch (_be2) { /* alert already sent — owner can still close manually */ }
+                await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+              }
               break;
             }
             case "HANDOFF_TO_HUMAN": {
@@ -601,7 +673,7 @@ COMPANY KNOWLEDGE BASE (from your website — answer questions factually from th
 "${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
 Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);
