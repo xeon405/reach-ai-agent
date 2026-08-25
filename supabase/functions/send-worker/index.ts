@@ -480,18 +480,13 @@ PS: I use an AI assistant (OutreachAI) to help manage my outreach — this note 
 Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
     // Generate tracking ID BEFORE send so we can reference it in the pixel.
-    // The emails_sent row is inserted ONLY after Gmail send succeeds (anti-phantom-send).
     const trackingId = crypto.randomUUID();
     const pixel = `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${trackingId}" width="1" height="1" alt="" style="display:none;border:0" />`;
     const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}`;
 
-    const ids = await sendGmailRaw(
-      tok.accessToken,
-      buildRawEmail(lead.email, gen.subject, bodyText, buildHtmlBody(bodyText, pixel), String(ctx.profile.gmail_email ?? ""), unsubUrl)
-    );
-
-    // Gmail send succeeded — NOW insert the record. If this fails, no phantom row exists.
-    const { data: emailRow, error: insertErr } = await db
+    // TWO-PHASE INSERT: pending row acts as distributed lock against lease-expiry races.
+    // Phase 1: Insert PENDING row (unique constraint prevents concurrent worker from sending).
+    const { error: pendingErr } = await db
       .from("emails_sent")
       .insert({
         id: trackingId,
@@ -499,17 +494,41 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         lead_id: lead.id,
         campaign_id: job.campaign_id,
         subject: gen.subject,
-        body: bodyText,
+        body: "(pending)",
         variant,
         follow_up_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
         sequence: 1,
         follow_up_sent: false,
-        gmail_message_id: ids.id,
-        gmail_thread_id: ids.threadId,
-      })
-      .select("id")
-      .single();
-    if (insertErr || !emailRow) throw new Error(`record_insert_failed:${insertErr?.message?.slice(0, 120)}`);
+      });
+    if (pendingErr) {
+      // Unique constraint violation → another worker already has this job.
+      // Mark our queue job as sent (idempotent — the other worker is handling it).
+      if (String(pendingErr.message ?? "").includes("duplicate key")) {
+        await db.from("send_queue").update({ status: "sent", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
+        return true;
+      }
+      throw new Error(`pending_insert_failed:${pendingErr.message?.slice(0, 120)}`);
+    }
+
+    // Phase 2: Send via Gmail.
+    let ids: { id: string | null; threadId: string | null };
+    try {
+      ids = await sendGmailRaw(
+        tok.accessToken,
+        buildRawEmail(lead.email, gen.subject, bodyText, buildHtmlBody(bodyText, pixel), String(ctx.profile.gmail_email ?? ""), unsubUrl)
+      );
+    } catch (sendErr) {
+      // Send failed — DELETE pending row so retry can try again cleanly.
+      await db.from("emails_sent").delete().eq("id", trackingId);
+      throw sendErr;
+    }
+
+    // Phase 3: Confirm — update pending row with Gmail IDs + real body.
+    await db.from("emails_sent").update({
+      body: bodyText,
+      gmail_message_id: ids.id,
+      gmail_thread_id: ids.threadId,
+    }).eq("id", trackingId);
     await db.from("send_queue").update({ status: "sent", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
     await db.from("leads").update({
       status: "emailed",
@@ -518,7 +537,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     }).eq("id", lead.id);
 
     ctx.sentToday++;
-    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: emailRow.id, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80) } });
+    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80) } });
     return true;
   }
 
