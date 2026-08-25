@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
-import { getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
+import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import { nextLifecycle } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
 
@@ -70,7 +70,7 @@ serve(async (req) => {
     // Load the outreach email + lead, verifying ownership via join
     const { data: row, error: rowErr } = await admin
       .from("emails_sent")
-      .select("id, user_id, subject, ai_draft, sent_at, lead:leads(email, name, company, job_title, country)")
+      .select("id, user_id, lead_id, subject, ai_draft, sent_at, lead:leads(id, email, name, company, job_title, country)")
       .eq("id", emailId)
       .single();
     if (rowErr || !row) throw new Error("Email not found");
@@ -137,6 +137,9 @@ IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft,
     const origSubject = row.subject ?? "";
     const subject = origSubject.toLowerCase().startsWith("re:") ? origSubject : `Re: ${origSubject}`;
 
+    const SITE = "https://outreach-ochre-sigma.vercel.app";
+    const leadIdForUnsub = leadRow?.id ?? row.lead_id;
+    const raw = buildRawEmail(toEmail, subject, replyBody, profile.gmail_email ?? "", leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}` : undefined);
     const ids = await sendGmailRaw(accessToken, toBase64Url(raw));
 
     await admin.from("emails_sent").update({ ai_draft: null, gmail_message_id: ids.id, gmail_thread_id: ids.threadId }).eq("id", emailId);

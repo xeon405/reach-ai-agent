@@ -441,6 +441,8 @@ Deno.serve(async (req) => {
     const tok = await getAccessToken(db, job.user_id);
     if (!tok) throw new Error("gmail_token_mint_failed");
 
+    const biCtx = buildBIContext(ctx.profile);
+
     let variant = job.variant;
     if (variant === "B") {
       const subs = await getAltSubjects(job.campaign_id, String(ctx.profile.offer ?? "our services"), biCtx);
@@ -448,7 +450,6 @@ Deno.serve(async (req) => {
     }
 
     const destLink = String(ctx.profile.website_url || ctx.profile.booking_link || "");
-    const biCtx = buildBIContext(ctx.profile);
     let gen = await generateEmail(
       String(ctx.profile.name ?? "Best regards"),
       lead.name ?? "there",
@@ -582,6 +583,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
           continue;
         }
 
+        const tok = await getAccessToken(db, email.user_id).catch(() => null);
         if (!tok) {
           await db.rpc("release_send_slot", { p_user: email.user_id });
           followupsCancelled++;
