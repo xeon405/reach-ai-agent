@@ -35,6 +35,7 @@ import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
 import { Route as AuthenticatedLeadEditLeadIdRouteImport } from './routes/_authenticated/lead-edit.$leadId'
+import { Route as AuthenticatedCampaignEditCampaignIdRouteImport } from './routes/_authenticated/campaign-edit.$campaignId'
 
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
@@ -166,6 +167,12 @@ const AuthenticatedLeadEditLeadIdRoute =
     path: '/lead-edit/$leadId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCampaignEditCampaignIdRoute =
+  AuthenticatedCampaignEditCampaignIdRouteImport.update({
+    id: '/campaign-edit/$campaignId',
+    path: '/campaign-edit/$campaignId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -191,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
+  '/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
   '/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -218,6 +226,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
+  '/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
   '/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -247,6 +256,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
+  '/_authenticated/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
   '/_authenticated/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/auth/callback'
     | '/gmail/callback'
+    | '/campaign-edit/$campaignId'
     | '/lead-edit/$leadId'
     | '/auth/google/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -303,6 +314,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/auth/callback'
     | '/gmail/callback'
+    | '/campaign-edit/$campaignId'
     | '/lead-edit/$leadId'
     | '/auth/google/callback'
   id:
@@ -331,6 +343,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/auth/callback'
     | '/gmail/callback'
+    | '/_authenticated/campaign-edit/$campaignId'
     | '/_authenticated/lead-edit/$leadId'
     | '/auth/google/callback'
   fileRoutesById: FileRoutesById
@@ -537,6 +550,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadEditLeadIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/campaign-edit/$campaignId': {
+      id: '/_authenticated/campaign-edit/$campaignId'
+      path: '/campaign-edit/$campaignId'
+      fullPath: '/campaign-edit/$campaignId'
+      preLoaderRoute: typeof AuthenticatedCampaignEditCampaignIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
@@ -549,6 +569,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedCampaignEditCampaignIdRoute: typeof AuthenticatedCampaignEditCampaignIdRoute
   AuthenticatedLeadEditLeadIdRoute: typeof AuthenticatedLeadEditLeadIdRoute
 }
 
@@ -561,6 +582,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedCampaignEditCampaignIdRoute:
+    AuthenticatedCampaignEditCampaignIdRoute,
   AuthenticatedLeadEditLeadIdRoute: AuthenticatedLeadEditLeadIdRoute,
 }
 

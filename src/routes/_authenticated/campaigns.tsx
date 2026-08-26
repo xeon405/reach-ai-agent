@@ -1,11 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send } from "lucide-react";
+import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { TEMPLATES } from "@/lib/templates";
 
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/campaigns")({
 type Campaign = { id: string; name: string; status: string; created_at: string; ab_test?: boolean; autopilot?: boolean };
 
 function CampaignsPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<Campaign[]>([]);
   const [stats, setStats] = useState<Record<string, { leads: number; emails: number; replies: number }>>({});
   const [abStats, setAbStats] = useState<Record<string, { a: number; aOpen: number; b: number; bOpen: number }> | null>(null);
@@ -370,6 +371,9 @@ function CampaignsPage() {
                     {sending === c.id
                       ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
                       : <><Send className="mr-2 h-4 w-4" /> Launch</>}
+                  </Button>
+                  <Button size="icon" variant="outline" onClick={() => navigate({ to: "/campaign-edit/$campaignId", params: { campaignId: c.id } })} aria-label="Edit campaign">
+                    <Pencil className="h-4 w-4" />
                   </Button>
                   <Button size="icon" variant="outline" onClick={() => toggle(c)}>
                     {c.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
