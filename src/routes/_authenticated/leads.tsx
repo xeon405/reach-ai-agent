@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Download, Search, Plus, Upload, Sparkles, Trash2 } from "lucide-react";
+import { Download, Search, Plus, Upload, Sparkles, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -91,19 +91,42 @@ function LeadsPage() {
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
   const [bulkText, setBulkText] = useState("");
-  const [editingCell, setEditingCell] = useState<{ id: string; field: "name" | "company" | "job_title" } | null>(null);
-  const [editingValue, setEditingValue] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editId, setEditId] = useState("");
+  const [editForm, setEditForm] = useState({
+    name: "", email: "", company: "", job_title: "", country: "", campaign_id: "", status: "new",
+  });
 
-  async function saveLeadField(id: string, field: "name" | "company" | "job_title", value: string) {
-    const trimmed = value.trim();
-    setEditingCell(null);
-    if (!trimmed) return;
-    const lead = leads.find((l) => l.id === id);
-    if (lead && lead[field] === trimmed) return;
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, [field]: trimmed } : l));
-    const patch = { [field]: trimmed } as { name?: string; company?: string; job_title?: string };
-    const { error } = await supabase.from("leads").update(patch).eq("id", id);
-    if (error) { toast.error("Could not update"); void load(); }
+  function openEdit(l: Lead) {
+    setEditId(l.id);
+    setEditForm({
+      name: l.name ?? "",
+      email: l.email ?? "",
+      company: l.company ?? "",
+      job_title: l.job_title ?? "",
+      country: l.country ?? "",
+      campaign_id: l.campaign_id ?? "",
+      status: l.status,
+    });
+    setEditOpen(true);
+  }
+
+  async function saveEdit() {
+    if (!editForm.email || !EMAIL_RE.test(editForm.email)) { toast.error("Valid email is required"); return; }
+    const patch = {
+      name: editForm.name || null,
+      email: editForm.email,
+      company: editForm.company || null,
+      job_title: editForm.job_title || null,
+      country: editForm.country || null,
+      campaign_id: editForm.campaign_id || null,
+      status: editForm.status,
+    };
+    setLeads((prev) => prev.map((l) => l.id === editId ? { ...l, ...patch } : l));
+    const { error } = await supabase.from("leads").update(patch).eq("id", editId);
+    if (error) { toast.error("Could not update lead"); void load(); }
+    else toast.success("Lead updated");
+    setEditOpen(false);
   }
 
   useEffect(() => { void load(); }, []);
@@ -389,80 +412,14 @@ function LeadsPage() {
               </td></tr>
             ) : filtered.map((l) => (
               <tr key={l.id} className="border-t border-border hover:bg-muted/20">
-                <td className="max-w-[160px] truncate px-4 py-3 font-medium" title={l.name ?? ""}>
-                  {editingCell?.id === l.id && editingCell.field === "name" ? (
-                    <input
-                      autoFocus
-                      value={editingValue}
-                      onChange={(e) => setEditingValue(e.target.value)}
-                      onBlur={() => saveLeadField(l.id, "name", editingValue)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveLeadField(l.id, "name", editingValue);
-                        if (e.key === "Escape") setEditingCell(null);
-                      }}
-                      className="w-full rounded-md border border-input bg-background px-1.5 py-0.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  ) : (
-                    <span
-                      className="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-muted/50"
-                      onClick={() => { setEditingCell({ id: l.id, field: "name" }); setEditingValue(l.name ?? ""); }}
-                      title="Click to edit"
-                    >
-                      {l.name ?? "—"}
-                    </span>
-                  )}
-                </td>
+                <td className="max-w-[160px] truncate px-4 py-3 font-medium" title={l.name ?? ""}>{l.name ?? "—"}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${temperature(l).cls}`}>
                     {temperature(l).label}
                   </span>
                 </td>
-                <td className="max-w-[140px] truncate px-4 py-3" title={l.company ?? ""}>
-                  {editingCell?.id === l.id && editingCell.field === "company" ? (
-                    <input
-                      autoFocus
-                      value={editingValue}
-                      onChange={(e) => setEditingValue(e.target.value)}
-                      onBlur={() => saveLeadField(l.id, "company", editingValue)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveLeadField(l.id, "company", editingValue);
-                        if (e.key === "Escape") setEditingCell(null);
-                      }}
-                      className="w-full rounded-md border border-input bg-background px-1.5 py-0.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  ) : (
-                    <span
-                      className="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-muted/50"
-                      onClick={() => { setEditingCell({ id: l.id, field: "company" }); setEditingValue(l.company ?? ""); }}
-                      title="Click to edit"
-                    >
-                      {l.company ?? "—"}
-                    </span>
-                  )}
-                </td>
-                <td className="max-w-[120px] truncate px-4 py-3" title={l.job_title ?? ""}>
-                  {editingCell?.id === l.id && editingCell.field === "job_title" ? (
-                    <input
-                      autoFocus
-                      value={editingValue}
-                      onChange={(e) => setEditingValue(e.target.value)}
-                      onBlur={() => saveLeadField(l.id, "job_title", editingValue)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveLeadField(l.id, "job_title", editingValue);
-                        if (e.key === "Escape") setEditingCell(null);
-                      }}
-                      className="w-full rounded-md border border-input bg-background px-1.5 py-0.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  ) : (
-                    <span
-                      className="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-muted/50"
-                      onClick={() => { setEditingCell({ id: l.id, field: "job_title" }); setEditingValue(l.job_title ?? ""); }}
-                      title="Click to edit"
-                    >
-                      {l.job_title ?? "—"}
-                    </span>
-                  )}
-                </td>
+                <td className="max-w-[140px] truncate px-4 py-3" title={l.company ?? ""}>{l.company ?? "—"}</td>
+                <td className="max-w-[120px] truncate px-4 py-3" title={l.job_title ?? ""}>{l.job_title ?? "—"}</td>
                 <td className="px-4 py-3">{l.country ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{l.email ?? "—"}</td>
                 <td className="px-4 py-3">
@@ -492,19 +449,96 @@ function LeadsPage() {
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{new Date(l.created_at).toLocaleDateString()}</td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => void deleteLead(l.id)}
-                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Delete lead"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => openEdit(l)}
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                      aria-label="Edit lead"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => void deleteLead(l.id)}
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Delete lead"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="w-full max-w-lg">
+          <DialogHeader><DialogTitle>Edit Lead</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Full name" value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+            <Input placeholder="Email address" value={editForm.email}
+              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+            <Input placeholder="Company" value={editForm.company}
+              onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+            <Input placeholder="Job title" value={editForm.job_title}
+              onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })} />
+            <select
+              value={editForm.country}
+              onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Country</option>
+              <option value="United States">United States</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="Canada">Canada</option>
+              <option value="Australia">Australia</option>
+              <option value="India">India</option>
+              <option value="Germany">Germany</option>
+              <option value="France">France</option>
+              <option value="Spain">Spain</option>
+              <option value="Italy">Italy</option>
+              <option value="Netherlands">Netherlands</option>
+              <option value="Saudi Arabia">Saudi Arabia</option>
+              <option value="UAE">UAE</option>
+              <option value="Egypt">Egypt</option>
+              <option value="Pakistan">Pakistan</option>
+              <option value="Singapore">Singapore</option>
+              <option value="Brazil">Brazil</option>
+              <option value="Turkey">Turkey</option>
+            </select>
+            <Select value={editForm.campaign_id} onValueChange={(v) => setEditForm({ ...editForm, campaign_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Assign to campaign" /></SelectTrigger>
+              <SelectContent className="max-w-[400px]">
+                <SelectItem value="">No campaign</SelectItem>
+                {campaigns.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <span className="block truncate">{c.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="new">New</SelectItem>
+                <SelectItem value="emailed">Contacted</SelectItem>
+                <SelectItem value="replied">Replied</SelectItem>
+                <SelectItem value="booked">Booked</SelectItem>
+                <SelectItem value="won">Won</SelectItem>
+                <SelectItem value="bounced">Bounced</SelectItem>
+                <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
+                <SelectItem value="invalid">Invalid</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={saveEdit} className="bg-gradient-primary">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
