@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Download, Search, Plus, Upload, Sparkles, Loader2, Trash2, Check } from "lucide-react";
+import { Download, Search, Plus, Upload, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -20,8 +20,6 @@ type Lead = {
 };
 
 type Campaign = { id: string; name: string };
-
-type FoundLead = { name: string; email: string; company: string; job_title: string; country: string; website: string; phone?: string; address?: string; rating?: number | null; source?: string };
 
 const STATUS_COLORS: Record<string, string> = {
   new: "bg-primary/15 text-primary",
@@ -60,6 +58,7 @@ function burstConfetti() {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function LeadsPage() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [q, setQ] = useState("");
@@ -86,25 +85,11 @@ function LeadsPage() {
   const [country, setCountry] = useState("all");
   const [status, setStatus] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
-  const [findOpen, setFindOpen] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [finding, setFinding] = useState(false);
-  const [findElapsed, setFindElapsed] = useState(0);
-  const [findResults, setFindResults] = useState<FoundLead[]>([]);
-  const [findSource, setFindSource] = useState<string>("");
-  const [findSelected, setFindSelected] = useState<Set<number>>(new Set());
-  const [savingLeads, setSavingLeads] = useState(false);
   const [form, setForm] = useState({
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
   const [bulkText, setBulkText] = useState("");
-  const [findForm, setFindForm] = useState({
-    jobTitle: "Marketing Manager",
-    industry: "",
-    country: "United States",
-    limit: "25",
-    campaign_id: "",
-  });
 
   useEffect(() => { void load(); }, []);
 
@@ -163,84 +148,6 @@ function LeadsPage() {
     setForm({ name: "", email: "", company: "", job_title: "", country: "", campaign_id: "" });
     setAddOpen(false);
     load();
-  }
-
-  async function findLeads() {
-    if (!findForm.jobTitle) { toast.error("Job title is required"); return; }
-
-    setFinding(true);
-    setFindElapsed(0);
-    setFindResults([]);
-    setFindSelected(new Set());
-    const elapsedInterval = setInterval(() => setFindElapsed((s) => s + 1), 1000);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("find-leads", {
-        body: {
-          campaignId: findForm.campaign_id || null,
-          jobTitle: findForm.jobTitle,
-          country: findForm.country || null,
-          limit: parseInt(findForm.limit),
-        },
-      });
-
-      if (data?.error) throw new Error(data.error);
-      if (error) {
-        const msg = error.message || "";
-        if (msg.includes("non-2xx") || msg.includes("FunctionsHttpError")) {
-          throw new Error("Search timed out. Large countries can be slow — try a smaller country or fewer leads.");
-        }
-        throw new Error(msg);
-      }
-
-      const leads: FoundLead[] = data.leads ?? [];
-      setFindSource(data.source ?? "");
-      if (leads.length === 0) {
-        toast.info(data.message ?? "No leads found. Try a different niche or country.");
-      } else {
-        setFindResults(leads);
-        setFindSelected(new Set(leads.map((_, i) => i)));
-        toast.success(`Found ${leads.length} leads — review and add the ones you want.`);
-      }
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to find leads");
-    } finally {
-      clearInterval(elapsedInterval);
-      setFinding(false);
-    }
-  }
-
-  async function saveSelectedLeads() {
-    if (findSelected.size === 0) { toast.error("Select at least one lead"); return; }
-    setSavingLeads(true);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return;
-      const rows = [...findSelected].map((i) => ({
-        user_id: u.user.id,
-        name: findResults[i].name || null,
-        email: findResults[i].email,
-        company: findResults[i].company || null,
-        job_title: findResults[i].job_title || null,
-        country: findResults[i].country || null,
-        campaign_id: findForm.campaign_id || null,
-        status: "new" as const,
-      }));
-      let saved = 0;
-      for (const row of rows) {
-        const { error: insErr } = await supabase.from("leads").insert(row);
-        if (!insErr) saved++;
-      }
-      toast.success(`Added ${saved} lead${saved !== 1 ? "s" : ""}!`);
-      setFindResults([]);
-      setFindSelected(new Set());
-      setFindOpen(false);
-      load();
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to save leads");
-    } finally {
-      setSavingLeads(false);
-    }
   }
 
   async function importCsv(e: React.ChangeEvent<HTMLInputElement>) {
@@ -321,131 +228,13 @@ function LeadsPage() {
           </label>
 
           {/* AI Find Leads */}
-          <Dialog open={findOpen} onOpenChange={setFindOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="border-primary text-primary">
-                <Sparkles className="mr-2 h-4 w-4" /> Find Leads with AI
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[85vh] w-full max-w-lg overflow-y-auto">
-              <DialogHeader><DialogTitle>AI Lead Finder</DialogTitle></DialogHeader>
-              <p className="text-sm text-muted-foreground">
-                Searches Google Maps and open business directories for real businesses with
-                public email addresses. Results appear below for you to review before adding.
-              </p>
-              <div className="space-y-3 py-2">
-                <div>
-                  <label className="text-sm font-medium">Business Type *</label>
-                  <Input placeholder="e.g. dentist, gym, restaurant, salon, lawyer" value={findForm.jobTitle}
-                    onChange={(e) => setFindForm({ ...findForm, jobTitle: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Country</label>
-                  <Input placeholder="e.g. United States, United Kingdom, India" value={findForm.country}
-                    onChange={(e) => setFindForm({ ...findForm, country: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Number of leads</label>
-                  <Select value={findForm.limit} onValueChange={(v) => setFindForm({ ...findForm, limit: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10 leads</SelectItem>
-                      <SelectItem value="25">25 leads</SelectItem>
-                      <SelectItem value="50">50 leads</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Assign to campaign (optional)</label>
-                  <Select value={findForm.campaign_id} onValueChange={(v) => setFindForm({ ...findForm, campaign_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select campaign" /></SelectTrigger>
-                    <SelectContent className="max-w-[400px]">
-                      {campaigns.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          <span className="block truncate">{c.name}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {!finding && findResults.length === 0 && (
-                <DialogFooter>
-                  <Button onClick={findLeads} className="w-full bg-gradient-primary">
-                    <Sparkles className="mr-2 h-4 w-4" /> Find Leads
-                  </Button>
-                </DialogFooter>
-              )}
-
-              {finding && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Searching public directories… {findElapsed}s
-                  </div>
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                    <div className="h-full animate-pulse rounded-full bg-primary/40" style={{ width: `${Math.min((findElapsed / 45) * 100, 100)}%` }} />
-                  </div>
-                </div>
-              )}
-
-              {!finding && findResults.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{findResults.length} leads found</span>
-                      {findSource && (
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${findSource === "google-maps" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-muted text-muted-foreground"}`}>
-                          {findSource === "google-maps" ? "Google Maps" : "OpenStreetMap"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setFindSelected(new Set(findResults.map((_, i) => i)))}>Select all</Button>
-                      <Button variant="ghost" size="sm" onClick={() => setFindSelected(new Set())}>Deselect all</Button>
-                    </div>
-                  </div>
-                  <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-lg border p-2">
-                    {findResults.map((l, i) => (
-                      <label key={i} className={`flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors ${findSelected.has(i) ? "bg-primary/5" : "hover:bg-muted/50"}`}>
-                        <input
-                          type="checkbox"
-                          checked={findSelected.has(i)}
-                          onChange={() => {
-                            const next = new Set(findSelected);
-                            next.has(i) ? next.delete(i) : next.add(i);
-                            setFindSelected(next);
-                          }}
-                          className="h-4 w-4 rounded border-input accent-primary"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{l.name || l.email}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {l.email}
-                            {l.company ? ` — ${l.company}` : ""}
-                          </div>
-                          {(l.phone || l.rating) && (
-                            <div className="truncate text-[11px] text-muted-foreground/70">
-                              {l.phone && <span>{l.phone}</span>}
-                              {l.phone && l.rating && <span> · </span>}
-                              {l.rating && <span>★ {l.rating.toFixed(1)}</span>}
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={saveSelectedLeads} disabled={savingLeads || findSelected.size === 0} className="w-full bg-gradient-primary">
-                      {savingLeads
-                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding…</>
-                        : <><Check className="mr-2 h-4 w-4" /> Add {findSelected.size} Lead{findSelected.size !== 1 ? "s" : ""}</>}
-                    </Button>
-                  </DialogFooter>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+          <Button
+            variant="outline"
+            className="border-primary text-primary"
+            onClick={() => navigate({ to: "/lead-finder" })}
+          >
+            <Sparkles className="mr-2 h-4 w-4" /> Find Leads with AI
+          </Button>
 
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>

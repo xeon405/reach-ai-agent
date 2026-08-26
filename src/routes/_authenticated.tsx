@@ -5,7 +5,7 @@ import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu,
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, SidebarHeader, SidebarFooter,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut, Loader2, Sparkles } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
@@ -20,6 +20,7 @@ export const Route = createFileRoute("/_authenticated")({
 const nav = [
   { tKey: "app_dash", url: "/dashboard", icon: LayoutDashboard },
   { tKey: "app_leads", url: "/leads", icon: Users },
+  { tKey: "app_lead_finder", url: "/lead-finder", icon: Sparkles },
   { tKey: "app_campaigns", url: "/campaigns", icon: Megaphone },
   { tKey: "app_emails", url: "/emails", icon: Mail },
   { tKey: "app_billing", url: "/billing", icon: CreditCard },
