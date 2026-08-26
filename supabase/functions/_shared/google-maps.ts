@@ -1,5 +1,6 @@
-// Google Maps Places API lead finder — finds businesses + scrapes their websites for emails
+// Google Maps Places API (New) lead finder — finds businesses + scrapes their websites for emails
 // Uses Places API (New) Text Search Essentials — 10,000 free searches/month
+// https://developers.google.com/maps/documentation/places/web-service/text-search
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 const DISPOSABLE_DOMAINS = new Set([
@@ -23,26 +24,28 @@ export interface GoogleMapsLead {
   source: string;
 }
 
-interface PlaceResult {
-  place_id: string;
-  name?: string;
-  website?: string;
-  formatted_phone_number?: string;
-  formatted_address?: string;
+// Places API (New) response types
+interface NewTextSearchResponse {
+  places?: Array<{
+    id: string;
+    displayName?: { text: string; languageCode: string };
+    websiteUri?: string;
+    internationalPhoneNumber?: string;
+    formattedAddress?: string;
+    rating?: number;
+    types?: string[];
+  }>;
+  nextPageToken?: string;
+}
+
+interface NewPlaceDetailsResponse {
+  id: string;
+  displayName?: { text: string; languageCode: string };
+  websiteUri?: string;
+  internationalPhoneNumber?: string;
+  formattedAddress?: string;
   rating?: number;
   types?: string[];
-}
-
-interface TextSearchResponse {
-  results: PlaceResult[];
-  next_page_token?: string;
-  status: string;
-  error_message?: string;
-}
-
-interface PlaceDetailsResponse {
-  result: PlaceResult;
-  status: string;
 }
 
 // Map country name to Google Maps region bias
@@ -71,35 +74,39 @@ export async function searchGoogleMaps(
   const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
   if (!apiKey) return [];
 
-  const region = COUNTRY_REGIONS[country.toLowerCase().trim()] ?? "";
   const query = `${jobTitle} in ${country}`;
   const leads: GoogleMapsLead[] = [];
   const seenPlaceIds = new Set<string>();
   const seenEmails = new Set<string>();
 
-  // Step 1: Text Search to find businesses
-  const batchSize = Math.min(limit, 20); // Google returns max 20 per page
-  const url = new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
-  url.searchParams.set("query", query);
-  url.searchParams.set("type", "establishment");
-  url.searchParams.set("key", apiKey);
-  if (region) url.searchParams.set("region", region);
-
-  let nextPageToken: string | undefined;
+  // Step 1: Text Search via Places API (New)
+  const fieldMask = "places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.formattedAddress,places.rating,places.types,nextPageToken";
+  let pageToken: string | undefined;
   let pagesFetched = 0;
-  const MAX_PAGES = 3; // Max 60 results (20 per page × 3 pages)
+  const MAX_PAGES = 3;
 
   while (leads.length < limit && pagesFetched < MAX_PAGES) {
-    const fetchUrl = nextPageToken
-      ? `${url.href}&pagetoken=${nextPageToken}`
-      : url.href;
+    const body: Record<string, unknown> = {
+      textQuery: query,
+      maxResultCount: 20,
+    };
+    if (pageToken) body.pageToken = pageToken;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
+    const timer = setTimeout(() => controller.abort(), 20_000);
 
-    let data: TextSearchResponse;
+    let data: NewTextSearchResponse;
     try {
-      const res = await fetch(fetchUrl, { signal: controller.signal });
+      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": fieldMask,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
       data = await res.json();
     } catch {
       break;
@@ -107,18 +114,28 @@ export async function searchGoogleMaps(
       clearTimeout(timer);
     }
 
-    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-      // API error — stop but don't crash
-      break;
-    }
+    const places = data.places ?? [];
+    if (places.length === 0) break;
 
-    for (const place of data.results ?? []) {
-      if (seenPlaceIds.has(place.place_id)) continue;
-      seenPlaceIds.add(place.place_id);
+    for (const place of places) {
+      if (seenPlaceIds.has(place.id)) continue;
+      seenPlaceIds.add(place.id);
 
-      // Step 2: Get place details (website URL)
-      const details = await getPlaceDetails(place.place_id, apiKey);
-      const website = details?.website ?? place.website ?? "";
+      // Step 2: Get place details (website URL) if not in search result
+      let website = place.websiteUri ?? "";
+      let phone = place.internationalPhoneNumber ?? "";
+      let address = place.formattedAddress ?? "";
+      let rating = place.rating ?? null;
+
+      if (!website) {
+        const details = await getPlaceDetailsNew(place.id, apiKey);
+        if (details) {
+          website = details.websiteUri ?? "";
+          phone = details.internationalPhoneNumber ?? phone;
+          address = details.formattedAddress ?? address;
+          rating = details.rating ?? rating;
+        }
+      }
       if (!website) continue;
 
       // Step 3: Scrape website for emails
@@ -128,15 +145,15 @@ export async function searchGoogleMaps(
         seenEmails.add(email);
 
         leads.push({
-          name: place.name || email.split("@")[0],
+          name: place.displayName?.text || email.split("@")[0],
           email,
-          company: place.name || "",
+          company: place.displayName?.text || "",
           job_title: jobTitle,
           country,
           website,
-          phone: details?.formatted_phone_number ?? "",
-          address: details?.formatted_address ?? place.formatted_address ?? "",
-          rating: details?.rating ?? place.rating ?? null,
+          phone,
+          address,
+          rating,
           source: "google-maps",
         });
 
@@ -145,10 +162,10 @@ export async function searchGoogleMaps(
       if (leads.length >= limit) break;
     }
 
-    nextPageToken = data.next_page_token;
-    if (!nextPageToken) break;
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
 
-    // Google requires a short delay before using next_page_token
+    // Google requires a short delay before using next page token
     await new Promise((r) => setTimeout(r, 2000));
     pagesFetched++;
   }
@@ -156,36 +173,36 @@ export async function searchGoogleMaps(
   return leads;
 }
 
-async function getPlaceDetails(
+async function getPlaceDetailsNew(
   placeId: string,
   apiKey: string,
-): Promise<PlaceResult | null> {
-  const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-  url.searchParams.set("place_id", placeId);
-  url.searchParams.set("fields", "website,formatted_phone_number,formatted_address,rating");
-  url.searchParams.set("key", apiKey);
+): Promise<NewPlaceDetailsResponse | null> {
+  const fieldMask = "websiteUri,internationalPhoneNumber,formattedAddress,rating";
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    const res = await fetch(url.href, { signal: controller.signal });
-    const data: PlaceDetailsResponse = await res.json();
-    if (data.status === "OK") return data.result;
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": fieldMask,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
-    // Timeout or network error — skip this place
+    return null;
   } finally {
     clearTimeout(timer);
   }
-  return null;
 }
 
 async function scrapeWebsiteForEmails(websiteUrl: string): Promise<string[]> {
-  // Normalize URL
   let url = websiteUrl;
   if (!url.startsWith("http")) url = "https://" + url;
 
-  // Try common contact pages first
   const pagesToTry = [
     url,
     url.replace(/\/$/, "") + "/contact",
@@ -222,7 +239,6 @@ async function scrapeWebsiteForEmails(websiteUrl: string): Promise<string[]> {
         allEmails.add(email);
       }
 
-      // If we found emails on the main page, no need to check subpages
       if (allEmails.size > 0) break;
     } catch {
       // Timeout or error — try next page
@@ -242,12 +258,9 @@ function extractEmails(html: string): string[] {
     const lower = email.toLowerCase();
     const domain = lower.split("@")[1];
 
-    // Skip invalid domains
     if (!domain || domain.length < 4) continue;
     if (DISPOSABLE_DOMAINS.has(domain)) continue;
     if (IGNORE_PATTERNS.test(lower)) continue;
-
-    // Skip image/file attachments that look like emails
     if (lower.includes("png") || lower.includes("jpg") || lower.includes("gif")) continue;
 
     valid.add(lower);
