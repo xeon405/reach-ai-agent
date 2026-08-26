@@ -297,6 +297,11 @@ export type Database = {
           country: string | null
           created_at: string
           email: string | null
+          email_confidence: number | null
+          email_is_disposable: boolean | null
+          email_is_role: boolean | null
+          email_status: string | null
+          email_verification_reason: string | null
           id: string
           job_title: string | null
           lead_source: string | null
@@ -316,6 +321,11 @@ export type Database = {
           country?: string | null
           created_at?: string
           email?: string | null
+          email_confidence?: number | null
+          email_is_disposable?: boolean | null
+          email_is_role?: boolean | null
+          email_status?: string | null
+          email_verification_reason?: string | null
           id?: string
           job_title?: string | null
           lead_source?: string | null
@@ -335,6 +345,11 @@ export type Database = {
           country?: string | null
           created_at?: string
           email?: string | null
+          email_confidence?: number | null
+          email_is_disposable?: boolean | null
+          email_is_role?: boolean | null
+          email_status?: string | null
+          email_verification_reason?: string | null
           id?: string
           job_title?: string | null
           lead_source?: string | null

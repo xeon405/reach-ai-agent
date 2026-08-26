@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
 import { searchGoogleMaps, isGoogleMapsAvailable } from "../_shared/google-maps.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { verifyEmail, type EmailVerification } from "../_shared/email-verifier.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,8 +33,15 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const userId = await getAuthedUserId(req);
-    const { campaignId, jobTitle, country, limit = 25 } = await req.json();
+    let userId: string;
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const body = await req.json().catch(() => ({}));
+    if (cronSecret && req.headers.get("x-cron-secret") === cronSecret && typeof body.user_id === "string") {
+      userId = body.user_id;
+    } else {
+      userId = await getAuthedUserId(req);
+    }
+    const { campaignId, jobTitle, country, limit = 25 } = body;
     if (!jobTitle) throw new Error("jobTitle is required");
 
     const supabase = createClient(
@@ -58,6 +66,9 @@ serve(async (req) => {
       website: string; phone: string; address: string;
       rating: number | null; source: string;
       category: string; place_id: string;
+      email_status?: string; email_confidence?: number;
+      email_is_role?: boolean; email_is_disposable?: boolean;
+      email_verification_reason?: string;
     }> = [];
     let source = "open-business-directory";
 
@@ -108,9 +119,27 @@ serve(async (req) => {
       payload: { count: leads.length, country, jobTitle, source },
     });
 
+    // Verify emails in parallel — enrich each lead with verification data
+    const verifiedLeads = await Promise.all(
+      leads.map(async (lead) => {
+        const websiteDomain = lead.website
+          ? new URL(lead.website.startsWith("http") ? lead.website : `https://${lead.website}`).hostname.replace(/^www\./, "")
+          : undefined;
+        const v: EmailVerification = await verifyEmail(lead.email, websiteDomain);
+        return {
+          ...lead,
+          email_status: v.status,
+          email_confidence: v.confidence,
+          email_is_role: v.is_role,
+          email_is_disposable: v.is_disposable,
+          email_verification_reason: v.reason,
+        };
+      }),
+    );
+
     return json({
-      leads,
-      count: leads.length,
+      leads: verifiedLeads,
+      count: verifiedLeads.length,
       source,
       message:
         leads.length === 0

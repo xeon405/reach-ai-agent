@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Sparkles, Loader2, Check, MapPin, Phone, Star, Globe, Mail, Search } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Check, MapPin, Phone, Star, Globe, Mail, Search, Shield, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/lead-finder")({
@@ -17,6 +17,9 @@ type FoundLead = {
   country: string; city?: string; website: string; phone?: string;
   address?: string; rating?: number | null; source?: string;
   category?: string; place_id?: string;
+  email_status?: string; email_confidence?: number;
+  email_is_role?: boolean; email_is_disposable?: boolean;
+  email_verification_reason?: string;
 };
 
 const PRESET_NICHES = [
@@ -112,6 +115,11 @@ function LeadFinderPage() {
         category: results[i].category || null,
         place_id: results[i].place_id || null,
         lead_source: results[i].source || null,
+        email_status: results[i].email_status || null,
+        email_confidence: results[i].email_confidence ?? null,
+        email_is_role: results[i].email_is_role ?? null,
+        email_is_disposable: results[i].email_is_disposable ?? null,
+        email_verification_reason: results[i].email_verification_reason || null,
       }));
       let savedCount = 0;
       for (const row of rows) {
@@ -314,6 +322,33 @@ function LeadFinderPage() {
                     <Mail className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{lead.email}</span>
                   </div>
+                  {lead.email_status && (
+                    <div className={`flex items-center gap-1.5 text-xs font-medium ${
+                      lead.email_status === "verified"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : lead.email_status === "risky"
+                        ? "text-amber-600 dark:text-amber-400"
+                        : lead.email_status === "invalid"
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-muted-foreground"
+                    }`}>
+                      {lead.email_status === "verified" ? (
+                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                      ) : lead.email_status === "risky" ? (
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                      ) : lead.email_status === "invalid" ? (
+                        <ShieldX className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <Shield className="h-3.5 w-3.5 shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {lead.email_status === "verified" && `Verified (${lead.email_confidence}%)`}
+                        {lead.email_status === "risky" && `Risky (${lead.email_confidence}%)`}
+                        {lead.email_status === "invalid" && `Invalid — ${lead.email_verification_reason}`}
+                        {lead.email_status === "unknown" && "Unknown"}
+                      </span>
+                    </div>
+                  )}
                   {lead.phone && (
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Phone className="h-3.5 w-3.5 shrink-0" />
