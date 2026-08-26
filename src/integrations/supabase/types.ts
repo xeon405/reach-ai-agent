@@ -290,8 +290,10 @@ export type Database = {
       }
       leads: {
         Row: {
+          address: string | null
           campaign_id: string | null
           category: string | null
+          city: string | null
           company: string | null
           conv_mode: string
           country: string | null
@@ -308,14 +310,19 @@ export type Database = {
           lifecycle: string
           name: string | null
           normalized_email: string | null
+          phone: string | null
           place_id: string | null
+          rating: number | null
           status: string
           unsubscribed: boolean
           user_id: string
+          website: string | null
         }
         Insert: {
+          address?: string | null
           campaign_id?: string | null
           category?: string | null
+          city?: string | null
           company?: string | null
           conv_mode?: string
           country?: string | null
@@ -332,14 +339,19 @@ export type Database = {
           lifecycle?: string
           name?: string | null
           normalized_email?: string | null
+          phone?: string | null
           place_id?: string | null
+          rating?: number | null
           status?: string
           unsubscribed?: boolean
           user_id: string
+          website?: string | null
         }
         Update: {
+          address?: string | null
           campaign_id?: string | null
           category?: string | null
+          city?: string | null
           company?: string | null
           conv_mode?: string
           country?: string | null
@@ -356,10 +368,13 @@ export type Database = {
           lifecycle?: string
           name?: string | null
           normalized_email?: string | null
+          phone?: string | null
           place_id?: string | null
+          rating?: number | null
           status?: string
           unsubscribed?: boolean
           user_id?: string
+          website?: string | null
         }
         Relationships: [
           {
