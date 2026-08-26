@@ -508,10 +508,10 @@ function LeadsPage() {
               <option value="Brazil">Brazil</option>
               <option value="Turkey">Turkey</option>
             </select>
-            <Select value={editForm.campaign_id} onValueChange={(v) => setEditForm({ ...editForm, campaign_id: v })}>
+            <Select value={editForm.campaign_id || "none"} onValueChange={(v) => setEditForm({ ...editForm, campaign_id: v === "none" ? "" : v })}>
               <SelectTrigger><SelectValue placeholder="Assign to campaign" /></SelectTrigger>
               <SelectContent className="max-w-[400px]">
-                <SelectItem value="">No campaign</SelectItem>
+                <SelectItem value="none">No campaign</SelectItem>
                 {campaigns.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     <span className="block truncate">{c.name}</span>
