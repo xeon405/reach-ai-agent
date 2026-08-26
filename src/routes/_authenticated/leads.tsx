@@ -414,7 +414,7 @@ function LeadsPage() {
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
                     <button
-                      onClick={() => navigate({ to: "/leads/$leadId/edit", params: { leadId: l.id } })}
+                      onClick={() => navigate({ to: "/lead-edit/$leadId", params: { leadId: l.id } })}
                       className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                       aria-label="Edit lead"
                     >

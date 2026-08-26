@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/leads/$leadId/edit")({
+export const Route = createFileRoute("/_authenticated/lead-edit/$leadId")({
   component: LeadEditPage,
 });
 
