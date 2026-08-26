@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Edit, Pause, Play, Plus, Trash2, Sparkles, Loader2, Send } from "lucide-react";
+import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { TEMPLATES } from "@/lib/templates";
 
@@ -27,6 +27,8 @@ function CampaignsPage() {
   const [spam, setSpam] = useState<{ score: number; grade: string; issues: { message: string }[]; good: string[] } | null>(null);
   const [checkingSpam, setCheckingSpam] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [aiForm, setAiForm] = useState({
     leadName: "", leadCompany: "", leadJobTitle: "",
     yourCompany: "OutreachAI",
@@ -85,12 +87,13 @@ function CampaignsPage() {
     else { toast.success("Campaign created"); setName(""); setOpen(false); load(); }
   }
 
-  async function renameCampaign(c: Campaign) {
-    const name = window.prompt("Rename campaign", c.name)?.trim();
-    if (!name || name === c.name) return;
-    const { error } = await supabase.from("campaigns").update({ name }).eq("id", c.id);
+  async function saveRename(c: Campaign) {
+    const trimmed = editingName.trim();
+    if (!trimmed || trimmed === c.name) { setEditingId(null); return; }
+    const { error } = await supabase.from("campaigns").update({ name: trimmed }).eq("id", c.id);
     if (error) toast.error(error.message);
     else { toast.success("Campaign renamed"); load(); }
+    setEditingId(null);
   }
 
   async function toggle(c: Campaign) {
@@ -302,7 +305,27 @@ function CampaignsPage() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold">{c.name}</h3>
+                    {editingId === c.id ? (
+                      <input
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => saveRename(c)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveRename(c);
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        className="rounded-md border border-input bg-background px-2 py-1 text-lg font-semibold outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    ) : (
+                      <h3
+                        className="cursor-pointer rounded-md px-2 py-1 text-lg font-semibold transition-colors hover:bg-muted/50"
+                        onClick={() => { setEditingId(c.id); setEditingName(c.name); }}
+                        title="Click to rename"
+                      >
+                        {c.name}
+                      </h3>
+                    )}
                     <Badge variant="secondary" className={c.status === "active" ? "bg-success/15 text-success" : ""}>
                       {c.status}
                     </Badge>
@@ -351,7 +374,6 @@ function CampaignsPage() {
                   <Button size="icon" variant="outline" onClick={() => toggle(c)}>
                     {c.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </Button>
-                  <Button size="icon" variant="outline" onClick={() => renameCampaign(c)} aria-label="Rename campaign"><Edit className="h-4 w-4" /></Button>
                   <Button size="icon" variant="outline" onClick={() => remove(c.id)} className="text-destructive">
                     <Trash2 className="h-4 w-4" />
                   </Button>

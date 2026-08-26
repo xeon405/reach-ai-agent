@@ -91,6 +91,20 @@ function LeadsPage() {
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
   const [bulkText, setBulkText] = useState("");
+  const [editingCell, setEditingCell] = useState<{ id: string; field: "name" | "company" | "job_title" } | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+
+  async function saveLeadField(id: string, field: "name" | "company" | "job_title", value: string) {
+    const trimmed = value.trim();
+    setEditingCell(null);
+    if (!trimmed) return;
+    const lead = leads.find((l) => l.id === id);
+    if (lead && lead[field] === trimmed) return;
+    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, [field]: trimmed } : l));
+    const patch = { [field]: trimmed } as { name?: string; company?: string; job_title?: string };
+    const { error } = await supabase.from("leads").update(patch).eq("id", id);
+    if (error) { toast.error("Could not update"); void load(); }
+  }
 
   useEffect(() => { void load(); }, []);
 
@@ -375,14 +389,80 @@ function LeadsPage() {
               </td></tr>
             ) : filtered.map((l) => (
               <tr key={l.id} className="border-t border-border hover:bg-muted/20">
-                <td className="max-w-[160px] truncate px-4 py-3 font-medium" title={l.name ?? ""}>{l.name ?? "—"}</td>
+                <td className="max-w-[160px] truncate px-4 py-3 font-medium" title={l.name ?? ""}>
+                  {editingCell?.id === l.id && editingCell.field === "name" ? (
+                    <input
+                      autoFocus
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={() => saveLeadField(l.id, "name", editingValue)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveLeadField(l.id, "name", editingValue);
+                        if (e.key === "Escape") setEditingCell(null);
+                      }}
+                      className="w-full rounded-md border border-input bg-background px-1.5 py-0.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  ) : (
+                    <span
+                      className="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-muted/50"
+                      onClick={() => { setEditingCell({ id: l.id, field: "name" }); setEditingValue(l.name ?? ""); }}
+                      title="Click to edit"
+                    >
+                      {l.name ?? "—"}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${temperature(l).cls}`}>
                     {temperature(l).label}
                   </span>
                 </td>
-                <td className="max-w-[140px] truncate px-4 py-3" title={l.company ?? ""}>{l.company ?? "—"}</td>
-                <td className="px-4 py-3">{l.job_title ?? "—"}</td>
+                <td className="max-w-[140px] truncate px-4 py-3" title={l.company ?? ""}>
+                  {editingCell?.id === l.id && editingCell.field === "company" ? (
+                    <input
+                      autoFocus
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={() => saveLeadField(l.id, "company", editingValue)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveLeadField(l.id, "company", editingValue);
+                        if (e.key === "Escape") setEditingCell(null);
+                      }}
+                      className="w-full rounded-md border border-input bg-background px-1.5 py-0.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  ) : (
+                    <span
+                      className="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-muted/50"
+                      onClick={() => { setEditingCell({ id: l.id, field: "company" }); setEditingValue(l.company ?? ""); }}
+                      title="Click to edit"
+                    >
+                      {l.company ?? "—"}
+                    </span>
+                  )}
+                </td>
+                <td className="max-w-[120px] truncate px-4 py-3" title={l.job_title ?? ""}>
+                  {editingCell?.id === l.id && editingCell.field === "job_title" ? (
+                    <input
+                      autoFocus
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={() => saveLeadField(l.id, "job_title", editingValue)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveLeadField(l.id, "job_title", editingValue);
+                        if (e.key === "Escape") setEditingCell(null);
+                      }}
+                      className="w-full rounded-md border border-input bg-background px-1.5 py-0.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  ) : (
+                    <span
+                      className="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-muted/50"
+                      onClick={() => { setEditingCell({ id: l.id, field: "job_title" }); setEditingValue(l.job_title ?? ""); }}
+                      title="Click to edit"
+                    >
+                      {l.job_title ?? "—"}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">{l.country ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{l.email ?? "—"}</td>
                 <td className="px-4 py-3">
