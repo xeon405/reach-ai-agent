@@ -291,6 +291,7 @@ export type Database = {
       leads: {
         Row: {
           campaign_id: string | null
+          category: string | null
           company: string | null
           conv_mode: string
           country: string | null
@@ -298,15 +299,18 @@ export type Database = {
           email: string | null
           id: string
           job_title: string | null
+          lead_source: string | null
           lifecycle: string
           name: string | null
           normalized_email: string | null
+          place_id: string | null
           status: string
           unsubscribed: boolean
           user_id: string
         }
         Insert: {
           campaign_id?: string | null
+          category?: string | null
           company?: string | null
           conv_mode?: string
           country?: string | null
@@ -314,15 +318,18 @@ export type Database = {
           email?: string | null
           id?: string
           job_title?: string | null
+          lead_source?: string | null
           lifecycle?: string
           name?: string | null
           normalized_email?: string | null
+          place_id?: string | null
           status?: string
           unsubscribed?: boolean
           user_id: string
         }
         Update: {
           campaign_id?: string | null
+          category?: string | null
           company?: string | null
           conv_mode?: string
           country?: string | null
@@ -330,9 +337,11 @@ export type Database = {
           email?: string | null
           id?: string
           job_title?: string | null
+          lead_source?: string | null
           lifecycle?: string
           name?: string | null
           normalized_email?: string | null
+          place_id?: string | null
           status?: string
           unsubscribed?: boolean
           user_id?: string

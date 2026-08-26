@@ -14,8 +14,9 @@ export const Route = createFileRoute("/_authenticated/lead-finder")({
 type Campaign = { id: string; name: string };
 type FoundLead = {
   name: string; email: string; company: string; job_title: string;
-  country: string; website: string; phone?: string; address?: string;
-  rating?: number | null; source?: string;
+  country: string; city?: string; website: string; phone?: string;
+  address?: string; rating?: number | null; source?: string;
+  category?: string; place_id?: string;
 };
 
 const PRESET_NICHES = [
@@ -108,6 +109,9 @@ function LeadFinderPage() {
         country: results[i].country || null,
         campaign_id: campaignId || null,
         status: "new" as const,
+        category: results[i].category || null,
+        place_id: results[i].place_id || null,
+        lead_source: results[i].source || null,
       }));
       let savedCount = 0;
       for (const row of rows) {
@@ -297,6 +301,9 @@ function LeadFinderPage() {
                 {/* Content */}
                 <div className="pr-7">
                   <h3 className="font-semibold text-foreground truncate">{lead.company || lead.name}</h3>
+                  {lead.category && (
+                    <p className="text-xs text-primary/80 truncate">{lead.category}</p>
+                  )}
                   {lead.company && lead.name !== lead.company && (
                     <p className="text-xs text-muted-foreground truncate">{lead.name}</p>
                   )}

@@ -438,10 +438,11 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                 );
                 const rows = found
                   .filter((l: { email?: string }) => l.email && !existing.has(String(l.email).toLowerCase()))
-                  .map((l: { name?: string; email?: string; company?: string; job_title?: string }) => ({
+                  .map((l: { name?: string; email?: string; company?: string; job_title?: string; city?: string; category?: string; place_id?: string; source?: string }) => ({
                     user_id: pilot.id, campaign_id: camp!.id, name: l.name ?? null, email: l.email,
                     company: l.company ?? null, job_title: l.job_title ?? null,
                     country: pilot.autopilot_country, status: "new",
+                    category: l.category ?? null, place_id: l.place_id ?? null, lead_source: l.source ?? "openstreetmap",
                   }));
                 if (rows.length > 0) {
                   await supabase.from("leads").insert(rows);

@@ -17,11 +17,14 @@ export interface GoogleMapsLead {
   company: string;
   job_title: string;
   country: string;
+  city: string;
   website: string;
   phone: string;
   address: string;
   rating: number | null;
   source: string;
+  category: string;
+  place_id: string;
 }
 
 // Places API (New) response types
@@ -34,6 +37,7 @@ interface NewTextSearchResponse {
     formattedAddress?: string;
     rating?: number;
     types?: string[];
+    primaryType?: string;
   }>;
   nextPageToken?: string;
 }
@@ -46,6 +50,7 @@ interface NewPlaceDetailsResponse {
   formattedAddress?: string;
   rating?: number;
   types?: string[];
+  primaryType?: string;
 }
 
 // Map country name to Google Maps region bias
@@ -61,6 +66,26 @@ const COUNTRY_REGIONS: Record<string, string> = {
   chile: "cl", peru: "pe", "new zealand": "nz", ireland: "ie",
   portugal: "pt", austria: "at", switzerland: "ch", belgium: "be",
 };
+
+// Pretty-print a Google Maps place type: "dentist" -> "Dentist", "health_care" -> "Health Care"
+function formatCategory(types: string[] | undefined, primaryType?: string): string {
+  const raw = primaryType ?? types?.[0] ?? "";
+  if (!raw) return "";
+  return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Parse city and country from Google's formattedAddress
+// Example: "25 E Washington St Ste 1921, Chicago, IL 60602, USA" -> city="Chicago", country="USA"
+function parseCityCountry(formattedAddress: string | undefined, fallbackCountry: string): { city: string; country: string } {
+  if (!formattedAddress) return { city: "", country: fallbackCountry };
+  const parts = formattedAddress.split(",").map((s) => s.trim());
+  if (parts.length >= 3) {
+    const city = parts[parts.length - 3] ?? "";
+    const country = parts[parts.length - 1] ?? fallbackCountry;
+    return { city, country };
+  }
+  return { city: parts.length >= 2 ? parts[parts.length - 2] : "", country: fallbackCountry };
+}
 
 export function isGoogleMapsAvailable(): boolean {
   return !!Deno.env.get("GOOGLE_MAPS_API_KEY");
@@ -80,7 +105,7 @@ export async function searchGoogleMaps(
   const seenEmails = new Set<string>();
 
   // Step 1: Text Search via Places API (New)
-  const fieldMask = "places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.formattedAddress,places.rating,places.types,nextPageToken";
+  const fieldMask = "places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.formattedAddress,places.rating,places.types,places.primaryType,nextPageToken";
   let pageToken: string | undefined;
   let pagesFetched = 0;
   const MAX_PAGES = 3;
@@ -138,6 +163,9 @@ export async function searchGoogleMaps(
       }
       if (!website) continue;
 
+      const { city, country: parsedCountry } = parseCityCountry(address, country);
+      const category = formatCategory(place.types, place.primaryType);
+
       // Step 3: Scrape website for emails
       const emails = await scrapeWebsiteForEmails(website);
       for (const email of emails) {
@@ -149,12 +177,15 @@ export async function searchGoogleMaps(
           email,
           company: place.displayName?.text || "",
           job_title: jobTitle,
-          country,
+          country: parsedCountry,
+          city,
           website,
           phone,
           address,
           rating,
           source: "google-maps",
+          category,
+          place_id: place.id,
         });
 
         if (leads.length >= limit) break;

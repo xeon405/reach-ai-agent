@@ -54,7 +54,10 @@ serve(async (req) => {
     const cappedLimit = Math.max(1, Math.min(Number(limit) || 25, 50));
     let leads: Array<{
       name: string; email: string; company: string;
-      job_title: string; country: string; website: string;
+      job_title: string; country: string; city: string;
+      website: string; phone: string; address: string;
+      rating: number | null; source: string;
+      category: string; place_id: string;
     }> = [];
     let source = "open-business-directory";
 
@@ -69,11 +72,14 @@ serve(async (req) => {
             company: l.company,
             job_title: l.job_title,
             country: l.country,
+            city: l.city,
             website: l.website,
             phone: l.phone,
             address: l.address,
             rating: l.rating,
             source: l.source,
+            category: l.category,
+            place_id: l.place_id,
           }));
           source = "google-maps";
         }

@@ -110,7 +110,9 @@ function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string)
   const seen = new Set<string>();
   const leads: Array<{
     name: string; email: string; company: string;
-    job_title: string; country: string; website: string;
+    job_title: string; country: string; city: string;
+    website: string; phone: string; address: string;
+    rating: null; source: string; category: string; place_id: string;
   }> = [];
 
   for (const el of data.elements ?? []) {
@@ -119,13 +121,35 @@ function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string)
     const company = tg.name ?? "";
     if (!email || !email.includes("@") || seen.has(email)) continue;
     seen.add(email);
+
+    const phone = (tg["contact:phone"] || tg.phone || "").trim();
+    const website = (tg.website || tg["contact:website"] || "").trim();
+    const street = (tg["addr:street"] || "").trim();
+    const housenumber = (tg["addr:housenumber"] || "").trim();
+    const cityTag = (tg["addr:city"] || "").trim();
+    const address = [housenumber && street ? `${housenumber} ${street}` : street, cityTag].filter(Boolean).join(", ");
+
+    // Category from OSM tags
+    const tagKeys = ["amenity", "shop", "office", "craft", "leisure", "tourism", "healthcare"];
+    let category = "";
+    for (const k of tagKeys) {
+      if (tg[k]) { category = tg[k].replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()); break; }
+    }
+
     leads.push({
       name: company || email.split("@")[0],
       email,
       company,
       job_title: "Owner",
       country: iso,
-      website: tg.website || tg["contact:website"] || "",
+      city: cityTag,
+      website,
+      phone,
+      address,
+      rating: null,
+      source: "openstreetmap",
+      category,
+      place_id: `osm-${el.type}-${el.id}`,
     });
     if (leads.length >= limit) break;
   }
