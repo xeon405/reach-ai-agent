@@ -353,7 +353,7 @@ function LeadsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-card">
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-3">Name</th>
@@ -375,19 +375,19 @@ function LeadsPage() {
               </td></tr>
             ) : filtered.map((l) => (
               <tr key={l.id} className="border-t border-border hover:bg-muted/20">
-                <td className="px-4 py-3 font-medium">{l.name ?? "—"}</td>
+                <td className="max-w-[160px] truncate px-4 py-3 font-medium" title={l.name ?? ""}>{l.name ?? "—"}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${temperature(l).cls}`}>
                     {temperature(l).label}
                   </span>
                 </td>
-                <td className="px-4 py-3">{l.company ?? "—"}</td>
+                <td className="max-w-[140px] truncate px-4 py-3" title={l.company ?? ""}>{l.company ?? "—"}</td>
                 <td className="px-4 py-3">{l.job_title ?? "—"}</td>
                 <td className="px-4 py-3">{l.country ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{l.email ?? "—"}</td>
                 <td className="px-4 py-3">
                   {l.campaign_id && campaignMap[l.campaign_id] ? (
-                    <span className="inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    <span className="inline-block max-w-[140px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" title={campaignMap[l.campaign_id]}>
                       {campaignMap[l.campaign_id]}
                     </span>
                   ) : (
