@@ -184,6 +184,10 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  html {
+    height: 100%;
   }
 }
 

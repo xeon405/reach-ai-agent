@@ -70,8 +70,8 @@ function AuthenticatedLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <Sidebar collapsible="icon">
+        <div className="flex min-h-screen w-full min-w-0 bg-background">
+          <Sidebar collapsible="icon">
           <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
             <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
               <Logo />
@@ -105,12 +105,12 @@ function AuthenticatedLayout() {
           </SidebarFooter>
         </Sidebar>
 
-        <div className="flex flex-1 flex-col">
-          <header className="flex h-14 items-center gap-2 border-b border-border px-4">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
             <span className="text-sm text-muted-foreground">OutreachAI</span>
           </header>
-          <main className="flex-1 p-6 md:p-8">
+          <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-8">
             <Outlet />
           </main>
           <SupportChat />
