@@ -304,6 +304,7 @@ Deno.serve(async (req) => {
             if (!profile.website_url) {
               // No self-serve destination — park the thread; the human must close.
               await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", email.id);
+              await supabase.from("leads").update({ conv_mode: "AI_OVERRIDDEN" }).eq("id", lead.id);
             } else {
               // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
               try {
@@ -354,6 +355,11 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
           if (cls.interested || cls.sentiment !== "NOT_INTERESTED") {
             tag = cls.sentiment === "INTERESTED" ? "INTERESTED" : cls.sentiment === "MAYBE" ? "Maybe later" : "Not interested";
             const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
+            const intentGuide = cls.intent === "objection"
+              ? `They raised an OBJECTION (not a rejection). Acknowledge their concern, gently address it, and keep the door open. Do NOT push hard — be empathetic and offer to answer questions.`
+              : cls.intent === "unclear"
+              ? `Their message was UNCLEAR or too short to determine intent. Ask a gentle clarifying question to understand what they need.`
+              : `Move toward booking a call.`;
             try {
               draft = await groqChat([{
                 role: "user",
@@ -365,7 +371,7 @@ COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factu
 "${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
-Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${cls.sentiment === "MAYBE" ? " Gently keep the door open." : " Move toward booking a call."}
+Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff. ${intentGuide}
 Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
@@ -552,6 +558,17 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           const AUTO_RE = /^(auto(:|matic)?\s*reply|automatic response|out of office|away from (the )?office)/i;
           if (AUTO_RE.test(subj) || /i am (currently )?(out of (the )?office|on vacation|unavailable until)|this is an auto(matic)?[- ]repl/i.test(theirWords.slice(0, 300))) {
             await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+            // Persist autoresponder classification
+            const autoClsInsert = await supabase.from("ai_classifications").insert({
+              user_id: t.user_id, lead_id: lead.id, message_id: hits[0].id,
+              intent: "autoresponder", confidence: 0.95, interested: false,
+              booking_intent: false, unsubscribe: false,
+              sentiment: "NOT_INTERESTED", requires_human: false,
+              suggested_action: "do_nothing", raw: { subject: subj.slice(0, 150) },
+            });
+            if (!autoClsInsert.error) {
+              await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: "autoresponder", source: "loop_guard" } });
+            }
             await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "review", title: `🤖 Autoresponder detected: ${lead.name ?? lead.email}`, body: subj.slice(0, 120) || theirWords.slice(0, 120), priority: "normal" });
             continue;
           }
@@ -639,6 +656,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               if (!profile.website_url) {
                 // No self-serve destination — park the thread; the human must close.
                 await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+                await supabase.from("leads").update({ conv_mode: "AI_OVERRIDDEN" }).eq("id", lead.id);
               } else {
                 // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
                 try {
@@ -700,16 +718,22 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
               let aiReply: string | null = null;
               try {
                 const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
+                const convIntentGuide = cls.intent === "objection"
+                  ? "They raised an OBJECTION (not a rejection). Acknowledge their concern, gently address it, and keep the door open. Be empathetic, not pushy."
+                  : cls.intent === "unclear"
+                  ? "Their message was UNCLEAR. Ask a gentle clarifying question to understand what they need."
+                  : t.ai_turns > 0 && t.last_ai_msg_at ? "You have already exchanged messages — keep continuity, do not reintroduce yourself." : "";
                 aiReply = await groqChat([{
                   role: "user",
-                   content: `${buildBIContext(profile)}Ongoing email conversation with a lead.
+                  content: `${buildBIContext(profile)}Ongoing email conversation with a lead.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
 Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
 Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}
 You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
 COMPANY KNOWLEDGE BASE (from your website — answer questions factually from this; never invent anything not written here or above):
 "${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
-Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}${t.ai_turns > 0 && t.last_ai_msg_at ? "\nYou have already exchanged messages in this thread — keep continuity, do not reintroduce yourself." : ""}
+Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}
+${convIntentGuide}
 
 Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 500, temperature: 0.9 });

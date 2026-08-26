@@ -4,7 +4,7 @@
 // ============================================================
 
 export interface Classification {
-  intent: string;            // e.g. interested | not_interested | unsubscribe | booking | question | other
+  intent: string;            // interested | not_interested | unsubscribe | booking | question | objection | unclear | autoresponder | other
   confidence: number;        // 0..1
   interested: boolean;
   booking_intent: boolean;
@@ -59,6 +59,10 @@ export function decide(c: Classification, ctx: PolicyContext): PolicyAction {
 
   if (ctx.conv_mode === "PAUSED") {
     return { action: "DO_NOTHING", reason: "conversation_paused" };
+  }
+
+  if (ctx.conv_mode === "AI_OVERRIDDEN") {
+    return { action: "DO_NOTHING", reason: "ai_overridden_owner_must_handle" };
   }
 
   // 4. Booking intent escalates immediately and marks high priority.
@@ -128,7 +132,7 @@ function advance(current: string, target: string): string {
 export function classificationSystemPrompt(): string {
   return (
     "You classify replies to cold outreach emails. Respond with ONLY a JSON object, no prose, matching exactly:\n" +
-    '{"intent":"interested|not_interested|unsubscribe|booking|question|other",' +
+    '{"intent":"interested|not_interested|unsubscribe|booking|question|objection|unclear|autoresponder|other",' +
     '"confidence":0.0-1.0,' +
     '"interested":true|false,' +
     '"booking_intent":true|false,' +
@@ -136,7 +140,17 @@ export function classificationSystemPrompt(): string {
     '"sentiment":"INTERESTED|MAYBE|NOT_INTERESTED",' +
     '"requires_human":true|false,' +
     '"suggested_action":"suppress|notify_owner_booking|auto_reply|alert_owner|handoff|do_nothing|continue_conversation"}\n' +
-    "Rules: pricing/negotiation/legal/complaint questions => requires_human=true. " +
+    "Intent rules:\n" +
+    "- interested: genuine interest, wants to learn more\n" +
+    "- not_interested: clear rejection\n" +
+    "- unsubscribe: any stop/opt-out/remove request\n" +
+    "- booking: meeting/calendar/schedule request\n" +
+    "- question: asks about product, service, or process\n" +
+    "- objection: pushback on price, timing, relevance, or value but NOT a rejection\n" +
+    "- unclear: message is too short or ambiguous to determine intent\n" +
+    "- autoresponder: automated out-of-office or vacation reply\n" +
+    "- other: none of the above\n\n" +
+    "Pricing/negotiation/legal/complaint questions => requires_human=true. " +
     "Any meeting/time/calendar request => booking_intent=true. " +
     "Any stop/remove/opt-out request => unsubscribe=true."
   );
@@ -157,6 +171,23 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
     requires_human: /price|pricing|cost|legal|contract|invoice/i.test(fallbackSnippet),
     suggested_action: "continue_conversation",
   };
+  // Detect autoresponder from snippet
+  if (/auto.?reply|out of office|away from|on vacation|automatic response/i.test(fallbackSnippet)) {
+    fallback.intent = "autoresponder";
+    fallback.confidence = 0.95;
+    fallback.requires_human = true;
+  }
+  // Detect objection from snippet
+  if (/not (the )?right time|too expensive|budget|already (have|using)|not (a )?priority|not convinced|skeptical|why should i/i.test(fallbackSnippet)) {
+    fallback.intent = "objection";
+    fallback.sentiment = "MAYBE";
+  }
+  // Detect unclear (very short messages)
+  if (fallbackSnippet.trim().length < 20 && !fallback.booking_intent && !fallback.unsubscribe) {
+    fallback.intent = "unclear";
+    fallback.confidence = 0.25;
+    fallback.requires_human = true;
+  }
   try {
     const start = rawText.indexOf("{");
     const end = rawText.lastIndexOf("}");
