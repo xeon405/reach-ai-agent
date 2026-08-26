@@ -34,6 +34,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
+import { Route as AuthenticatedLeadsLeadIdEditRouteImport } from './routes/_authenticated/leads.$leadId.edit'
 
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
@@ -159,6 +160,12 @@ const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   path: '/google/callback',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthenticatedLeadsLeadIdEditRoute =
+  AuthenticatedLeadsLeadIdEditRouteImport.update({
+    id: '/$leadId/edit',
+    path: '/$leadId/edit',
+    getParentRoute: () => AuthenticatedLeadsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -179,12 +186,13 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/emails': typeof AuthenticatedEmailsRoute
   '/lead-finder': typeof AuthenticatedLeadFinderRoute
-  '/leads': typeof AuthenticatedLeadsRoute
+  '/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/leads/$leadId/edit': typeof AuthenticatedLeadsLeadIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -205,12 +213,13 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/emails': typeof AuthenticatedEmailsRoute
   '/lead-finder': typeof AuthenticatedLeadFinderRoute
-  '/leads': typeof AuthenticatedLeadsRoute
+  '/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/leads/$leadId/edit': typeof AuthenticatedLeadsLeadIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -233,12 +242,13 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/emails': typeof AuthenticatedEmailsRoute
   '/_authenticated/lead-finder': typeof AuthenticatedLeadFinderRoute
-  '/_authenticated/leads': typeof AuthenticatedLeadsRoute
+  '/_authenticated/leads': typeof AuthenticatedLeadsRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/_authenticated/leads/$leadId/edit': typeof AuthenticatedLeadsLeadIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -267,6 +277,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/gmail/callback'
     | '/auth/google/callback'
+    | '/leads/$leadId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -293,6 +304,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/gmail/callback'
     | '/auth/google/callback'
+    | '/leads/$leadId/edit'
   id:
     | '__root__'
     | '/'
@@ -320,6 +332,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/gmail/callback'
     | '/auth/google/callback'
+    | '/_authenticated/leads/$leadId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -517,8 +530,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthGoogleCallbackRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_authenticated/leads/$leadId/edit': {
+      id: '/_authenticated/leads/$leadId/edit'
+      path: '/$leadId/edit'
+      fullPath: '/leads/$leadId/edit'
+      preLoaderRoute: typeof AuthenticatedLeadsLeadIdEditRouteImport
+      parentRoute: typeof AuthenticatedLeadsRoute
+    }
   }
 }
+
+interface AuthenticatedLeadsRouteChildren {
+  AuthenticatedLeadsLeadIdEditRoute: typeof AuthenticatedLeadsLeadIdEditRoute
+}
+
+const AuthenticatedLeadsRouteChildren: AuthenticatedLeadsRouteChildren = {
+  AuthenticatedLeadsLeadIdEditRoute: AuthenticatedLeadsLeadIdEditRoute,
+}
+
+const AuthenticatedLeadsRouteWithChildren =
+  AuthenticatedLeadsRoute._addFileChildren(AuthenticatedLeadsRouteChildren)
 
 interface AuthenticatedRouteChildren {
   AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
@@ -526,7 +557,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEmailsRoute: typeof AuthenticatedEmailsRoute
   AuthenticatedLeadFinderRoute: typeof AuthenticatedLeadFinderRoute
-  AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
+  AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRouteWithChildren
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
@@ -537,7 +568,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEmailsRoute: AuthenticatedEmailsRoute,
   AuthenticatedLeadFinderRoute: AuthenticatedLeadFinderRoute,
-  AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
+  AuthenticatedLeadsRoute: AuthenticatedLeadsRouteWithChildren,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }

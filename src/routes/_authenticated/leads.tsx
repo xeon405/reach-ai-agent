@@ -91,43 +91,6 @@ function LeadsPage() {
     name: "", email: "", company: "", job_title: "", country: "", campaign_id: ""
   });
   const [bulkText, setBulkText] = useState("");
-  const [editOpen, setEditOpen] = useState(false);
-  const [editId, setEditId] = useState("");
-  const [editForm, setEditForm] = useState({
-    name: "", email: "", company: "", job_title: "", country: "", campaign_id: "", status: "new",
-  });
-
-  function openEdit(l: Lead) {
-    setEditId(l.id);
-    setEditForm({
-      name: l.name ?? "",
-      email: l.email ?? "",
-      company: l.company ?? "",
-      job_title: l.job_title ?? "",
-      country: l.country ?? "",
-      campaign_id: l.campaign_id ?? "",
-      status: l.status,
-    });
-    setEditOpen(true);
-  }
-
-  async function saveEdit() {
-    if (!editForm.email || !EMAIL_RE.test(editForm.email)) { toast.error("Valid email is required"); return; }
-    const patch = {
-      name: editForm.name || null,
-      email: editForm.email,
-      company: editForm.company || null,
-      job_title: editForm.job_title || null,
-      country: editForm.country || null,
-      campaign_id: editForm.campaign_id || null,
-      status: editForm.status,
-    };
-    setLeads((prev) => prev.map((l) => l.id === editId ? { ...l, ...patch } : l));
-    const { error } = await supabase.from("leads").update(patch).eq("id", editId);
-    if (error) { toast.error("Could not update lead"); void load(); }
-    else toast.success("Lead updated");
-    setEditOpen(false);
-  }
 
   useEffect(() => { void load(); }, []);
 
@@ -451,7 +414,7 @@ function LeadsPage() {
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
                     <button
-                      onClick={() => openEdit(l)}
+                      onClick={() => navigate({ to: "/leads/$leadId/edit", params: { leadId: l.id } })}
                       className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
                       aria-label="Edit lead"
                     >
@@ -471,74 +434,6 @@ function LeadsPage() {
           </tbody>
         </table>
       </div>
-
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-full max-w-lg">
-          <DialogHeader><DialogTitle>Edit Lead</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Full name" value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
-            <Input placeholder="Email address" value={editForm.email}
-              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
-            <Input placeholder="Company" value={editForm.company}
-              onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
-            <Input placeholder="Job title" value={editForm.job_title}
-              onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })} />
-            <select
-              value={editForm.country}
-              onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="">Country</option>
-              <option value="United States">United States</option>
-              <option value="United Kingdom">United Kingdom</option>
-              <option value="Canada">Canada</option>
-              <option value="Australia">Australia</option>
-              <option value="India">India</option>
-              <option value="Germany">Germany</option>
-              <option value="France">France</option>
-              <option value="Spain">Spain</option>
-              <option value="Italy">Italy</option>
-              <option value="Netherlands">Netherlands</option>
-              <option value="Saudi Arabia">Saudi Arabia</option>
-              <option value="UAE">UAE</option>
-              <option value="Egypt">Egypt</option>
-              <option value="Pakistan">Pakistan</option>
-              <option value="Singapore">Singapore</option>
-              <option value="Brazil">Brazil</option>
-              <option value="Turkey">Turkey</option>
-            </select>
-            <Select value={editForm.campaign_id || "none"} onValueChange={(v) => setEditForm({ ...editForm, campaign_id: v === "none" ? "" : v })}>
-              <SelectTrigger><SelectValue placeholder="Assign to campaign" /></SelectTrigger>
-              <SelectContent className="max-w-[400px]">
-                <SelectItem value="none">No campaign</SelectItem>
-                {campaigns.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <span className="block truncate">{c.name}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
-              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="emailed">Contacted</SelectItem>
-                <SelectItem value="replied">Replied</SelectItem>
-                <SelectItem value="booked">Booked</SelectItem>
-                <SelectItem value="won">Won</SelectItem>
-                <SelectItem value="bounced">Bounced</SelectItem>
-                <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
-                <SelectItem value="invalid">Invalid</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
-            <Button onClick={saveEdit} className="bg-gradient-primary">Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
