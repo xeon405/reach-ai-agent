@@ -60,6 +60,18 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function wrapUrlsForTracking(html: string, trackingBase: string): string {
+  // Wrap plain-text URLs in the HTML body with click-tracking redirects
+  // Only wrap http/https URLs that are NOT already tracking pixels or unsubscribe links
+  return html.replace(/(href=["']|(?<=\s>|>))(https?:\/\/(?!zvohdvopmvzsujktrdmu\.supabase\.co\/functions\/v1\/track-|.*unsubscribe))/gi,
+    (match, prefix, url) => {
+      if (prefix.startsWith("href=")) {
+        return `href="${trackingBase}${encodeURIComponent(url)}"`;
+      }
+      return `${prefix}${trackingBase}${encodeURIComponent(url)}`;
+    });
+}
+
 function buildHtmlBody(plain: string, pixel?: string): string {
   const html = escapeHtml(plain).replace(/\n/g, "<br>");
   return `<html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222">${html}${pixel ?? ""}</body></html>`;
@@ -484,8 +496,15 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     const pixel = `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${trackingId}" width="1" height="1" alt="" style="display:none;border:0" />`;
     const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}`;
 
+    // Wrap outbound links in the HTML body with click-tracking redirects
+    const trackingBase = `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-click?id=${trackingId}&url=`;
+
     // TWO-PHASE INSERT: pending row acts as distributed lock against lease-expiry races.
     // Phase 1: Insert PENDING row (unique constraint prevents concurrent worker from sending).
+    // Look up step 2 delay from follow_up_sequences table (default 3 days if missing).
+    const { data: step2Def } = await db.from("follow_up_sequences").select("delay_days")
+      .eq("campaign_id", job.campaign_id).eq("step_number", 2).eq("active", true).maybeSingle();
+    const firstFollowUpDays = step2Def?.delay_days ?? 3;
     const { error: pendingErr } = await db
       .from("emails_sent")
       .insert({
@@ -496,7 +515,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         subject: gen.subject,
         body: "(pending)",
         variant,
-        follow_up_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        follow_up_at: new Date(Date.now() + firstFollowUpDays * 24 * 60 * 60 * 1000).toISOString(),
         sequence: 1,
         follow_up_sent: false,
       });
@@ -513,9 +532,11 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     // Phase 2: Send via Gmail.
     let ids: { id: string | null; threadId: string | null };
     try {
+      const htmlBody = buildHtmlBody(bodyText, pixel);
+      const trackedHtml = destLink2 ? wrapUrlsForTracking(htmlBody, trackingBase) : htmlBody;
       ids = await sendGmailRaw(
         tok.accessToken,
-        buildRawEmail(lead.email, gen.subject, bodyText, buildHtmlBody(bodyText, pixel), String(ctx.profile.gmail_email ?? ""), unsubUrl)
+        buildRawEmail(lead.email, gen.subject, bodyText, trackedHtml, String(ctx.profile.gmail_email ?? ""), unsubUrl)
       );
     } catch (sendErr) {
       // Send failed — DELETE pending row so retry can try again cleanly.
@@ -542,23 +563,38 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
   }
 
   // ------------------------------------------------------------------
-  // FOLLOW-UP ENGINE: time-gated but NEVER blind — full re-check per send.
+  // FOLLOW-UP ENGINE: time-gated, DB-driven, NEVER blind — full re-check per send.
+  // Reads from follow_up_sequences table for configurable intervals (3d, 7d, 12d, ...365d).
   async function processDueFollowUps(db: ReturnType<typeof createClient>): Promise<{ followupsSent: number; followupsCancelled: number }> {
     let followupsSent = 0, followupsCancelled = 0;
     const now = new Date().toISOString();
+    // Pick up any email that is a "scheduling sentinel" (follow_up_sent=false, replied=false)
+    // and whose follow_up_at has arrived. Sequence can be 1 (initial triggers step 2)
+    // or any follow-up step N (triggers step N+1).
     const { data: emails } = await db
       .from("emails_sent")
       .select("*, lead:leads(*)")
       .eq("follow_up_sent", false)
       .eq("replied", false)
-      .in("sequence", [1, 3])
       .lte("follow_up_at", now)
-      .limit(60);
+      .limit(40);
     if (!emails || emails.length === 0) return { followupsSent, followupsCancelled };
 
     const userIds = [...new Set(emails.map((e) => e.user_id))];
     const { data: profiles } = await db.from("profiles").select("*").in("id", userIds);
     const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
+
+    // Pre-fetch follow-up sequences for all relevant campaigns
+    const campIds = [...new Set(emails.map((e) => e.campaign_id).filter(Boolean))];
+    const { data: seqRows } = campIds.length
+      ? await db.from("follow_up_sequences").select("campaign_id, step_number, delay_days").in("campaign_id", campIds).eq("active", true)
+      : { data: [] };
+    const seqByCampaign = new Map<string, Array<{ step: number; delayDays: number }>>();
+    for (const r of seqRows ?? []) {
+      const arr = seqByCampaign.get(r.campaign_id) ?? [];
+      arr.push({ step: r.step_number, delayDays: r.delay_days });
+      seqByCampaign.set(r.campaign_id, arr);
+    }
 
     for (const email of emails) {
       try {
@@ -575,33 +611,41 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         if (!camp || camp.status !== "active") reasons.push("campaign_inactive");
         const { data: sup } = await db.from("suppressions").select("id").eq("user_id", email.user_id).ilike("email", lead.email).limit(1).maybeSingle();
         if (sup) reasons.push("suppression_list");
+        if (email.replied) reasons.push("already_replied");
 
         if (reasons.length > 0) {
-          // Cancel the scheduled step — conditions changed
           await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
-          // Also cancel any live queue jobs for this lead
           await db.from("send_queue").update({ status: "cancelled", last_error: `followup_cancel:${reasons[0]}`, updated_at: new Date().toISOString() })
             .eq("lead_id", lead.id).in("status", ["pending", "claimed"]);
-          // Cancel orphaned step 3 placeholder if step 2 was cancelled before it sent
-          if (email.sequence === 1) {
-            await db.from("emails_sent").update({ follow_up_sent: true }).eq("campaign_id", email.campaign_id).eq("lead_id", lead.id).eq("sequence", 3).eq("follow_up_sent", false);
-          }
+          // Cascade-cancel all future scheduled placeholders for this lead+campaign
+          await db.from("emails_sent").update({ follow_up_sent: true })
+            .eq("campaign_id", email.campaign_id).eq("lead_id", lead.id)
+            .eq("follow_up_sent", false).gt("sequence", email.sequence ?? 1);
           followupsCancelled++;
-          await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons } });
+          await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons, sequence: email.sequence } });
           continue;
         }
 
-        // IDEMPOTENCY: skip if this step already recorded (crash-retry protection).
-        const step = email.sequence === 1 ? 2 : 3;
+        // Determine the next step number
+        const currentSeq = email.sequence ?? 1;
+        const nextStep = currentSeq + 1;
+        const maxStep = 14; // up to 365 days
+
+        // Check if we've exceeded the max follow-up steps
+        if (nextStep > maxStep) {
+          await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
+          continue;
+        }
+
+        // IDEMPOTENCY: skip if next step already recorded
         const { data: existingStep } = await db.from("emails_sent")
-          .select("id").eq("campaign_id", email.campaign_id).eq("lead_id", lead.id).eq("sequence", step).limit(1).maybeSingle();
+          .select("id").eq("campaign_id", email.campaign_id).eq("lead_id", lead.id).eq("sequence", nextStep).limit(1).maybeSingle();
         if (existingStep) {
           await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
           continue;
         }
 
-        // ATOMIC CLAIM: prevents two workers from sending the same follow-up.
-        // CAS sets follow_up_sent=true; if another worker already claimed it, this returns nothing.
+        // ATOMIC CLAIM: CAS sets follow_up_sent=true
         const { data: claimed } = await db.from("emails_sent")
           .update({ follow_up_sent: true }, { count: "exact" })
           .eq("id", email.id)
@@ -610,13 +654,22 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
           .maybeSingle();
         if (!claimed) continue;
 
-        // ATOMIC daily-cap reservation (concurrency-safe). Cap hit → DEFER an hour, never cancel.
+        // Look up delay for next step from DB sequence config
+        const campSeq = seqByCampaign.get(email.campaign_id) ?? [];
+        const nextSeqDef = campSeq.find((s) => s.step === nextStep);
+        if (!nextSeqDef) {
+          // No sequence defined for this step — stop the chain
+          continue;
+        }
+
+        // ATOMIC daily-cap reservation
         const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
         const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
         const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
         const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5, baseCap);
         const { data: reserved } = await db.rpc("reserve_send_slot", { p_user: email.user_id, p_cap: cap });
         if (!reserved) {
+          // Defer 1 hour on cap hit
           await db.from("emails_sent").update({ follow_up_at: new Date(Date.now() + 3600_000).toISOString() }).eq("id", email.id);
           continue;
         }
@@ -635,7 +688,10 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
 Get your own AI outreach agent → ${SITE}
 
 Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
-        const body = step === 2
+
+        // Dynamic follow-up copy based on step depth
+        const dayLabel = nextSeqDef.delayDays >= 30 ? `${Math.round(nextSeqDef.delayDays / 30)} months` : `${nextSeqDef.delayDays} days`;
+        const body = nextStep <= 3
           ? `Hi ${firstName},
 
 Just floating this back up — I know inboxes get busy.
@@ -644,34 +700,59 @@ Worth a quick 15-minute chat about ${lead.company ?? "your team"}? Happy to work
 
 Best regards
 ${footer}`
+          : nextStep <= 7
+          ? `Hi ${firstName},
+
+I reached out a ${dayLabel} ago about helping ${lead.company ?? "your team"}. I know priorities shift — just checking if this is something worth exploring now.
+
+If the timing isn't right, no worries at all.
+
+Best regards
+${footer}`
+          : nextStep <= 10
+          ? `Hi ${firstName},
+
+I'll keep this brief — if ${lead.company ?? "your team"} ever needs help with ${profile.offer ? sanitizeForPrompt(String(profile.offer), 50) : "outreach"}, I'm here. No pressure.
+
+If that's never going to be a fit, just let me know and I'll stop reaching out.
+
+Best regards
+${footer}`
           : `Hi ${firstName},
 
-I'll stop reaching out after this one 🙂
+This is my last outreach. If the timing is ever right down the road, my door is open.
 
-If ${lead.company ?? "your team"} ever needs help turning cold outreach into booked meetings, my door is open. Otherwise, wishing you a great quarter.
+Wishing you and ${lead.company ?? "your team"} a great year ahead.
 
 Best regards
 ${footer}`;
 
         const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(lead.email, subject, body, buildHtmlBody(body), profile.gmail_email ?? "", `${SITE}/unsubscribe?l=${lead.id}&c=${email.campaign_id}`));
 
+        // Record the sent follow-up
         await db.from("emails_sent").insert({
           user_id: email.user_id, lead_id: lead.id, campaign_id: email.campaign_id,
-          subject, body, sequence: step, follow_up_sent: true,
+          subject, body, sequence: nextStep, follow_up_sent: true,
           gmail_message_id: ids.id, gmail_thread_id: ids.threadId,
         });
-        if (step === 2) {
-          await db.from("emails_sent").insert({
-            user_id: email.user_id, lead_id: lead.id, campaign_id: email.campaign_id,
-            subject, body: "(scheduled step 3)", sequence: 3, follow_up_sent: false,
-            follow_up_at: new Date(Date.now() + 5 * 86400000).toISOString(), // Follow-up #2 at +5 days from step 2 (+7 total)
-          });
+
+        // Schedule the next step in the chain (if one exists in DB)
+        const futureStep = nextStep + 1;
+        if (futureStep <= maxStep) {
+          const futureSeqDef = campSeq.find((s) => s.step === futureStep);
+          if (futureSeqDef) {
+            const followUpAt = new Date(Date.now() + futureSeqDef.delayDays * 86400000);
+            await db.from("emails_sent").insert({
+              user_id: email.user_id, lead_id: lead.id, campaign_id: email.campaign_id,
+              subject, body: `(scheduled step ${futureStep})`, sequence: futureStep,
+              follow_up_sent: false, follow_up_at: followUpAt.toISOString(),
+            });
+          }
         }
-        await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
+
+        await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "email.sent", payload: { kind: "followup", step: nextStep, email_id: email.id, gmail_message_id: ids.id, next_delay_days: futureStep <= maxStep ? (campSeq.find((s) => s.step === futureStep)?.delayDays ?? null) : null } });
         followupsSent++;
-        await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "email.sent", payload: { kind: "followup", step, email_id: email.id, gmail_message_id: ids.id } });
       } catch (e) {
-        // Slot was reserved but the send failed — give it back.
         try { await db.rpc("release_send_slot", { p_user: email.user_id }); } catch (_e) { /* best effort */ }
         try {
           await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: email.lead_id ?? null, event: "email.failed", payload: { kind: "followup", error: e instanceof Error ? e.message : String(e) } });
