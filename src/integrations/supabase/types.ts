@@ -99,6 +99,7 @@ export type Database = {
         Row: {
           ab_test: boolean
           autopilot: boolean
+          campaign_image_url: string | null
           created_at: string
           id: string
           name: string
@@ -109,6 +110,7 @@ export type Database = {
         Insert: {
           ab_test?: boolean
           autopilot?: boolean
+          campaign_image_url?: string | null
           created_at?: string
           id?: string
           name: string
@@ -119,6 +121,7 @@ export type Database = {
         Update: {
           ab_test?: boolean
           autopilot?: boolean
+          campaign_image_url?: string | null
           created_at?: string
           id?: string
           name?: string

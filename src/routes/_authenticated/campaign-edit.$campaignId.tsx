@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/campaign-edit/$campaignId")({
@@ -22,6 +22,8 @@ function CampaignEditPage() {
     ab_test: false,
     autopilot: false,
   });
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -33,10 +35,37 @@ function CampaignEditPage() {
           ab_test: data.ab_test ?? false,
           autopilot: data.autopilot ?? false,
         });
+        setImageUrl(data.campaign_image_url ?? null);
       }
       setLoading(false);
     })();
   }, [campaignId]);
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      const path = `${u.user.id}/${campaignId}/${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("campaign-images").upload(path, file);
+      if (error) throw new Error(error.message);
+      const { data: urlData } = supabase.storage.from("campaign-images").getPublicUrl(path);
+      await supabase.from("campaigns").update({ campaign_image_url: urlData.publicUrl }).eq("id", campaignId);
+      setImageUrl(urlData.publicUrl);
+      toast.success("Image uploaded");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeImage() {
+    await supabase.from("campaigns").update({ campaign_image_url: null }).eq("id", campaignId);
+    setImageUrl(null);
+  }
 
   async function save() {
     if (!form.name.trim()) { toast.error("Campaign name is required"); return; }
@@ -46,6 +75,7 @@ function CampaignEditPage() {
       status: form.status,
       ab_test: form.ab_test,
       autopilot: form.autopilot,
+      campaign_image_url: imageUrl,
     }).eq("id", campaignId);
     setSaving(false);
     if (error) toast.error("Could not update campaign");
@@ -111,6 +141,25 @@ function CampaignEditPage() {
               />
               Autopilot replies
             </label>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Campaign Image (optional)</label>
+            <div className="flex items-center gap-3">
+              {imageUrl ? (
+                <div className="relative">
+                  <img src={imageUrl} alt="Campaign" className="h-16 rounded-lg border border-border object-cover" />
+                  <button onClick={removeImage} className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 hover:bg-destructive/10">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors">
+                  <Upload className="h-4 w-4" />
+                  {uploading ? "Uploading..." : "Upload image"}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                </label>
+              )}
+            </div>
           </div>
         </div>
 

@@ -35,6 +35,7 @@ import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
 import { Route as AuthenticatedLeadEditLeadIdRouteImport } from './routes/_authenticated/lead-edit.$leadId'
+import { Route as AuthenticatedCampaignReviewCampaignIdRouteImport } from './routes/_authenticated/campaign-review.$campaignId'
 import { Route as AuthenticatedCampaignEditCampaignIdRouteImport } from './routes/_authenticated/campaign-edit.$campaignId'
 
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
@@ -167,6 +168,12 @@ const AuthenticatedLeadEditLeadIdRoute =
     path: '/lead-edit/$leadId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCampaignReviewCampaignIdRoute =
+  AuthenticatedCampaignReviewCampaignIdRouteImport.update({
+    id: '/campaign-review/$campaignId',
+    path: '/campaign-review/$campaignId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCampaignEditCampaignIdRoute =
   AuthenticatedCampaignEditCampaignIdRouteImport.update({
     id: '/campaign-edit/$campaignId',
@@ -199,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
   '/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
+  '/campaign-review/$campaignId': typeof AuthenticatedCampaignReviewCampaignIdRoute
   '/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -227,6 +235,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
   '/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
+  '/campaign-review/$campaignId': typeof AuthenticatedCampaignReviewCampaignIdRoute
   '/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -257,6 +266,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/gmail/callback': typeof GmailCallbackRoute
   '/_authenticated/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
+  '/_authenticated/campaign-review/$campaignId': typeof AuthenticatedCampaignReviewCampaignIdRoute
   '/_authenticated/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
   '/auth/google/callback': typeof AuthGoogleCallbackRoute
 }
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/gmail/callback'
     | '/campaign-edit/$campaignId'
+    | '/campaign-review/$campaignId'
     | '/lead-edit/$leadId'
     | '/auth/google/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -315,6 +326,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/gmail/callback'
     | '/campaign-edit/$campaignId'
+    | '/campaign-review/$campaignId'
     | '/lead-edit/$leadId'
     | '/auth/google/callback'
   id:
@@ -344,6 +356,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/gmail/callback'
     | '/_authenticated/campaign-edit/$campaignId'
+    | '/_authenticated/campaign-review/$campaignId'
     | '/_authenticated/lead-edit/$leadId'
     | '/auth/google/callback'
   fileRoutesById: FileRoutesById
@@ -550,6 +563,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadEditLeadIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/campaign-review/$campaignId': {
+      id: '/_authenticated/campaign-review/$campaignId'
+      path: '/campaign-review/$campaignId'
+      fullPath: '/campaign-review/$campaignId'
+      preLoaderRoute: typeof AuthenticatedCampaignReviewCampaignIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/campaign-edit/$campaignId': {
       id: '/_authenticated/campaign-edit/$campaignId'
       path: '/campaign-edit/$campaignId'
@@ -570,6 +590,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedCampaignEditCampaignIdRoute: typeof AuthenticatedCampaignEditCampaignIdRoute
+  AuthenticatedCampaignReviewCampaignIdRoute: typeof AuthenticatedCampaignReviewCampaignIdRoute
   AuthenticatedLeadEditLeadIdRoute: typeof AuthenticatedLeadEditLeadIdRoute
 }
 
@@ -584,6 +605,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedCampaignEditCampaignIdRoute:
     AuthenticatedCampaignEditCampaignIdRoute,
+  AuthenticatedCampaignReviewCampaignIdRoute:
+    AuthenticatedCampaignReviewCampaignIdRoute,
   AuthenticatedLeadEditLeadIdRoute: AuthenticatedLeadEditLeadIdRoute,
 }
 

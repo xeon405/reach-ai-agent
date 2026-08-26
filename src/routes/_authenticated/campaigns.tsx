@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send, Pencil } from "lucide-react";
+import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send, Pencil, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { TEMPLATES } from "@/lib/templates";
 
@@ -362,6 +362,13 @@ function CampaignsPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate({ to: "/campaign-review/$campaignId", params: { campaignId: c.id } })}
+                  >
+                    <Eye className="mr-2 h-4 w-4" /> Review
+                  </Button>
                   <Button
                     size="sm"
                     className="bg-gradient-primary"
