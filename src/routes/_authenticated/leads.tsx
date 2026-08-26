@@ -84,6 +84,7 @@ function LeadsPage() {
   }
   const [country, setCountry] = useState("all");
   const [status, setStatus] = useState("all");
+  const [campaignFilter, setCampaignFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [form, setForm] = useState({
@@ -191,11 +192,18 @@ function LeadsPage() {
 
   const countries = useMemo(() => Array.from(new Set(leads.map((l) => l.country).filter(Boolean))) as string[], [leads]);
 
+  const campaignMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    campaigns.forEach((c) => { map[c.id] = c.name; });
+    return map;
+  }, [campaigns]);
+
   const filtered = leads.filter((l) => {
     const matchQ = !q || [l.name, l.company, l.email].some((v) => v?.toLowerCase().includes(q.toLowerCase()));
     const matchC = country === "all" || l.country === country;
     const matchS = status === "all" || l.status === status;
-    return matchQ && matchC && matchS;
+    const matchCamp = campaignFilter === "all" || l.campaign_id === campaignFilter;
+    return matchQ && matchC && matchS && matchCamp;
   });
 
   function exportCsv() {
@@ -335,6 +343,13 @@ function LeadsPage() {
             <SelectItem value="won">🏆 Won</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Campaign" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All campaigns</SelectItem>
+            {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-card">
@@ -347,6 +362,7 @@ function LeadsPage() {
               <th className="px-4 py-3">Job Title</th>
               <th className="px-4 py-3">Country</th>
               <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Campaign</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3"></th>
@@ -354,7 +370,7 @@ function LeadsPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-16 text-center text-muted-foreground">
+              <tr><td colSpan={9} className="px-4 py-16 text-center text-muted-foreground">
                 No leads yet. Use "Find Leads with AI" or add manually.
               </td></tr>
             ) : filtered.map((l) => (
@@ -369,6 +385,15 @@ function LeadsPage() {
                 <td className="px-4 py-3">{l.job_title ?? "—"}</td>
                 <td className="px-4 py-3">{l.country ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{l.email ?? "—"}</td>
+                <td className="px-4 py-3">
+                  {l.campaign_id && campaignMap[l.campaign_id] ? (
+                    <span className="inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      {campaignMap[l.campaign_id]}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground/50">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   {SYSTEM_STATUSES.includes(l.status) ? (
                     <Badge className={STATUS_COLORS[l.status] ?? ""} variant="secondary">{l.status}</Badge>

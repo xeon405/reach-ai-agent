@@ -93,7 +93,7 @@ export function SupportChat() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open AI help chat"
-          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-primary text-white shadow-xl shadow-black/40 transition-transform hover:scale-105 active:scale-95"
+          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-black/40 transition-transform hover:scale-105 active:scale-95"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <path
@@ -109,16 +109,16 @@ export function SupportChat() {
 
       {open && (
         <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 flex h-[520px] max-h-[80vh] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-          <div className="flex items-center justify-between bg-gradient-primary px-4 py-3">
+          <div className="flex items-center justify-between bg-primary px-4 py-3">
             <div>
-              <div className="text-sm font-semibold text-white">OutreachAI Guide</div>
-              <div className="flex items-center gap-1.5 text-xs text-white/80">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-300" /> Online
+              <div className="text-sm font-semibold text-primary-foreground">OutreachAI Guide</div>
+              <div className="flex items-center gap-1.5 text-xs text-primary-foreground/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-400" /> Online
               </div>
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="rounded-full p-1 text-white/80 hover:bg-white/15 hover:text-white"
+              className="rounded-full p-1 text-primary-foreground/70 hover:bg-primary-foreground/15 hover:text-primary-foreground"
               aria-label="Close"
             >
               <svg width="16" height="16" viewBox="0 0 12 12" fill="none">
@@ -181,7 +181,7 @@ export function SupportChat() {
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
-                className="rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
               >
                 ➤
               </button>
