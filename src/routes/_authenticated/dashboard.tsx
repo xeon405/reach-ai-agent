@@ -328,6 +328,7 @@ function Dashboard() {
               <div className="w-20 text-right text-sm font-medium">{stage.value}</div>
               <div className="w-14 text-right text-xs text-muted-foreground">{stage.pct}%</div>
               {i < funnel.length - 1 && <ArrowRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />}
+              {i === funnel.length - 1 && <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />}
             </div>
           ))}
         </div>
