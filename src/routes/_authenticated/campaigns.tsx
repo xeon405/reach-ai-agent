@@ -174,7 +174,7 @@ function CampaignsPage() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>✨ AI Email Generator</DialogTitle>
+                <DialogTitle>AI Email Generator</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
