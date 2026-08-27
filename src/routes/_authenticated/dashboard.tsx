@@ -154,7 +154,6 @@ function Dashboard() {
     const replied = kpis.replies;
     const interested = kpis.positiveReplies;
     const booking = kpis.bookingIntents;
-    const humanConversion = fAudit.filter((a) => a.event === "booking.detected" || a.event === "human.takeover").length;
     const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
     return [
       { label: "Leads Found", value: found, pct: 100 },
@@ -164,10 +163,38 @@ function Dashboard() {
       { label: "Opens", value: opened, pct: pct(opened, sent) },
       { label: "Replies", value: replied, pct: pct(replied, sent) },
       { label: "Interested", value: interested, pct: pct(interested, sent) },
-      { label: "Booking", value: booking, pct: pct(booking, sent) },
-      { label: "Human Conversion", value: humanConversion, pct: pct(humanConversion, sent) },
+      { label: "Bookings", value: booking, pct: pct(booking, sent) },
     ];
   }, [fLeads, fEmails, kpis]);
+
+  const humanConversion = useMemo(() => {
+    const handoffs = fAudit.filter((a) => a.event === "agent.handoff").length;
+    const takeovers = fAudit.filter((a) => a.event === "human.takeover").length;
+    const bookingDetected = fAudit.filter((a) => a.event === "booking.detected").length;
+    const totalHumanActions = handoffs + takeovers + bookingDetected;
+    const repliedLeads = new Set(
+      fEmails.filter((e) => e.replied).map((e) => e.lead_id).filter(Boolean)
+    ).size;
+    const humanManagedLeads = new Set(
+      fAudit.filter((a) =>
+        (a.event === "agent.handoff" || a.event === "human.takeover" || a.event === "booking.detected") &&
+        a.lead_id
+      ).map((a) => a.lead_id)
+    ).size;
+    const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
+    return {
+      handoffs,
+      takeovers,
+      bookingDetected,
+      totalHumanActions,
+      repliedLeads,
+      humanManagedLeads,
+      humanConversionRate: pct(humanManagedLeads, repliedLeads),
+      handoffRate: pct(handoffs, repliedLeads),
+      takeoverRate: pct(takeovers, repliedLeads),
+      bookingRate: pct(bookingDetected, repliedLeads),
+    };
+  }, [fAudit, fEmails]);
 
   const emailPerf = useMemo(() => {
     const sent = fEmails.length;
@@ -305,6 +332,78 @@ function Dashboard() {
         </div>
         {funnel[0].value === 0 && (
           <p className="mt-4 text-center text-sm text-muted-foreground">No leads found in this period. Start a campaign to see your funnel.</p>
+        )}
+      </Section>
+
+      {/* Human Conversion Analytics */}
+      <Section title="Human Conversion Analytics" icon={<Hand className="h-4 w-4" />}>
+        {fAudit.length === 0 && fEmails.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground">No data yet. Human conversion analytics appear after replies are received.</p>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Replied Leads" value={humanConversion.repliedLeads} />
+              <StatCard label="Human-Managed Leads" value={humanConversion.humanManagedLeads} accent={humanConversion.humanManagedLeads > 0} />
+              <StatCard label="Human Conversion Rate" value={`${humanConversion.humanConversionRate}%`} accent={humanConversion.humanConversionRate > 20} />
+              <StatCard label="Total Human Actions" value={humanConversion.totalHumanActions} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Hand className="h-3.5 w-3.5 text-amber-500" /> AI Handoffs
+                </div>
+                <div className="mt-1.5 text-2xl font-bold">{humanConversion.handoffs}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.handoffRate}% of replies</div>
+                <p className="mt-2 text-xs text-muted-foreground/70">AI detected complex intent and transferred to human</p>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5 text-orange-500" /> Owner Takeovers
+                </div>
+                <div className="mt-1.5 text-2xl font-bold">{humanConversion.takeovers}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.takeoverRate}% of replies</div>
+                <p className="mt-2 text-xs text-muted-foreground/70">Owner manually took control of the conversation</p>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" /> Bookings Detected
+                </div>
+                <div className="mt-1.5 text-2xl font-bold">{humanConversion.bookingDetected}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.bookingRate}% of replies</div>
+                <p className="mt-2 text-xs text-muted-foreground/70">Lead confirmed or requested a meeting booking</p>
+              </div>
+            </div>
+
+            {humanConversion.repliedLeads > 0 && (
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Conversion Breakdown</h3>
+                <div className="space-y-2">
+                  {[
+                    { label: "AI-Handled (auto-reply)", count: humanConversion.repliedLeads - humanConversion.humanManagedLeads, color: "bg-purple-500" },
+                    { label: "AI Handoff to Human", count: humanConversion.handoffs, color: "bg-amber-500" },
+                    { label: "Owner Takeover", count: humanConversion.takeovers, color: "bg-orange-500" },
+                    { label: "Booking Confirmed", count: humanConversion.bookingDetected, color: "bg-emerald-500" },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-center gap-3">
+                      <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${row.color}`} />
+                      <span className="text-sm flex-1">{row.label}</span>
+                      <span className="text-sm font-medium w-12 text-right">{row.count}</span>
+                      <div className="w-32">
+                        <Progress
+                          value={humanConversion.repliedLeads > 0 ? Math.round((row.count / humanConversion.repliedLeads) * 100) : 0}
+                          className="h-2"
+                        />
+                      </div>
+                      <span className="w-10 text-right text-xs text-muted-foreground">
+                        {humanConversion.repliedLeads > 0 ? Math.round((row.count / humanConversion.repliedLeads) * 100) : 0}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </Section>
 
