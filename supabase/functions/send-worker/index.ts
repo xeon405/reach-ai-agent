@@ -280,6 +280,18 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey!);
   const startedAt = Date.now();
 
+  // FOLLOW-UP AI CONTEXT (must be before try block to avoid TDZ)
+  const FOLLOWUP_COPY_CONTEXT = [
+    "You are writing a follow-up email in an ongoing cold outreach campaign.",
+    "This is NOT the first email — the lead has received previous emails from the sender.",
+    "Write a SHORT, natural follow-up (30-80 words). Keep it conversational and respectful.",
+    "Do NOT repeat the original email. Reference that you reached out before.",
+    "Do NOT invent websites, booking links, products, prices, or company facts.",
+    "If a website/booking link is provided, you may mention it once naturally.",
+    "Do NOT use spam words. Do NOT use ALL CAPS. Do NOT use emojis.",
+    "Sign off with the sender's real name — never a placeholder.",
+  ].join("\n");
+
   try {
     // ---------------- PASS 1: due FOLLOW-UPS (re-checked, never blind) ----------
     const fuStats = await processDueFollowUps(supabase);
@@ -576,16 +588,6 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
   // Queries leads.next_followup_at instead of emails_sent sentinels.
   // Every follow-up is re-checked, never blind.
   // ------------------------------------------------------------------
-  const FOLLOWUP_COPY_CONTEXT = [
-    "You are writing a follow-up email in an ongoing cold outreach campaign.",
-    "This is NOT the first email — the lead has received previous emails from the sender.",
-    "Write a SHORT, natural follow-up (30-80 words). Keep it conversational and respectful.",
-    "Do NOT repeat the original email. Reference that you reached out before.",
-    "Do NOT invent websites, booking links, products, prices, or company facts.",
-    "If a website/booking link is provided, you may mention it once naturally.",
-    "Do NOT use spam words. Do NOT use ALL CAPS. Do NOT use emojis.",
-    "Sign off with the sender's real name — never a placeholder.",
-  ].join("\n");
 
   async function generateFollowUp(
     senderName: string,
