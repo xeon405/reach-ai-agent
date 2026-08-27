@@ -501,10 +501,6 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
 
     // TWO-PHASE INSERT: pending row acts as distributed lock against lease-expiry races.
     // Phase 1: Insert PENDING row (unique constraint prevents concurrent worker from sending).
-    // Look up step 2 delay from follow_up_sequences table (default 3 days if missing).
-    const { data: step2Def } = await db.from("follow_up_sequences").select("delay_days")
-      .eq("campaign_id", job.campaign_id).eq("step_number", 2).eq("active", true).maybeSingle();
-    const firstFollowUpDays = step2Def?.delay_days ?? 3;
     const { error: pendingErr } = await db
       .from("emails_sent")
       .insert({
@@ -515,7 +511,6 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         subject: gen.subject,
         body: "(pending)",
         variant,
-        follow_up_at: new Date(Date.now() + firstFollowUpDays * 24 * 60 * 60 * 1000).toISOString(),
         sequence: 1,
         follow_up_sent: false,
       });
@@ -557,35 +552,114 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
       normalized_email: String(lead.email).toLowerCase(),
     }).eq("id", lead.id);
 
+    // Initialize follow-up tracking on the lead (sets followup_step, followup_status, next_followup_at)
+    // Skip if follow-ups are disabled for this campaign
+    const { data: campCheck } = await db.from("campaigns").select("followups_enabled").eq("id", job.campaign_id).maybeSingle();
+    if (campCheck?.followups_enabled !== false) {
+      const { error: fuInitErr } = await db.rpc("init_lead_followup", {
+        p_lead_id: lead.id,
+        p_campaign_id: job.campaign_id,
+        p_initial_send_at: new Date().toISOString(),
+      });
+      if (fuInitErr) {
+        console.error("[send-worker] Failed to init follow-up tracking:", fuInitErr.message);
+      }
+    }
+
     ctx.sentToday++;
-    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80) } });
+    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), followup_initialized: campCheck?.followups_enabled !== false } });
     return true;
   }
 
   // ------------------------------------------------------------------
-  // FOLLOW-UP ENGINE: time-gated, DB-driven, NEVER blind — full re-check per send.
-  // Reads from follow_up_sequences table for configurable intervals (3d, 7d, 12d, ...365d).
+  // FOLLOW-UP ENGINE v2: lead-centric, AI-generated, DB-driven.
+  // Queries leads.next_followup_at instead of emails_sent sentinels.
+  // Every follow-up is re-checked, never blind.
+  // ------------------------------------------------------------------
+  const FOLLOWUP_COPY_CONTEXT = [
+    "You are writing a follow-up email in an ongoing cold outreach campaign.",
+    "This is NOT the first email — the lead has received previous emails from the sender.",
+    "Write a SHORT, natural follow-up (30-80 words). Keep it conversational and respectful.",
+    "Do NOT repeat the original email. Reference that you reached out before.",
+    "Do NOT invent websites, booking links, products, prices, or company facts.",
+    "If a website/booking link is provided, you may mention it once naturally.",
+    "Do NOT use spam words. Do NOT use ALL CAPS. Do NOT use emojis.",
+    "Sign off with the sender's real name — never a placeholder.",
+  ].join("\n");
+
+  async function generateFollowUp(
+    senderName: string,
+    leadName: string,
+    leadCompany: string,
+    leadJobTitle: string,
+    userOffer: string,
+    previousEmails: string[],
+    currentStep: number,
+    totalSteps: number,
+    bookingLink = "",
+    biContext = "",
+    arabic = false,
+  ): Promise<{ subject: string; body: string }> {
+    const history = previousEmails.map((e, i) => `Email ${i + 1}:\n${e}`).join("\n\n");
+    const text = await groqChat([{
+      role: "user",
+      content: `${biContext}${FOLLOWUP_COPY_CONTEXT}
+
+Write follow-up email #${currentStep} of ${totalSteps} to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
+Our offer: ${sanitizeForPrompt(userOffer, 300)}
+Sender name: ${sanitizeForPrompt(senderName, 60)} — sign off with their actual name.
+
+Previous emails sent to this lead (for context — do NOT repeat them):
+${history || "(no previous emails available)"}
+
+${bookingLink ? `A booking link exists: ${sanitizeForPrompt(bookingLink, 200)}. You may mention it once naturally if appropriate.` : "No booking link is configured. Do NOT invent one."}
+
+Rules:
+- Subject: Keep the SAME subject as the previous email (or a slight variation). Do NOT create a new subject.
+- Body: 30-80 words. Natural, conversational. Acknowledge you've reached out before.
+- Tone depends on step: early follow-ups (#2-4) are casual. Mid (#5-8) are brief. Late (#9+) are respectful final touches.
+- If step >= 10, consider saying this may be your last outreach.
+- Return ONLY a JSON object: {"subject":"...","body":"line1\\nline2"}
+The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT — WRITE IN ARABIC with professional Gulf business tone. Keep company names in Latin script." : ""}`,
+    }], { maxTokens: 500, temperature: 0.85 });
+
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      try {
+        const parsed = JSON.parse(text.slice(start, end + 1));
+        if (parsed.subject && parsed.body) {
+          return { subject: String(parsed.subject), body: String(parsed.body).replace(/\\n/g, "\n") };
+        }
+      } catch { /* fall through */ }
+    }
+    const lines = text.split("\n").filter(Boolean);
+    return { subject: (lines[0] ?? "Follow-up").slice(0, 90), body: lines.slice(1).join("\n") || text };
+  }
+
   async function processDueFollowUps(db: ReturnType<typeof createClient>): Promise<{ followupsSent: number; followupsCancelled: number }> {
     let followupsSent = 0, followupsCancelled = 0;
     const now = new Date().toISOString();
-    // Pick up any email that is a "scheduling sentinel" (follow_up_sent=false, replied=false)
-    // and whose follow_up_at has arrived. Sequence can be 1 (initial triggers step 2)
-    // or any follow-up step N (triggers step N+1).
-    const { data: emails } = await db
-      .from("emails_sent")
-      .select("*, lead:leads(*)")
-      .eq("follow_up_sent", false)
-      .eq("replied", false)
-      .lte("follow_up_at", now)
-      .limit(40);
-    if (!emails || emails.length === 0) return { followupsSent, followupsCancelled };
 
-    const userIds = [...new Set(emails.map((e) => e.user_id))];
-    const { data: profiles } = await db.from("profiles").select("*").in("id", userIds);
+    // Query leads directly — much simpler and more efficient than scanning emails_sent sentinels
+    const { data: dueLeads } = await db
+      .from("leads")
+      .select("*, campaign:campaigns(id, name, status, followups_enabled, user_id)")
+      .eq("followup_status", "active")
+      .not("next_followup_at", "is", null)
+      .lte("next_followup_at", now)
+      .limit(30);
+    if (!dueLeads || dueLeads.length === 0) return { followupsSent, followupsCancelled };
+
+    // Batch-fetch profiles
+    const userIds = [...new Set(dueLeads.map((l) => l.campaign?.user_id).filter(Boolean))];
+    const { data: profiles } = userIds.length
+      ? await db.from("profiles").select("*").in("id", userIds)
+      : { data: [] };
     const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
 
-    // Pre-fetch follow-up sequences for all relevant campaigns
-    const campIds = [...new Set(emails.map((e) => e.campaign_id).filter(Boolean))];
+    // Batch-fetch follow-up sequences
+    const campIds = [...new Set(dueLeads.map((l) => l.campaign?.id).filter(Boolean))];
     const { data: seqRows } = campIds.length
       ? await db.from("follow_up_sequences").select("campaign_id, step_number, delay_days").in("campaign_id", campIds).eq("active", true)
       : { data: [] };
@@ -596,92 +670,149 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
       seqByCampaign.set(r.campaign_id, arr);
     }
 
-    for (const email of emails) {
+    for (const lead of dueLeads) {
       try {
-        const profile = profileMap[email.user_id];
-        const lead = Array.isArray(email.lead) ? email.lead[0] : email.lead;
-        if (!profile || !lead?.email) continue;
+        const campaign = Array.isArray(lead.campaign) ? lead.campaign[0] : lead.campaign;
+        if (!campaign) { followupsCancelled++; continue; }
+        const profile = profileMap[campaign.user_id];
+        if (!profile || !lead.email) { followupsCancelled++; continue; }
 
-        // Re-check ALL blocking conditions before every follow-up
+        // ── SAFETY RE-CHECK: every blocking condition ──
         const reasons: string[] = [];
         if (lead.unsubscribed || ["unsubscribed", "bounced", "suppressed"].includes(lead.status)) reasons.push("lead_state");
-        if (["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED", "HUMAN_TAKEOVER"].includes(lead.lifecycle ?? "")) reasons.push("lifecycle");
+        if (["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED"].includes(lead.lifecycle ?? "")) reasons.push("lifecycle");
         if ((lead.conv_mode ?? "AI_AUTOPILOT") === "HUMAN") reasons.push("human_takeover");
-        const { data: camp } = await db.from("campaigns").select("status").eq("id", email.campaign_id).maybeSingle();
-        if (!camp || camp.status !== "active") reasons.push("campaign_inactive");
-        const { data: sup } = await db.from("suppressions").select("id").eq("user_id", email.user_id).ilike("email", lead.email).limit(1).maybeSingle();
+        if (campaign.status !== "active") reasons.push("campaign_inactive");
+        if (!campaign.followups_enabled) reasons.push("followups_disabled");
+
+        // Check DB suppressions
+        const { data: sup } = await db.from("suppressions").select("id")
+          .eq("user_id", campaign.user_id).ilike("email", lead.email).limit(1).maybeSingle();
         if (sup) reasons.push("suppression_list");
-        if (email.replied) reasons.push("already_replied");
+
+        // Check if lead has replied since scheduling (belt-and-suspenders with trigger)
+        const { data: repliedCheck } = await db.from("emails_sent").select("id")
+          .eq("lead_id", lead.id).eq("campaign_id", campaign.id).eq("replied", true).limit(1).maybeSingle();
+        if (repliedCheck) reasons.push("already_replied");
 
         if (reasons.length > 0) {
-          await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
-          await db.from("send_queue").update({ status: "cancelled", last_error: `followup_cancel:${reasons[0]}`, updated_at: new Date().toISOString() })
-            .eq("lead_id", lead.id).in("status", ["pending", "claimed"]);
-          // Cascade-cancel all future scheduled placeholders for this lead+campaign
-          await db.from("emails_sent").update({ follow_up_sent: true })
-            .eq("campaign_id", email.campaign_id).eq("lead_id", lead.id)
-            .eq("follow_up_sent", false).gt("sequence", email.sequence ?? 1);
+          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
           followupsCancelled++;
-          await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons, sequence: email.sequence } });
+          await insertAudit(db, { user_id: campaign.user_id, campaign_id: campaign.id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons, step: lead.followup_step } });
           continue;
         }
 
-        // Determine the next step number
-        const currentSeq = email.sequence ?? 1;
-        const nextStep = currentSeq + 1;
-        const maxStep = 14; // up to 365 days
-
-        // Check if we've exceeded the max follow-up steps
-        if (nextStep > maxStep) {
-          await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
+        // ── DETERMINE NEXT STEP ──
+        const currentStep = lead.followup_step ?? 0;
+        const nextStep = currentStep + 1;
+        if (nextStep > 14) {
+          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
           continue;
         }
 
-        // IDEMPOTENCY: skip if next step already recorded
+        // Check sequence definition exists
+        const campSeq = seqByCampaign.get(campaign.id) ?? [];
+        const nextSeqDef = campSeq.find((s) => s.step === nextStep);
+        if (!nextSeqDef) {
+          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
+          continue;
+        }
+
+        // ── IDEMPOTENCY: skip if next step already recorded ──
         const { data: existingStep } = await db.from("emails_sent")
-          .select("id").eq("campaign_id", email.campaign_id).eq("lead_id", lead.id).eq("sequence", nextStep).limit(1).maybeSingle();
+          .select("id").eq("campaign_id", campaign.id).eq("lead_id", lead.id).eq("sequence", nextStep).limit(1).maybeSingle();
         if (existingStep) {
-          await db.from("emails_sent").update({ follow_up_sent: true }).eq("id", email.id);
+          // Already sent — advance the lead to the next step
+          await db.rpc("advance_lead_followup", { p_lead_id: lead.id, p_campaign_id: campaign.id, p_current_step: nextStep });
           continue;
         }
 
-        // ATOMIC CLAIM: CAS sets follow_up_sent=true
-        const { data: claimed } = await db.from("emails_sent")
-          .update({ follow_up_sent: true }, { count: "exact" })
-          .eq("id", email.id)
-          .eq("follow_up_sent", false)
+        // ── ATOMIC CLAIM: CAS update followup_status from 'active' to 'sending' ──
+        // This prevents concurrent workers from double-sending
+        const { data: claimed } = await db.from("leads")
+          .update({ followup_status: "sending" }, { count: "exact" })
+          .eq("id", lead.id)
+          .eq("followup_status", "active")
           .select("id")
           .maybeSingle();
         if (!claimed) continue;
 
-        // Look up delay for next step from DB sequence config
-        const campSeq = seqByCampaign.get(email.campaign_id) ?? [];
-        const nextSeqDef = campSeq.find((s) => s.step === nextStep);
-        if (!nextSeqDef) {
-          // No sequence defined for this step — stop the chain
-          continue;
-        }
-
-        // ATOMIC daily-cap reservation
+        // ── DAILY CAP CHECK ──
         const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
         const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
         const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
         const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5, baseCap);
-        const { data: reserved } = await db.rpc("reserve_send_slot", { p_user: email.user_id, p_cap: cap });
+        const { data: reserved } = await db.rpc("reserve_send_slot", { p_user: campaign.user_id, p_cap: cap });
         if (!reserved) {
-          // Defer 1 hour on cap hit
-          await db.from("emails_sent").update({ follow_up_at: new Date(Date.now() + 3600_000).toISOString() }).eq("id", email.id);
+          // Defer 1 hour — restore to 'active' so next worker picks it up
+          const nextHour = new Date(Date.now() + 3600_000).toISOString();
+          await db.from("leads").update({ followup_status: "active", next_followup_at: nextHour }).eq("id", lead.id);
           continue;
         }
 
-        const tok = await getAccessToken(db, email.user_id).catch(() => null);
+        // ── GMAIL TOKEN ──
+        const tok = await getAccessToken(db, campaign.user_id).catch(() => null);
         if (!tok) {
-          await db.rpc("release_send_slot", { p_user: email.user_id });
+          await db.rpc("release_send_slot", { p_user: campaign.user_id });
+          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
           followupsCancelled++;
           continue;
         }
+
+        // ── GATHER CONTEXT FOR AI ──
+        const biCtx = buildBIContext(profile);
         const firstName = (lead.name ?? "there").split(" ")[0];
-        const subject = String(email.subject ?? "").startsWith("Re: ") ? String(email.subject) : `Re: ${email.subject}`;
+
+        // Fetch previous emails for this lead+campaign (for AI context)
+        const { data: prevEmails } = await db.from("emails_sent")
+          .select("subject, body, sequence")
+          .eq("campaign_id", campaign.id).eq("lead_id", lead.id)
+          .order("sequence", { ascending: true })
+          .limit(10);
+        const previousBodies = (prevEmails ?? [])
+          .filter((e) => e.body && !e.body.startsWith("(scheduled") && !e.body.startsWith("(pending"))
+          .map((e) => `Subject: ${e.subject}\n${e.body}`);
+
+        // ── AI GENERATE FOLLOW-UP ──
+        const destLink = String(profile.website_url || profile.booking_link || "");
+        const gen = await generateFollowUp(
+          String(profile.name ?? "Best regards"),
+          lead.name ?? "there",
+          lead.company ?? "your company",
+          lead.job_title ?? "professional",
+          String(profile.offer ?? "our service"),
+          previousBodies,
+          nextStep,
+          14,
+          destLink,
+          biCtx,
+          isArabicLead(lead.country),
+        );
+
+        // Spam check
+        let check = localSpamScore(gen.subject, gen.body);
+        if (check.score < 60 && check.hint) {
+          try {
+            const retry = await generateFollowUp(
+              String(profile.name ?? "Best regards"),
+              lead.name ?? "there",
+              lead.company ?? "your company",
+              lead.job_title ?? "professional",
+              String(profile.offer ?? "our service"),
+              previousBodies,
+              nextStep,
+              14,
+              destLink,
+              biCtx,
+              isArabicLead(lead.country),
+            );
+            if (localSpamScore(retry.subject, retry.body).score > check.score) {
+              Object.assign(gen, retry);
+            }
+          } catch { /* keep original */ }
+        }
+
+        // Build final body with footer
         const footer = `--
 
 ⚡ Still automated — my AI agent sent this follow-up too.
@@ -689,74 +820,64 @@ Get your own AI outreach agent → ${SITE}
 
 Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
-        // Dynamic follow-up copy based on step depth
-        const dayLabel = nextSeqDef.delayDays >= 30 ? `${Math.round(nextSeqDef.delayDays / 30)} months` : `${nextSeqDef.delayDays} days`;
-        const body = nextStep <= 3
-          ? `Hi ${firstName},
+        const bodyText = `${gen.body}${footer}`;
+        const subject = String(gen.subject).startsWith("Re: ") ? gen.subject : `Re: ${gen.subject}`;
+        const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${campaign.id}`;
 
-Just floating this back up — I know inboxes get busy.
+        // Tracking pixel + click tracking
+        const trackingId = crypto.randomUUID();
+        const pixel = `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${trackingId}" width="1" height="1" alt="" style="display:none;border:0" />`;
+        const trackingBase = `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-click?id=${trackingId}&url=`;
 
-Worth a quick 15-minute chat about ${lead.company ?? "your team"}? Happy to work around your schedule.
+        const htmlBody = buildHtmlBody(bodyText, pixel);
+        const trackedHtml = destLink ? wrapUrlsForTracking(htmlBody, trackingBase) : htmlBody;
 
-Best regards
-${footer}`
-          : nextStep <= 7
-          ? `Hi ${firstName},
+        // ── SEND ──
+        const ids = await sendGmailRaw(
+          tok.accessToken,
+          buildRawEmail(lead.email, subject, bodyText, trackedHtml, String(profile.gmail_email ?? ""), unsubUrl),
+        );
 
-I reached out a ${dayLabel} ago about helping ${lead.company ?? "your team"}. I know priorities shift — just checking if this is something worth exploring now.
-
-If the timing isn't right, no worries at all.
-
-Best regards
-${footer}`
-          : nextStep <= 10
-          ? `Hi ${firstName},
-
-I'll keep this brief — if ${lead.company ?? "your team"} ever needs help with ${profile.offer ? sanitizeForPrompt(String(profile.offer), 50) : "outreach"}, I'm here. No pressure.
-
-If that's never going to be a fit, just let me know and I'll stop reaching out.
-
-Best regards
-${footer}`
-          : `Hi ${firstName},
-
-This is my last outreach. If the timing is ever right down the road, my door is open.
-
-Wishing you and ${lead.company ?? "your team"} a great year ahead.
-
-Best regards
-${footer}`;
-
-        const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(lead.email, subject, body, buildHtmlBody(body), profile.gmail_email ?? "", `${SITE}/unsubscribe?l=${lead.id}&c=${email.campaign_id}`));
-
-        // Record the sent follow-up
+        // ── RECORD SENT ──
         await db.from("emails_sent").insert({
-          user_id: email.user_id, lead_id: lead.id, campaign_id: email.campaign_id,
-          subject, body, sequence: nextStep, follow_up_sent: true,
+          user_id: campaign.user_id, lead_id: lead.id, campaign_id: campaign.id,
+          subject, body: bodyText, sequence: nextStep, follow_up_sent: true,
           gmail_message_id: ids.id, gmail_thread_id: ids.threadId,
         });
 
-        // Schedule the next step in the chain (if one exists in DB)
-        const futureStep = nextStep + 1;
-        if (futureStep <= maxStep) {
-          const futureSeqDef = campSeq.find((s) => s.step === futureStep);
-          if (futureSeqDef) {
-            const followUpAt = new Date(Date.now() + futureSeqDef.delayDays * 86400000);
-            await db.from("emails_sent").insert({
-              user_id: email.user_id, lead_id: lead.id, campaign_id: email.campaign_id,
-              subject, body: `(scheduled step ${futureStep})`, sequence: futureStep,
-              follow_up_sent: false, follow_up_at: followUpAt.toISOString(),
-            });
-          }
-        }
+        // ── ADVANCE LEAD TO NEXT STEP ──
+        await db.rpc("advance_lead_followup", { p_lead_id: lead.id, p_campaign_id: campaign.id, p_current_step: nextStep });
 
-        await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "email.sent", payload: { kind: "followup", step: nextStep, email_id: email.id, gmail_message_id: ids.id, next_delay_days: futureStep <= maxStep ? (campSeq.find((s) => s.step === futureStep)?.delayDays ?? null) : null } });
+        // ── AUDIT ──
+        const nextSeqDelay = campSeq.find((s) => s.step === nextStep + 1)?.delayDays ?? null;
+        await insertAudit(db, {
+          user_id: campaign.user_id, campaign_id: campaign.id, lead_id: lead.id,
+          event: "followup.sent",
+          payload: {
+            step: nextStep,
+            total_steps: 14,
+            email_id: trackingId,
+            gmail_message_id: ids.id,
+            next_delay_days: nextSeqDelay,
+          },
+        });
+
         followupsSent++;
       } catch (e) {
-        try { await db.rpc("release_send_slot", { p_user: email.user_id }); } catch (_e) { /* best effort */ }
+        // Release slot and restore lead to active on failure
         try {
-          await insertAudit(db, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: email.lead_id ?? null, event: "email.failed", payload: { kind: "followup", error: e instanceof Error ? e.message : String(e) } });
-        } catch (_e) { /* best effort */ }
+          await db.rpc("release_send_slot", { p_user: lead.campaign?.user_id });
+        } catch { /* best effort */ }
+        try {
+          await db.from("leads").update({ followup_status: "active" }).eq("id", lead.id);
+        } catch { /* best effort */ }
+        try {
+          await insertAudit(db, {
+            user_id: lead.campaign?.user_id, campaign_id: lead.campaign?.id, lead_id: lead.id,
+            event: "followup.failed",
+            payload: { error: e instanceof Error ? e.message : String(e), step: (lead.followup_step ?? 0) + 1 },
+          });
+        } catch { /* best effort */ }
       }
     }
     return { followupsSent, followupsCancelled };

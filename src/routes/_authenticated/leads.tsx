@@ -17,6 +17,7 @@ type Lead = {
   id: string; name: string | null; company: string | null; job_title: string | null;
   country: string | null; email: string | null; status: string; created_at: string;
   campaign_id: string | null;
+  followup_step: number | null; followup_status: string | null; next_followup_at: string | null;
 };
 
 type Campaign = { id: string; name: string };
@@ -363,6 +364,7 @@ function LeadsPage() {
               <th className="px-4 py-3">Country</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Campaign</th>
+              <th className="px-4 py-3">Follow-up</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3"></th>
@@ -370,7 +372,7 @@ function LeadsPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-16 text-center text-muted-foreground">
+              <tr><td colSpan={10} className="px-4 py-16 text-center text-muted-foreground">
                 No leads yet. Use "Find Leads with AI" or add manually.
               </td></tr>
             ) : filtered.map((l) => (
@@ -389,6 +391,27 @@ function LeadsPage() {
                   {l.campaign_id && campaignMap[l.campaign_id] ? (
                     <span className="inline-block max-w-[140px] truncate rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary" title={campaignMap[l.campaign_id]}>
                       {campaignMap[l.campaign_id]}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground/50">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {l.followup_status === "active" ? (
+                    <span className="inline-block rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400" title={l.next_followup_at ? `Next: ${new Date(l.next_followup_at).toLocaleDateString()}` : ""}>
+                      Step {l.followup_step ?? 0} / 14
+                    </span>
+                  ) : l.followup_status === "completed" ? (
+                    <span className="inline-block rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      Complete
+                    </span>
+                  ) : l.followup_status === "cancelled" ? (
+                    <span className="inline-block rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+                      Stopped
+                    </span>
+                  ) : l.followup_step && l.followup_step > 0 ? (
+                    <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      Step {l.followup_step}
                     </span>
                   ) : (
                     <span className="text-muted-foreground/50">—</span>

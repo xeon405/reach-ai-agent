@@ -21,6 +21,7 @@ function CampaignEditPage() {
     status: "active",
     ab_test: false,
     autopilot: false,
+    followups_enabled: true,
   });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -34,6 +35,7 @@ function CampaignEditPage() {
           status: data.status ?? "active",
           ab_test: data.ab_test ?? false,
           autopilot: data.autopilot ?? false,
+          followups_enabled: data.followups_enabled ?? true,
         });
         setImageUrl(data.campaign_image_url ?? null);
       }
@@ -75,6 +77,7 @@ function CampaignEditPage() {
       status: form.status,
       ab_test: form.ab_test,
       autopilot: form.autopilot,
+      followups_enabled: form.followups_enabled,
       campaign_image_url: imageUrl,
     }).eq("id", campaignId);
     setSaving(false);
@@ -140,6 +143,15 @@ function CampaignEditPage() {
                 className="h-4 w-4 rounded border-input accent-primary"
               />
               Autopilot replies
+            </label>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={form.followups_enabled}
+                onChange={(e) => setForm({ ...form, followups_enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              Enable follow-ups (14-step sequence)
             </label>
           </div>
           <div>

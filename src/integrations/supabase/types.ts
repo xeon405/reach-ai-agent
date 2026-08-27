@@ -101,6 +101,7 @@ export type Database = {
           autopilot: boolean
           campaign_image_url: string | null
           created_at: string
+          followups_enabled: boolean
           id: string
           name: string
           status: string
@@ -112,6 +113,7 @@ export type Database = {
           autopilot?: boolean
           campaign_image_url?: string | null
           created_at?: string
+          followups_enabled?: boolean
           id?: string
           name: string
           status?: string
@@ -123,6 +125,7 @@ export type Database = {
           autopilot?: boolean
           campaign_image_url?: string | null
           created_at?: string
+          followups_enabled?: boolean
           id?: string
           name?: string
           status?: string
@@ -307,11 +310,14 @@ export type Database = {
           email_is_role: boolean | null
           email_status: string | null
           email_verification_reason: string | null
+          followup_step: number
+          followup_status: string
           id: string
           job_title: string | null
           lead_source: string | null
           lifecycle: string
           name: string | null
+          next_followup_at: string | null
           normalized_email: string | null
           phone: string | null
           place_id: string | null
@@ -336,11 +342,14 @@ export type Database = {
           email_is_role?: boolean | null
           email_status?: string | null
           email_verification_reason?: string | null
+          followup_step?: number
+          followup_status?: string
           id?: string
           job_title?: string | null
           lead_source?: string | null
           lifecycle?: string
           name?: string | null
+          next_followup_at?: string | null
           normalized_email?: string | null
           phone?: string | null
           place_id?: string | null
@@ -365,11 +374,14 @@ export type Database = {
           email_is_role?: boolean | null
           email_status?: string | null
           email_verification_reason?: string | null
+          followup_step?: number
+          followup_status?: string
           id?: string
           job_title?: string | null
           lead_source?: string | null
           lifecycle?: string
           name?: string | null
+          next_followup_at?: string | null
           normalized_email?: string | null
           phone?: string | null
           place_id?: string | null
