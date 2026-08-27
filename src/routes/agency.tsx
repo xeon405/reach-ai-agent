@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
 
 export const Route = createFileRoute("/agency")({
   component: AgencyPage,
@@ -79,10 +78,10 @@ function AgencyPage() {
               <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Launch</div>
               <div className="mt-3 text-4xl font-extrabold">$299<span className="text-base font-medium text-muted-foreground">/mo</span></div>
               <ul className="mt-6 space-y-2.5 text-left text-sm">
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> 500 AI emails / month</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Weekly lead research</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Automated follow-ups</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Weekly report</li>
+                <li>✅ 500 AI emails / month</li>
+                <li>✅ Weekly lead research</li>
+                <li>✅ Automated follow-ups</li>
+                <li>✅ Weekly report</li>
               </ul>
               <a href="mailto:outreachai.team@gmail.com?subject=Launch%20plan%20—%20$299/mo">
                 <Button className="mt-7 w-full" variant="outline">Start Launch</Button>
@@ -95,11 +94,11 @@ function AgencyPage() {
               <div className="text-sm font-semibold uppercase tracking-wide text-primary">Growth</div>
               <div className="mt-3 text-4xl font-extrabold">$699<span className="text-base font-medium text-muted-foreground">/mo</span></div>
               <ul className="mt-6 space-y-2.5 text-left text-sm">
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> 2,000 AI emails / month</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Multi-country targeting</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Spam-checked AI subject lines</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Priority reply handling</li>
-                <li className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-500 shrink-0" /> Dedicated manager</li>
+                <li>✅ 2,000 AI emails / month</li>
+                <li>✅ Multi-country targeting</li>
+                <li>✅ Spam-checked AI subject lines</li>
+                <li>✅ Priority reply handling</li>
+                <li>✅ Dedicated manager</li>
               </ul>
               <a href="mailto:outreachai.team@gmail.com?subject=Growth%20plan%20—%20$699/mo">
                 <Button className="mt-7 w-full bg-gradient-primary">Start Growth</Button>

@@ -33,12 +33,27 @@ const STATUS_COLORS: Record<string, string> = {
 const PIPELINE_STATUSES = ["new", "emailed", "replied", "won"] as const;
 const SYSTEM_STATUSES = ["bounced", "unsubscribed", "invalid", "skipped"];
 
-function temperature(l: { status: string }): { label: string; cls: string; dot: string } {
-  if (l.status === "won") return { label: "✓ Won", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400", dot: "bg-emerald-500" };
-  if (l.status === "replied") return { label: "● Replied", cls: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400", dot: "bg-red-500" };
-  if (l.status === "emailed" || l.status === "booked") return { label: "◐ Emailed", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400", dot: "bg-amber-500" };
-  if (SYSTEM_STATUSES.includes(l.status)) return { label: "—", cls: "text-muted-foreground", dot: "" };
-  return { label: "○ New", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400", dot: "bg-blue-500" };
+function temperature(l: { status: string }): { label: string; cls: string } {
+  if (l.status === "won") return { label: "🏆 Closed", cls: "bg-success/15 text-success" };
+  if (l.status === "replied") return { label: "🔥 Hot", cls: "bg-destructive/10 text-destructive" };
+  if (l.status === "emailed" || l.status === "booked") return { label: "🌤 Warm", cls: "bg-warning/15 text-warning" };
+  if (SYSTEM_STATUSES.includes(l.status)) return { label: "—", cls: "text-muted-foreground" };
+  return { label: "❄️ Cold", cls: "bg-primary/10 text-primary" };
+}
+
+function burstConfetti() {
+  const EMOJI = ["🎉", "🎊", "✨", "🏆", "🥳"];
+  for (let i = 0; i < 36; i++) {
+    const el = document.createElement("span");
+    el.textContent = EMOJI[Math.floor(Math.random() * EMOJI.length)];
+    el.style.cssText = `position:fixed;left:${Math.random() * 100}vw;top:-40px;font-size:${14 + Math.random() * 18}px;z-index:9999;pointer-events:none;transition:transform ${1.6 + Math.random()}s cubic-bezier(.2,.6,.4,1),opacity 2.4s ease-in;will-change:transform`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.transform = `translateY(${window.innerHeight + 80}px) rotate(${Math.random() * 720 - 360}deg)`;
+      el.style.opacity = "0";
+    });
+    setTimeout(() => el.remove(), 2600);
+  }
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -64,7 +79,8 @@ function LeadsPage() {
       toast.error("Could not update status");
       void load();
     } else if (next === "won") {
-      toast.success("✓ Lead marked as won");
+      burstConfetti();
+      toast.success("🏆 Marked as won — great job!");
     }
   }
   const [country, setCountry] = useState("all");
@@ -325,7 +341,7 @@ function LeadsPage() {
             <SelectItem value="emailed">Emailed</SelectItem>
             <SelectItem value="replied">Replied</SelectItem>
             <SelectItem value="booked">Booked</SelectItem>
-            <SelectItem value="won">Won</SelectItem>
+            <SelectItem value="won">🏆 Won</SelectItem>
           </SelectContent>
         </Select>
         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
@@ -413,7 +429,7 @@ function LeadsPage() {
                       <option value="new">New</option>
                       <option value="emailed">Contacted</option>
                       <option value="replied">Replied</option>
-                      <option value="won">Won</option>
+                      <option value="won">🏆 Won</option>
                     </select>
                   )}
                 </td>
