@@ -145,28 +145,6 @@ function Dashboard() {
     return { totalLeads, verifiedLeads, totalSent, sentSuccess, opens, clicks, replies, positiveReplies, bookingIntents, bounces, suppressed, aiReplies, humanHandoffs, takeovers };
   }, [fLeads, fEmails, fCls, fAudit, fSuppressions, fTracking]);
 
-  const funnel = useMemo(() => {
-    const found = fLeads.length;
-    const verified = fLeads.filter((l) => l.email_status === "verified" || l.email_status === "risky").length;
-    const inCampaign = fLeads.filter((l) => !!l.campaign_id).length;
-    const sent = fEmails.length;
-    const opened = kpis.opens;
-    const replied = kpis.replies;
-    const interested = kpis.positiveReplies;
-    const booking = kpis.bookingIntents;
-    const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
-    return [
-      { label: "Leads Found", value: found, pct: 100 },
-      { label: "Verified", value: verified, pct: pct(verified, found) },
-      { label: "In Campaigns", value: inCampaign, pct: pct(inCampaign, found) },
-      { label: "Emails Sent", value: sent, pct: pct(sent, found) },
-      { label: "Opens", value: opened, pct: pct(opened, sent) },
-      { label: "Replies", value: replied, pct: pct(replied, sent) },
-      { label: "Interested", value: interested, pct: pct(interested, sent) },
-      { label: "Bookings", value: booking, pct: pct(booking, sent) },
-    ];
-  }, [fLeads, fEmails, kpis]);
-
   const humanConversion = useMemo(() => {
     const handoffs = fAudit.filter((a) => a.event === "agent.handoff").length;
     const takeovers = fAudit.filter((a) => a.event === "human.takeover").length;
@@ -195,6 +173,29 @@ function Dashboard() {
       bookingRate: pct(bookingDetected, repliedLeads),
     };
   }, [fAudit, fEmails]);
+
+  const funnel = useMemo(() => {
+    const found = fLeads.length;
+    const verified = fLeads.filter((l) => l.email_status === "verified" || l.email_status === "risky").length;
+    const inCampaign = fLeads.filter((l) => !!l.campaign_id).length;
+    const sent = fEmails.length;
+    const opened = kpis.opens;
+    const replied = kpis.replies;
+    const interested = kpis.positiveReplies;
+    const booking = kpis.bookingIntents;
+    const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
+    return [
+      { label: "Leads Found", value: found, pct: 100 },
+      { label: "Verified", value: verified, pct: pct(verified, found) },
+      { label: "In Campaigns", value: inCampaign, pct: pct(inCampaign, found) },
+      { label: "Emails Sent", value: sent, pct: pct(sent, found) },
+      { label: "Opens", value: opened, pct: pct(opened, sent) },
+      { label: "Replies", value: replied, pct: pct(replied, sent) },
+      { label: "Interested", value: interested, pct: pct(interested, sent) },
+      { label: "Bookings", value: booking, pct: pct(booking, sent) },
+      { label: "Human Conversion", value: humanConversion.humanManagedLeads, pct: humanConversion.humanConversionRate },
+    ];
+  }, [fLeads, fEmails, kpis, humanConversion]);
 
   const emailPerf = useMemo(() => {
     const sent = fEmails.length;

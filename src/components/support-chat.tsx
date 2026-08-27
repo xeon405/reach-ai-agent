@@ -8,13 +8,18 @@ const SUGGESTIONS = [
   "Why aren't my emails sending?",
   "How do follow-ups work?",
   "Is my Gmail safe?",
+  "How do I handle replies?",
+  "What are the pricing plans?",
 ];
 
 const CHAT_KEY = "outreachai_support_chat";
+const SUPPORT_EMAIL = "outreachai.team@gmail.com";
+
 const WELCOME: Msg = {
   role: "assistant",
-  content:
-    "Hey! I'm your OutreachAI guide. Ask me anything — how to find leads, launch campaigns, send replies, anything at all.",
+  content: `Hey! I'm your OutreachAI guide. I can help with anything — finding leads, launching campaigns, follow-ups, Gmail setup, billing, and more.
+
+Need human support? Reach us at ${SUPPORT_EMAIL}`,
 };
 
 function loadMessages(): Msg[] {
@@ -67,7 +72,7 @@ export function SupportChat() {
               "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ messages: next.slice(-12) }),
+          body: JSON.stringify({ messages: next.slice(-16) }),
         }
       );
       const data = await res.json();
@@ -186,6 +191,9 @@ export function SupportChat() {
                 ➤
               </button>
             </form>
+            <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+              Need human support? <span className="font-medium">{SUPPORT_EMAIL}</span>
+            </p>
           </div>
         </div>
       )}
