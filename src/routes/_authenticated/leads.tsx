@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Download, Search, Plus, Upload, Sparkles, Trash2, Pencil } from "lucide-react";
+import confetti from "canvas-confetti";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/leads")({
@@ -42,18 +43,10 @@ function temperature(l: { status: string }): { label: string; cls: string } {
 }
 
 function burstConfetti() {
-  const EMOJI = ["🎉", "🎊", "✨", "🏆", "🥳"];
-  for (let i = 0; i < 36; i++) {
-    const el = document.createElement("span");
-    el.textContent = EMOJI[Math.floor(Math.random() * EMOJI.length)];
-    el.style.cssText = `position:fixed;left:${Math.random() * 100}vw;top:-40px;font-size:${14 + Math.random() * 18}px;z-index:9999;pointer-events:none;transition:transform ${1.6 + Math.random()}s cubic-bezier(.2,.6,.4,1),opacity 2.4s ease-in;will-change:transform`;
-    document.body.appendChild(el);
-    requestAnimationFrame(() => {
-      el.style.transform = `translateY(${window.innerHeight + 80}px) rotate(${Math.random() * 720 - 360}deg)`;
-      el.style.opacity = "0";
-    });
-    setTimeout(() => el.remove(), 2600);
-  }
+  const colors = ["#7c3aed", "#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#10b981"];
+  confetti({ particleCount: 160, spread: 100, origin: { x: 0.5, y: 0.6 }, colors, zIndex: 9999 });
+  setTimeout(() => confetti({ particleCount: 80, angle: 60, spread: 70, origin: { x: 0, y: 0.7 }, colors, zIndex: 9999 }), 250);
+  setTimeout(() => confetti({ particleCount: 80, angle: 120, spread: 70, origin: { x: 1, y: 0.7 }, colors, zIndex: 9999 }), 400);
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
