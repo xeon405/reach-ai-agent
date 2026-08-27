@@ -1,15 +1,8 @@
-// Google Maps Places API (New) lead finder — finds businesses + scrapes their websites for emails
+// Google Maps Places API (New) lead finder — finds businesses + enriches their websites for emails
 // Uses Places API (New) Text Search Essentials — 10,000 free searches/month
 // https://developers.google.com/maps/documentation/places/web-service/text-search
 
-const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
-const DISPOSABLE_DOMAINS = new Set([
-  "mailinator.com", "guerrillamail.com", "tempmail.com", "throwaway.email",
-  "yopmail.com", "10minutemail.com", "trashmail.com", "sharklasers.com",
-  "guerrillamailblock.com", "grr.la", "dispostable.com", "maildrop.cc",
-  "fakeinbox.com", "tempail.com", "tempr.email", "temp-mail.org",
-]);
-const IGNORE_PATTERNS = /\.(png|jpg|jpeg|gif|svg|webp|pdf|doc|xls|zip|mp[34]|css|js)$/i;
+import { enrichWebsiteEmails } from "./website-email-enrichment.ts";
 
 export interface GoogleMapsLead {
   name: string;
@@ -25,6 +18,8 @@ export interface GoogleMapsLead {
   source: string;
   category: string;
   place_id: string;
+  email_source?: string;
+  email_source_url?: string;
 }
 
 // Places API (New) response types
@@ -166,15 +161,39 @@ export async function searchGoogleMaps(
       const { city, country: parsedCountry } = parseCityCountry(address, country);
       const category = formatCategory(place.types, place.primaryType);
 
-      // Step 3: Scrape website for emails
-      const emails = await scrapeWebsiteForEmails(website);
-      for (const email of emails) {
-        if (seenEmails.has(email)) continue;
-        seenEmails.add(email);
+      // Step 3: Enrich website for publicly displayed emails
+      const enrichment = await enrichWebsiteEmails(website);
 
+      if (enrichment.emails.length > 0) {
+        for (const ee of enrichment.emails) {
+          if (seenEmails.has(ee.email)) continue;
+          seenEmails.add(ee.email);
+
+          leads.push({
+            name: place.displayName?.text || ee.email.split("@")[0],
+            email: ee.email,
+            company: place.displayName?.text || "",
+            job_title: jobTitle,
+            country: parsedCountry,
+            city,
+            website,
+            phone,
+            address,
+            rating,
+            source: "google-maps",
+            category,
+            place_id: place.id,
+            email_source: ee.source_type === "mailto" ? "website-mailto" : "website-text",
+            email_source_url: ee.source_url,
+          });
+
+          if (leads.length >= limit) break;
+        }
+      } else if (website) {
+        // No emails found but business has a website — include without email
         leads.push({
-          name: place.displayName?.text || email.split("@")[0],
-          email,
+          name: place.displayName?.text || "",
+          email: "",
           company: place.displayName?.text || "",
           job_title: jobTitle,
           country: parsedCountry,
@@ -187,8 +206,6 @@ export async function searchGoogleMaps(
           category,
           place_id: place.id,
         });
-
-        if (leads.length >= limit) break;
       }
       if (leads.length >= limit) break;
     }
@@ -228,74 +245,4 @@ async function getPlaceDetailsNew(
   } finally {
     clearTimeout(timer);
   }
-}
-
-async function scrapeWebsiteForEmails(websiteUrl: string): Promise<string[]> {
-  let url = websiteUrl;
-  if (!url.startsWith("http")) url = "https://" + url;
-
-  const pagesToTry = [
-    url,
-    url.replace(/\/$/, "") + "/contact",
-    url.replace(/\/$/, "") + "/contact-us",
-    url.replace(/\/$/, "") + "/about",
-    url.replace(/\/$/, "") + "/about-us",
-  ];
-
-  const allEmails = new Set<string>();
-
-  for (const pageUrl of pagesToTry) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8_000);
-
-    try {
-      const res = await fetch(pageUrl, {
-        signal: controller.signal,
-        headers: {
-          "User-Agent": "OutreachAI-LeadFinder/2.0 (https://outreach-ochre-sigma.vercel.app)",
-          "Accept": "text/html,application/xhtml+xml",
-        },
-        redirect: "follow",
-      });
-
-      if (!res.ok) continue;
-
-      const contentType = res.headers.get("content-type") ?? "";
-      if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) continue;
-
-      const html = await res.text();
-      const emails = extractEmails(html);
-
-      for (const email of emails) {
-        allEmails.add(email);
-      }
-
-      if (allEmails.size > 0) break;
-    } catch {
-      // Timeout or error — try next page
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  return [...allEmails];
-}
-
-function extractEmails(html: string): string[] {
-  const raw = html.match(EMAIL_REGEX) ?? [];
-  const valid = new Set<string>();
-
-  for (const email of raw) {
-    const lower = email.toLowerCase();
-    const domain = lower.split("@")[1];
-
-    if (!domain || domain.length < 4) continue;
-    if (DISPOSABLE_DOMAINS.has(domain)) continue;
-    if (IGNORE_PATTERNS.test(lower)) continue;
-    if (lower.includes("png") || lower.includes("jpg") || lower.includes("gif")) continue;
-
-    valid.add(lower);
-  }
-
-  return [...valid];
 }

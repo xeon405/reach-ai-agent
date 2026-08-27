@@ -1,4 +1,5 @@
 // Shared OpenStreetMap lead-finder (used by find-leads API and autopilot cron)
+import { enrichWebsiteEmails } from "./website-email-enrichment.ts";
 export type Niche = { tag: string; label: string };
 export const COUNTRY_ISO: Record<string, string> = {
   "united states": "US", usa: "US", us: "US", "united kingdom": "GB", uk: "GB",
@@ -94,7 +95,43 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
         lastErr = new Error("Directory search unavailable, try again shortly");
         continue;
       }
-      return parseOverpass(await res.json(), limit, iso);
+      const { withEmail, withWebsite } = parseOverpass(await res.json(), iso);
+
+      // Enrich website-hailing leads that have no email from OSM tags (max 3 concurrent)
+      const toEnrich = withWebsite.filter((l) => !l.email && l.website);
+      const enrichedResults: typeof withWebsite = [];
+      for (let i = 0; i < toEnrich.length; i += 3) {
+        const batch = toEnrich.slice(i, i + 3);
+        const batchResults = await Promise.all(
+          batch.map(async (lead) => {
+            const result = await enrichWebsiteEmails(lead.website);
+            if (result.emails.length > 0) {
+              const best = result.emails[0];
+              return {
+                ...lead,
+                email: best.email,
+                email_source: best.source_type === "mailto" ? "website-mailto" : "website-text",
+                email_source_url: best.source_url,
+              };
+            }
+            return lead;
+          }),
+        );
+        enrichedResults.push(...batchResults);
+      }
+      const enriched = [...withEmail.map((l) => l), ...enrichedResults];
+
+      // Merge: leads with OSM email first, then enriched leads, deduplicated
+      const seenEmails = new Set(withEmail.map((l) => l.email));
+      const merged = [...withEmail];
+      for (const lead of enriched) {
+        if (lead.email && !seenEmails.has(lead.email)) {
+          seenEmails.add(lead.email);
+          merged.push(lead);
+        }
+        if (merged.length >= limit) break;
+      }
+      return merged.slice(0, limit);
     } catch (err) {
       lastErr = err;
     } finally {
@@ -105,23 +142,28 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
   return [];
 }
 
-function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string) {
+function parseOverpass(data: { elements?: OsmEl[] }, iso: string) {
 
   const seen = new Set<string>();
-  const leads: Array<{
+  const withEmail: Array<{
     name: string; email: string; company: string;
     job_title: string; country: string; city: string;
     website: string; phone: string; address: string;
     rating: null; source: string; category: string; place_id: string;
+    email_source?: string; email_source_url?: string;
+  }> = [];
+  const withWebsite: Array<{
+    name: string; email: string; company: string;
+    job_title: string; country: string; city: string;
+    website: string; phone: string; address: string;
+    rating: null; source: string; category: string; place_id: string;
+    email_source?: string; email_source_url?: string;
   }> = [];
 
   for (const el of data.elements ?? []) {
     const tg = el.tags ?? {};
     const email = (tg["contact:email"] || tg.email || "").trim().toLowerCase();
     const company = tg.name ?? "";
-    if (!email || !email.includes("@") || seen.has(email)) continue;
-    seen.add(email);
-
     const phone = (tg["contact:phone"] || tg.phone || "").trim();
     const website = (tg.website || tg["contact:website"] || "").trim();
     const street = (tg["addr:street"] || "").trim();
@@ -136,9 +178,8 @@ function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string)
       if (tg[k]) { category = tg[k].replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()); break; }
     }
 
-    leads.push({
+    const leadBase = {
       name: company || email.split("@")[0],
-      email,
       company,
       job_title: "Owner",
       country: iso,
@@ -146,13 +187,20 @@ function parseOverpass(data: { elements?: OsmEl[] }, limit: number, iso: string)
       website,
       phone,
       address,
-      rating: null,
+      rating: null as null,
       source: "openstreetmap",
       category,
       place_id: `osm-${el.type}-${el.id}`,
-    });
-    if (leads.length >= limit) break;
+    };
+
+    if (email && email.includes("@") && !seen.has(email)) {
+      seen.add(email);
+      withEmail.push({ ...leadBase, name: company || email.split("@")[0], email });
+    } else if (website && !seen.has(`website:${website}`)) {
+      seen.add(`website:${website}`);
+      withWebsite.push({ ...leadBase, name: company || "", email: "" });
+    }
   }
-  return leads;
+  return { withEmail, withWebsite };
 }
 

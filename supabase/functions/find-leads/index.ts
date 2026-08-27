@@ -66,6 +66,7 @@ serve(async (req) => {
       website: string; phone: string; address: string;
       rating: number | null; source: string;
       category: string; place_id: string;
+      email_source?: string; email_source_url?: string;
       email_status?: string; email_confidence?: number;
       email_is_role?: boolean; email_is_disposable?: boolean;
       email_verification_reason?: string;
@@ -91,6 +92,8 @@ serve(async (req) => {
             source: l.source,
             category: l.category,
             place_id: l.place_id,
+            email_source: l.email_source,
+            email_source_url: l.email_source_url,
           }));
           source = "google-maps";
         }
@@ -122,6 +125,16 @@ serve(async (req) => {
     // Verify emails in parallel — enrich each lead with verification data
     const verifiedLeads = await Promise.all(
       leads.map(async (lead) => {
+        if (!lead.email) {
+          return {
+            ...lead,
+            email_status: "unknown",
+            email_confidence: 0,
+            email_is_role: false,
+            email_is_disposable: false,
+            email_verification_reason: "no email found on website",
+          };
+        }
         const websiteDomain = lead.website
           ? new URL(lead.website.startsWith("http") ? lead.website : `https://${lead.website}`).hostname.replace(/^www\./, "")
           : undefined;

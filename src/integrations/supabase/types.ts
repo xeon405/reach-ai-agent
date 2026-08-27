@@ -309,6 +309,8 @@ export type Database = {
           email_is_disposable: boolean | null
           email_is_role: boolean | null
           email_status: string | null
+          email_source: string | null
+          email_source_url: string | null
           email_verification_reason: string | null
           followup_step: number
           followup_status: string
@@ -341,6 +343,8 @@ export type Database = {
           email_is_disposable?: boolean | null
           email_is_role?: boolean | null
           email_status?: string | null
+          email_source?: string | null
+          email_source_url?: string | null
           email_verification_reason?: string | null
           followup_step?: number
           followup_status?: string
@@ -373,6 +377,8 @@ export type Database = {
           email_is_disposable?: boolean | null
           email_is_role?: boolean | null
           email_status?: string | null
+          email_source?: string | null
+          email_source_url?: string | null
           email_verification_reason?: string | null
           followup_step?: number
           followup_status?: string

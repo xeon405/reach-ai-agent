@@ -22,6 +22,7 @@ type FoundLead = {
   country: string; city?: string; website: string; phone?: string;
   address?: string; rating?: number | null; source?: string;
   category?: string; place_id?: string;
+  email_source?: string; email_source_url?: string;
   email_status?: string; email_confidence?: number;
   email_is_role?: boolean; email_is_disposable?: boolean;
   email_verification_reason?: string;
@@ -195,7 +196,7 @@ function LeadFinderPage() {
       const existingEmails = new Set((existingLeads ?? []).map((l: { email: string | null }) => l.email?.toLowerCase() ?? ""));
 
       const rows = [...selected]
-        .filter((i) => !existingEmails.has(results[i].email.toLowerCase()))
+        .filter((i) => results[i].email && !existingEmails.has(results[i].email.toLowerCase()))
         .map((i) => ({
           user_id: u.user.id,
           name: results[i].name || null,
@@ -213,6 +214,8 @@ function LeadFinderPage() {
           category: results[i].category || null,
           place_id: results[i].place_id || null,
           lead_source: results[i].source || null,
+          email_source: results[i].email_source || null,
+          email_source_url: results[i].email_source_url || null,
           email_status: results[i].email_status || null,
           email_confidence: results[i].email_confidence ?? null,
           email_is_role: results[i].email_is_role ?? null,
@@ -584,6 +587,13 @@ function LeadFinderPage() {
                           {lead.email_status === "risky" && `Risky (${lead.email_confidence}%)`}
                           {lead.email_status === "invalid" && `Invalid`}
                           {lead.email_status === "unknown" && "Unknown"}
+                        </span>
+                      </div>
+                    )}
+                    {lead.email_source && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span className="text-[10px] px-1 py-0.5 rounded bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400">
+                          {lead.email_source === "website-mailto" ? "mailto" : "website"}
                         </span>
                       </div>
                     )}
