@@ -34,11 +34,11 @@ const PIPELINE_STATUSES = ["new", "emailed", "replied", "won"] as const;
 const SYSTEM_STATUSES = ["bounced", "unsubscribed", "invalid", "skipped"];
 
 function temperature(l: { status: string }): { label: string; cls: string; dot: string } {
-  if (l.status === "won") return { label: "Won", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400", dot: "bg-emerald-500" };
-  if (l.status === "replied") return { label: "Replied", cls: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400", dot: "bg-red-500" };
-  if (l.status === "emailed" || l.status === "booked") return { label: "Emailed", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400", dot: "bg-amber-500" };
+  if (l.status === "won") return { label: "✓ Won", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400", dot: "bg-emerald-500" };
+  if (l.status === "replied") return { label: "● Replied", cls: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400", dot: "bg-red-500" };
+  if (l.status === "emailed" || l.status === "booked") return { label: "◐ Emailed", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400", dot: "bg-amber-500" };
   if (SYSTEM_STATUSES.includes(l.status)) return { label: "—", cls: "text-muted-foreground", dot: "" };
-  return { label: "New", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400", dot: "bg-blue-500" };
+  return { label: "○ New", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400", dot: "bg-blue-500" };
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -64,7 +64,7 @@ function LeadsPage() {
       toast.error("Could not update status");
       void load();
     } else if (next === "won") {
-      toast.success("Lead marked as won");
+      toast.success("✓ Lead marked as won");
     }
   }
   const [country, setCountry] = useState("all");
