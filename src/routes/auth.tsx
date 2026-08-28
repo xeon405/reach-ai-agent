@@ -63,24 +63,23 @@ function AuthPage() {
     });
     setLoading(false);
     if (error) return toast.error(error.message);
-    await creditReferral(data?.user?.id);
+    await creditReferral();
     toast.success("Check your email to confirm your account.");
   }
 
-  // Attribute signup to the referral link (?ref=CODE) if present
-  async function creditReferral(userId?: string | null) {
+  // Attribute signup to the referral link (?ref=CODE) if present — credits the referrer
+  async function creditReferral() {
     const ref = new URLSearchParams(window.location.search).get("ref")
       ?? localStorage.getItem("referral_code");
-    if (!userId || !ref) return;
+    if (!ref) return;
     localStorage.setItem("referral_code", ref);
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("referred_by, referral_code")
-      .eq("id", userId)
-      .single();
-    if (prof && !prof.referred_by && prof.referral_code !== ref) {
-      await supabase.from("profiles").update({ referred_by: ref }).eq("id", userId);
-      localStorage.removeItem("referral_code");
+    try {
+      const { data, error } = await supabase.functions.invoke("referral-claim", { body: { ref } });
+      if (data?.error) throw new Error(data.error);
+      if (error) throw error;
+      if (data?.ok) localStorage.removeItem("referral_code");
+    } catch {
+      // Best-effort — never blocks signup.
     }
   }
 

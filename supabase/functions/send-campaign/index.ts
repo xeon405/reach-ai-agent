@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { effectivePlan } from "../_shared/effective-plan.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,7 +93,7 @@ Deno.serve(async (req) => {
     const { data: tokenRow } = await supabase.from("gmail_tokens").select("refresh_token").eq("profile_id", userId).single();
     if (!profile.gmail_connected || !tokenRow?.refresh_token) throw new Error("Gmail not connected. Connect it in Settings first.");
 
-    const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+    const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
     const dailyCap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
     const today = new Date().toISOString().split("T")[0];

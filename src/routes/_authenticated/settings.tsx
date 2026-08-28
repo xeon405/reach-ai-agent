@@ -46,6 +46,8 @@ function SettingsPage() {
   const [dontClaim, setDontClaim] = useState("");
   const [phone, setPhone] = useState("");
   const [networkMode, setNetworkMode] = useState(false);
+  const [rewardPlan, setRewardPlan] = useState<string | null>(null);
+  const [rewardUntil, setRewardUntil] = useState<string | null>(null);
 
   async function exportData() {
     setExporting(true);
@@ -117,6 +119,8 @@ function SettingsPage() {
         setDontClaim(p.dont_claim ?? "");
         setPhone(p.phone ?? "");
         setNetworkMode(p.network_mode ?? false);
+        setRewardPlan(p.referral_reward_plan ?? null);
+        setRewardUntil(p.referral_reward_until ?? null);
         if (p.referral_code) {
           setReferral(p.referral_code);
           const { count } = await supabase.rpc("referral_count").single();
@@ -417,8 +421,14 @@ function SettingsPage() {
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
           <div className="font-medium">Your invite link</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Every friend who signs up through it is tracked here. Free marketing for you.
+            Every friend who joins through your link earns you 7 days of free starter access — stack them. Your friends still start free, no catch.
           </div>
+          {rewardPlan && rewardUntil && new Date(rewardUntil).getTime() > Date.now() && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+              🎁 +7 free days earned — <span className="uppercase">{rewardPlan}</span> access until{" "}
+              {new Date(rewardUntil).toLocaleDateString()}
+            </div>
+          )}
           {referral && (
             <>
               <div className="mt-3 flex items-center gap-2">

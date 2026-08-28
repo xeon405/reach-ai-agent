@@ -18,17 +18,14 @@ function GoogleCallbackPage() {
       if (event === "SIGNED_IN") {
         supabase.auth.getUser().then(async ({ data }) => {
           if (!data.user) return navigate({ to: "/auth" });
-          // Credit referral if this Google signup came via an invite link
+          // Credit referral if this Google signup came via an invite link (server-side, best-effort)
           const ref = localStorage.getItem("referral_code");
           if (ref) {
-            const { data: pr } = await supabase
-              .from("profiles")
-              .select("referred_by, referral_code")
-              .eq("id", data.user.id)
-              .single();
-            if (pr && !pr.referred_by && pr.referral_code !== ref) {
-              await supabase.from("profiles").update({ referred_by: ref }).eq("id", data.user.id);
-              localStorage.removeItem("referral_code");
+            try {
+              const { data: rd, error: rErr } = await supabase.functions.invoke("referral-claim", { body: { ref } });
+              if (!(rd?.error) && !rErr && rd?.ok) localStorage.removeItem("referral_code");
+            } catch {
+              // Best-effort — never blocks sign-in
             }
           }
           const { data: p } = await supabase

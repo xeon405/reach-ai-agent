@@ -9,6 +9,7 @@ import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { effectivePlan } from "../_shared/effective-plan.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -410,7 +411,7 @@ Deno.serve(async (req) => {
     if (!profile?.gmail_connected) return null;
     const tok = await getAccessToken(db, uid).catch(() => null);
     if (!tok) return null;
-    const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+    const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
     const today = new Date().toISOString().split("T")[0];
     return {
@@ -453,7 +454,7 @@ Deno.serve(async (req) => {
       .eq("user_id", job.user_id).ilike("email", lead.email).limit(1).maybeSingle();
     if (sup) return "lead_suppressed_db";                                                  // 5/7 (DB truth)
     if (!profile.gmail_connected) return "gmail_disconnected";                             // 1/2
-    const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+    const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
     const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
     const today = new Date().toISOString().split("T")[0];
@@ -782,7 +783,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         if (!claimed) continue;
 
         // ── DAILY CAP CHECK ──
-        const limits = PLAN_LIMITS[profile.plan ?? "starter"] ?? PLAN_LIMITS.starter;
+        const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
         const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
         const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
         const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5, baseCap);
