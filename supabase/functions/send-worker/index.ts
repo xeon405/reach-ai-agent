@@ -647,6 +647,13 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT â€
     let followupsSent = 0, followupsCancelled = 0;
     const now = new Date().toISOString();
 
+    // Reclaim stranded 'sending' leads (worker crashed mid-flight after the CAS claim).
+    // A healthy send completes in seconds, so anything stuck >30 min is abandoned.
+    try { await db.from("leads").update({ followup_status: "active" })
+      .eq("followup_status", "sending")
+      .lt("next_followup_at", new Date(Date.now() - 30 * 60_000).toISOString())
+      .select("id"); } catch (_e) { /* best effort */ }
+
     // Query leads directly â€” much simpler and more efficient than scanning emails_sent sentinels
     const { data: dueLeads } = await db
       .from("leads")
