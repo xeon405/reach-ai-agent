@@ -372,7 +372,7 @@ COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factu
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff. ${intentGuide}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST and the knowledge base contains no amount, answer honestly (pricing is on the site / happy to confirm details) and point them to the site — never invent a price and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
@@ -670,7 +670,7 @@ What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowle
 COMPANY KNOWLEDGE BASE (factual only — never invent anything beyond it): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
 Your site — direct them there to get started: ${sanitizeForPrompt(profile.website_url, 200)}
 
-Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. Sign off as "Best regards". Return only the reply text.`,
+Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. If they asked about PRICE/PRICING/COST: answer using the company knowledge base; if pricing is not in the knowledge base, say so honestly and point them to the site above to see pricing — never invent an amount, and never defer to a human. Sign off as "Best regards". Return only the reply text.`,
                   }], { maxTokens: 400, temperature: 0.8 });
                   if (bReply?.trim()) {
                     const newTurnsB = (t.ai_turns ?? 0) + 1;

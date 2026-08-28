@@ -150,7 +150,9 @@ export function classificationSystemPrompt(): string {
     "- unclear: message is too short or ambiguous to determine intent\n" +
     "- autoresponder: automated out-of-office or vacation reply\n" +
     "- other: none of the above\n\n" +
-    "Pricing/negotiation/legal/complaint questions => requires_human=true. " +
+    "By default you answer product/service/pricing questions yourself (requires_human=false). " +
+    "Set requires_human=true ONLY for: legal, contractual, invoice/payment, complaints, refunds, security/privacy, or hard price negotiation (e.g. 'too expensive'). " +
+    "Set requires_human=true if you cannot determine intent at all. " +
     "Any meeting/time/calendar request => booking_intent=true. " +
     "Any stop/remove/opt-out request => unsubscribe=true."
   );
@@ -168,7 +170,7 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
       : /interested|sounds good|tell me more|yes/i.test(fallbackSnippet)
         ? "INTERESTED"
         : "MAYBE",
-    requires_human: /price|pricing|cost|legal|contract|invoice/i.test(fallbackSnippet),
+    requires_human: /legal|contract|invoice|complaint|refund|negotiat|too expensive|\bbudget\b/i.test(fallbackSnippet),
     suggested_action: "continue_conversation",
   };
   // Detect autoresponder from snippet
