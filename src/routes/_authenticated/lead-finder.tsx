@@ -185,8 +185,9 @@ function LeadFinderPage() {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
 
-      // Pre-check: which emails already exist for this user
-      const selectedEmails = [...selected].map((i) => results[i].email.toLowerCase());
+      // Pre-check: which emails already exist for this user (skips email-less leads)
+      const replaceable = [...selected].filter((i) => !!results[i]?.email);
+      const selectedEmails = replaceable.map((i) => results[i].email.toLowerCase());
       const { data: existingLeads } = await supabase
         .from("leads")
         .select("email")
@@ -195,8 +196,8 @@ function LeadFinderPage() {
         .limit(5000);
       const existingEmails = new Set((existingLeads ?? []).map((l: { email: string | null }) => l.email?.toLowerCase() ?? ""));
 
-      const rows = [...selected]
-        .filter((i) => results[i].email && !existingEmails.has(results[i].email.toLowerCase()))
+      const rows = replaceable
+        .filter((i) => !existingEmails.has(results[i].email!.toLowerCase()))
         .map((i) => ({
           user_id: u.user.id,
           name: results[i].name || null,

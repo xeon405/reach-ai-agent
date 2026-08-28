@@ -340,7 +340,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                       ...(newTurns >= 3 ? { ai_paused: true } : {}),
                     }).eq("id", email.id);
                     if (newTurns >= 3) {
-                      await supabase.from("emails_sent").update({ conv_mode: "PAUSED" }).eq("id", email.id);
+                      await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
                       await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "handoff", title: "AI turn budget reached", body: "3 AI turns used — thread paused for human review.", priority: "high" });
                     }
                     await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurns } });

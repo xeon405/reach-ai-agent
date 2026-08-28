@@ -29,16 +29,8 @@ Deno.serve(async (req) => {
   const userId = userData.user.id;
 
   try {
-    // 1. Revoke Google OAuth tokens if connected
-    try {
-      const { data: tokens } = await supabase
-        .from("gmail_tokens")
-        .select("access_token_encrypted, refresh_token_encrypted")
-        .eq("user_id", userId)
-        .maybeSingle();
-      // Note: actual revocation requires decrypting the token and calling Google's revocation endpoint.
-      // We delete the token row regardless — the user can revoke manually at myaccount.google.com/permissions.
-    } catch (_e) { /* best effort */ }
+    // 1. Gmail OAuth token row is cascade-deleted via profiles FK.
+    //    User can additionally revoke at myaccount.google.com/permissions.
 
     // 2. Delete all owned rows (order matters: children before parents)
     const tables = [
@@ -50,7 +42,6 @@ Deno.serve(async (req) => {
       { name: "suppressions", column: "user_id" },
       { name: "send_queue", column: "user_id" },
       { name: "usage_limits", column: "user_id" },
-      { name: "gmail_tokens", column: "user_id" },
       { name: "referrals", column: "referrer_id" },
       { name: "meetings", column: "user_id" },
       { name: "emails_sent", column: "user_id" },

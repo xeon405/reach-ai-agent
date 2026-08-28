@@ -307,6 +307,7 @@ Deno.serve(async (req) => {
       for (const job of jobs as QueueJob[]) {
         try {
           await insertAudit(supabase, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: job.lead_id, event: "email.claimed", payload: { job_id: job.id, attempt: job.attempts } });
+          let slotHeld = false;
 
           let ctx = ctxs.get(job.user_id);
           if (!ctx) {
@@ -336,6 +337,7 @@ Deno.serve(async (req) => {
             retried++;
             continue;
           }
+          slotHeld = true;
 
           const ok = await processJob(supabase, job, ctx!, startedAt);
           if (ok) { sent++; ctx!.sentToday++; }
@@ -347,6 +349,8 @@ Deno.serve(async (req) => {
           await new Promise((r) => setTimeout(r, DELAY_MS));
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
+          // Release the reserved daily slot even on throw (prevent cap inflation).
+          if (slotHeld) { try { await supabase.rpc("release_send_slot", { p_user: job.user_id }); } catch (_e) { /* best effort */ } }
           const d = await failJob(supabase, job, msg, MAX_ATTEMPTS);
           if (d === "dead") dead++; else retried++;
           failed++;

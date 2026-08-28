@@ -96,6 +96,7 @@ function Dashboard() {
 
   async function loadAll() {
     setLoading(true);
+    try {
     const [leadsR, emailsR, campsR, clsR, auditR, alertR, trackR, supR] = await Promise.all([
       supabase.from("leads").select("id, user_id, campaign_id, status, lifecycle, conv_mode, email_status, email_confidence, unsubscribed, created_at, lead_source").order("created_at", { ascending: false }).limit(1000),
       supabase.from("emails_sent").select("id, user_id, lead_id, campaign_id, sent_at, opened, replied, autoreplied, ai_paused, ai_turns, reply_sentiment, follow_up_sent, gmail_message_id").order("sent_at", { ascending: false }).limit(1000),
@@ -114,7 +115,11 @@ function Dashboard() {
     setAlerts((alertR.data as AlertRow[]) ?? []);
     setTracking((trackR.data as TrackRow[]) ?? []);
     setSuppressions((supR.data as SuppressRow[]) ?? []);
-    setLoading(false);
+    } catch (e) {
+      console.error("dashboard: failed to load analytics", e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const cutoff = useMemo(() => new Date(Date.now() - dateRange * 86400000).toISOString(), [dateRange]);
@@ -132,8 +137,8 @@ function Dashboard() {
     const verifiedLeads = fLeads.filter((l) => l.email_status === "verified").length;
     const totalSent = fEmails.length;
     const sentSuccess = fEmails.filter((e) => !!e.gmail_message_id).length;
-    const opens = fTracking.filter((t) => t.event === "opened").length + fEmails.filter((e) => e.opened).length;
-    const clicks = fTracking.filter((t) => t.event === "clicked").length;
+    const opens = fTracking.filter((t) => t.event === "open").length + fEmails.filter((e) => e.opened).length;
+    const clicks = fTracking.filter((t) => t.event === "click").length;
     const replies = fEmails.filter((e) => e.replied).length;
     const positiveReplies = fCls.filter((c) => c.interested || c.booking_intent).length;
     const bookingIntents = fCls.filter((c) => c.booking_intent).length;
@@ -200,7 +205,7 @@ function Dashboard() {
   const emailPerf = useMemo(() => {
     const sent = fEmails.length;
     const opened = fEmails.filter((e) => e.opened).length;
-    const clicked = fTracking.filter((t) => t.event === "clicked").length;
+    const clicked = fTracking.filter((t) => t.event === "click").length;
     const replied = fEmails.filter((e) => e.replied).length;
     const bounced = kpis.bounces;
     const positive = fCls.filter((c) => c.interested || c.booking_intent).length;

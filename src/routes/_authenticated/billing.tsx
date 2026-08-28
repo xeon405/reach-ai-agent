@@ -77,11 +77,6 @@ function BillingPage() {
     });
   }, []);
 
-  async function handleCheckout(checkoutUrl: string) {
-    // Payments go live soon — collect interested users instead of dead checkout
-    toast.info("💳 Payments are launching very soon! You're on the Starter plan meanwhile — enjoy higher limits on us.");
-  }
-
   return (
     <div className="space-y-8">
       <div>

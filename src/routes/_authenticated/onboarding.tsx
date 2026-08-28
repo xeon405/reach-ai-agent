@@ -280,7 +280,7 @@ function Onboarding() {
             <Button variant={gmailConnected ? "secondary" : "outline"} className="w-full"
               onClick={() => { window.location.href = buildGmailAuthUrl(); }}>
               <Mail className="mr-2 h-4 w-4" />
-              {gmailConnected ? `Gmail Connected (${gmailConnected})` : "Connect Gmail"}
+              {gmailConnected ? "Gmail Connected" : "Connect Gmail"}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>

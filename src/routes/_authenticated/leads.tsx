@@ -31,7 +31,7 @@ const STATUS_COLORS: Record<string, string> = {
   booked: "bg-warning/15 text-warning",
 };
 
-const PIPELINE_STATUSES = ["new", "emailed", "replied", "won"] as const;
+const PIPELINE_STATUSES = ["new", "emailed", "replied", "booked", "won"] as const;
 const SYSTEM_STATUSES = ["bounced", "unsubscribed", "invalid", "skipped"];
 
 function temperature(l: { status: string }): { label: string; cls: string } {
@@ -422,6 +422,7 @@ function LeadsPage() {
                       <option value="new">New</option>
                       <option value="emailed">Contacted</option>
                       <option value="replied">Replied</option>
+                      <option value="booked">Booked</option>
                       <option value="won">🏆 Won</option>
                     </select>
                   )}

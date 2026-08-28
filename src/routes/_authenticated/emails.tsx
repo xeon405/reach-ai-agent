@@ -83,6 +83,7 @@ function EmailsPage() {
 
   async function loadAll() {
     setLoading(true);
+    try {
     const [emailRes, clsRes, alertRes, auditRes] = await Promise.all([
       supabase.from("emails_sent")
         .select("id, subject, body, sent_at, opened, replied, reply_sentiment, ai_draft, ai_turns, ai_paused, autoreplied, gmail_thread_id, last_lead_msg_at, last_ai_msg_at, lead_id, campaign_id, lead:leads(id, name, email, company, status, lifecycle, conv_mode)")
@@ -105,7 +106,11 @@ function EmailsPage() {
     setClassifications((clsRes.data as Classification[]) ?? []);
     setAlerts((alertRes.data as OwnerAlert[]) ?? []);
     setAuditEvents((auditRes.data as AuditEvent[]) ?? []);
-    setLoading(false);
+    } catch (e) {
+      console.error("emails: failed to load inbox", e);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const selectedEmail = useMemo(() => emails.find((e) => e.id === selected), [emails, selected]);
