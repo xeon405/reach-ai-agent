@@ -28,6 +28,12 @@ type FoundLead = {
   email_verification_reason?: string;
 };
 
+type NetworkMatch = {
+  target_user_id: string; business: string; company: string | null;
+  offer: string; website_url: string | null; country: string | null; niche: string | null;
+  matched: string[];
+};
+
 const PRESET_NICHES = [
   { label: "Dentists", value: "dentist" },
   { label: "Gyms", value: "gym" },
@@ -58,6 +64,9 @@ function LeadFinderPage() {
   const [source, setSource] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [network, setNetwork] = useState<NetworkMatch[]>([]);
+  const [networkRequested, setNetworkRequested] = useState<Set<string>>(new Set());
+  const [sendingNetwork, setSendingNetwork] = useState<string | null>(null);
 
   // Phase 3: review/filter state
   const [searchText, setSearchText] = useState("");
@@ -110,6 +119,8 @@ function LeadFinderPage() {
     setFinding(true);
     setElapsed(0);
     setResults([]);
+    setNetwork([]);
+    setNetworkRequested(new Set());
     setSelected(new Set());
     setSaved(false);
     setSearchText("");
@@ -134,6 +145,7 @@ function LeadFinderPage() {
 
       const leads: FoundLead[] = data.leads ?? [];
       setSource(data.source ?? "");
+      setNetwork((data.network ?? []) as NetworkMatch[]);
       if (leads.length === 0) {
         toast.info(data.message ?? "No leads found. Try a different niche or country.");
       } else {
@@ -265,6 +277,23 @@ function LeadFinderPage() {
   }
 
   const selectedInvalid = [...selected].filter((i) => results[i]?.email_status === "invalid").length;
+
+  async function requestIntro(m: NetworkMatch) {
+    setSendingNetwork(m.target_user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke("network-intros", {
+        body: { action: "request", target_user_id: m.target_user_id },
+      });
+      if (data?.error) throw new Error(data.error);
+      if (error) throw new Error(error.message);
+      setNetworkRequested((prev) => new Set(prev).add(m.target_user_id));
+      toast.success(data.message ?? "Intro request sent — they'll be notified");
+    } catch (e: any) {
+      toast.error(e.message ?? "Could not send intro request");
+    } finally {
+      setSendingNetwork(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -700,6 +729,77 @@ function LeadFinderPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Warm network matches */}
+      {network.length > 0 && !finding && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            <h2 className="text-lg font-semibold">Warm network matches</h2>
+            <Badge
+              variant="secondary"
+              className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+            >
+              No cold email needed
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Businesses already on OutreachAI matching "{activeNiche}". Their email stays private — request a warm intro and they
+            choose to accept (so does the steady drip cadence you know).
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {network.map((m) => (
+              <div key={m.target_user_id} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-foreground truncate">{m.business}</h3>
+                  {m.matched.length > 0 && (
+                    <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
+                      {m.matched.join(", ")}
+                    </span>
+                  )}
+                </div>
+                {m.offer && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{m.offer}</p>}
+                <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                  {m.country && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{m.country}</span>}
+                  {m.niche && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{m.niche}</span>}
+                </div>
+                {m.website_url && (
+                  <a
+                    href={m.website_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-2 flex items-center gap-1.5 text-sm text-primary hover:underline"
+                  >
+                    <Globe className="h-3.5 w-3.5" /><span className="truncate">{m.website_url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+                  </a>
+                )}
+                <div className="mt-3">
+                  {networkRequested.has(m.target_user_id) ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      <Check className="h-3.5 w-3.5" /> Intro requested — they'll be notified
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full bg-gradient-primary text-primary-foreground hover:bg-gradient-primary/90"
+                      disabled={sendingNetwork !== null}
+                      onClick={() => requestIntro(m)}
+                    >
+                      {sendingNetwork === m.target_user_id ? (
+                        <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Sending...</>
+                      ) : (
+                        <>Request warm intro</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

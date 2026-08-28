@@ -45,6 +45,7 @@ function SettingsPage() {
   const [communicationStyle, setCommunicationStyle] = useState("");
   const [dontClaim, setDontClaim] = useState("");
   const [phone, setPhone] = useState("");
+  const [networkMode, setNetworkMode] = useState(false);
 
   async function exportData() {
     setExporting(true);
@@ -115,6 +116,7 @@ function SettingsPage() {
         setCommunicationStyle(p.communication_style ?? "");
         setDontClaim(p.dont_claim ?? "");
         setPhone(p.phone ?? "");
+        setNetworkMode(p.network_mode ?? false);
         if (p.referral_code) {
           setReferral(p.referral_code);
           const { count } = await supabase.rpc("referral_count").single();
@@ -168,6 +170,7 @@ function SettingsPage() {
         communication_style: communicationStyle.trim() || null,
         dont_claim: dontClaim.trim() || null,
         phone: phone.trim() || null,
+        network_mode: networkMode,
       })
       .eq("id", u.user.id);
     setSaving(false);
@@ -350,6 +353,18 @@ function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             Appended at the end of every email your agent sends — looks professional and builds recognition.
           </p>
+        </div>
+      </Section>
+
+      <Section title="Warm network">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-medium">Discoverable by other businesses</div>
+            <div className="text-xs text-muted-foreground">
+              Let other OutreachAI users find your business in their AI lead search and request a warm intro. Your email and phone are never shown — you approve every intro first.
+            </div>
+          </div>
+          <Switch checked={networkMode} onCheckedChange={setNetworkMode} />
         </div>
       </Section>
 

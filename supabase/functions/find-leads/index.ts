@@ -115,11 +115,49 @@ serve(async (req) => {
       }
     }
 
+    // Warm network matches — other outreach businesses that opted in (no contact exposed).
+    let network: Array<{
+      target_user_id: string; business: string; company: string | null;
+      offer: string; website_url: string | null; country: string | null; niche: string | null;
+      matched: string[];
+    }> = [];
+    try {
+      const terms = String(jobTitle ?? "")
+        .toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2).slice(0, 4);
+      const { data: businesses } = await supabase
+        .from("profiles")
+        .select("id, name, company, offer, business_description, website_url, autopilot_country, autopilot_niche")
+        .eq("network_mode", true).neq("id", userId).not("website_url", "is", null).limit(300);
+      for (const b of businesses ?? []) {
+        const hay = [b.name, b.company, b.offer, b.business_description, b.autopilot_niche]
+          .filter(Boolean).join(" ").toLowerCase();
+        if (!terms.length || !terms.some((t) => hay.includes(t))) continue;
+        if (country && String(country).toLowerCase() !== "all" && b.autopilot_country) {
+          const q = String(country).toLowerCase();
+          const c = String(b.autopilot_country).toLowerCase();
+          if (!q.includes(c) && !c.includes(q)) continue;
+        }
+        network.push({
+          target_user_id: b.id,
+          business: b.name || b.company || "A network business",
+          company: b.company,
+          offer: (b.offer || b.business_description || "").slice(0, 200),
+          website_url: b.website_url,
+          country: b.autopilot_country,
+          niche: b.autopilot_niche,
+          matched: terms.filter((t) => hay.includes(t)),
+        });
+        if (network.length >= 5) break;
+      }
+    } catch (netErr) {
+      console.error("Network match lookup failed:", netErr);
+    }
+
     await insertAudit(supabase, {
       user_id: userId,
       campaign_id: campaignId,
       event: "lead.searched",
-      payload: { count: leads.length, country, jobTitle, source },
+      payload: { count: leads.length, country, jobTitle, source, network_matches: network.length },
     });
 
     // Verify emails in parallel — enrich each lead with verification data
@@ -154,6 +192,7 @@ serve(async (req) => {
       leads: verifiedLeads,
       count: verifiedLeads.length,
       source,
+      network,
       message:
         leads.length === 0
           ? source === "google-maps"
