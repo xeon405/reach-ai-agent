@@ -469,7 +469,6 @@ Deno.serve(async (req) => {
           if (decision.action === "SUPPRESS") {
             unsubscribes++;
             await suppressLead(supabase, email.user_id, email.campaign_id, lead, "unsubscribe_requested");
-            await notifySelf(tok.accessToken, profile, `🚫 ${lead.name ?? lead.email} asked to stop — suppressed permanently.\n→ ${SITE}/leads`);
             await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "opt_out", title: `🚫 Opt-out: ${lead.name ?? lead.email}`, body: "Suppressed permanently across all campaigns.", priority: "high" });
             continue;
           }
@@ -482,7 +481,6 @@ Deno.serve(async (req) => {
               last_message_id: hits[0].id, high_priority: true, updated_at: new Date().toISOString(),
             }, { onConflict: "user_id,lead_id" });
             await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "booking", title: `🔥 HOT: ${lead.name ?? lead.email} wants to book!`, body: `They said: "${(fullReplyText || snippet).slice(0, 150)}"\n${profile.website_url ? "AI answered with your site link — thread stays on autopilot." : "AI stepped back — reply from your Gmail to close."}`, priority: "high" });
-            await notifySelf(tok.accessToken, profile, `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${(fullReplyText || snippet).slice(0, 150)}"\n${profile.website_url ? "AI replied pointing them to your site." : "AI stepped back — reply from your Gmail to close."}\n→ ${SITE}/emails`);
             await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "booking.detected", payload: {} });
 
             if (!profile.website_url) {
@@ -590,9 +588,8 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             }
           }
 
-          // Owner alert for every detected first reply (slim + link)
+          // In-app alert for every detected first reply (slim + link)
           if (profile.notify_replies !== false) {
-            await notifySelf(tok.accessToken, profile, `${lead.name ?? lead.email} replied to your outreach.\n\nVerdict: ${tag}\nTheir message: "${(fullReplyText || snippet).slice(0, 150)}"\n\nThe AI already drafted a personal response for you.\nReview & send it in one click:\n→ ${SITE}/emails\n\n— OutreachAI Agent`, `${tag} — New reply from ${lead.name ?? lead.email}`);
             await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "first_reply", title: `${tag} — ${lead.name ?? lead.email}`, body: (fullReplyText || snippet).slice(0, 280), priority: cls.interested ? "high" : "normal" });
           }
         } catch (rowErr) {
@@ -722,9 +719,6 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               await supabase.from("leads").update({ conv_mode: "HUMAN", lifecycle: nextLifecycle(lead.lifecycle ?? "", "human.takeover") }).eq("id", lead.id);
               await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "takeover", title: `🤝 You took over: ${lead.name ?? lead.email}`, body: "AI stood down — the thread is yours.", priority: "normal" });
               await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "human.takeover", payload: { trigger: "owner_replied_manually" } });
-              if (profile.notify_replies !== false) {
-                await notifySelf(tok.accessToken, profile, `You replied to ${lead.email} yourself, so the AI has stopped auto-answering this thread.\nThe conversation is all yours now.\n→ ${SITE}/emails`, `🤝 AI stepped back — you're talking with ${lead.name ?? lead.email}`);
-              }
               continue;
             }
           }
@@ -824,13 +818,10 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             unsubscribed: !!lead.unsubscribed,
           });
 
-          let ownerNote = "";
-
           switch (decision.action) {
             case "SUPPRESS": {
               unsubscribes++;
               await suppressLead(supabase, t.user_id, t.campaign_id, lead, "unsubscribe_requested");
-              ownerNote = `🚫 ${lead.name ?? lead.email} asked to stop — suppressed permanently.\n→ ${SITE}/leads`;
               break;
             }
             case "NOTIFY_OWNER_BOOKING": {
@@ -841,9 +832,6 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                 last_message_id: hits[0].id, high_priority: true, updated_at: new Date().toISOString(),
               }, { onConflict: "user_id,lead_id" });
               await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "booking", title: `🔥 HOT: ${lead.name ?? lead.email} wants to book!`, body: `They said: "${theirWords.slice(0, 150)}"${profile.website_url ? "\nAI answered with your site link — thread stays on autopilot." : ""}`, priority: "high" });
-              ownerNote = profile.website_url
-                ? `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI replied pointing them to your site.\n→ ${SITE}/emails`
-                : `🔥 HOT: ${lead.name ?? lead.email} wants to book a call!\nThey said: "${theirWords.slice(0, 150)}"\nAI stepped back — reply from your Gmail to close.\n→ ${SITE}/emails`;
               await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "booking.detected", payload: {} });
 
               if (!profile.website_url) {
@@ -954,7 +942,6 @@ Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2
               await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
               await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
               await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: decision.action === "HANDOFF_TO_HUMAN" && cls.requires_human ? "They need a human answer." : "Turn budget used.", priority: "high" });
-              ownerNote = `🤝 ${lead.name ?? lead.email}: the AI handed this thread to you${cls.requires_human ? " (they need a human answer)" : ` after ${newTurns} conversation turns`}.\nContinue from your Gmail:\n→ ${SITE}/emails`;
               await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: cls.requires_human ? "requires_human" : "turn_budget" } });
               break;
             }
@@ -1015,7 +1002,6 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
                     await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
                     await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
                     await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: "3 AI turns used.", priority: "high" });
-                    ownerNote = `🤝 ${lead.name ?? lead.email}: the AI has used its 3 conversation turns, so the thread is now yours.\nContinue from your Gmail, or track it here:\n→ ${SITE}/emails`;
                   }
                 }
               } else {
@@ -1028,9 +1014,6 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
             }
           }
 
-          if (ownerNote && profile.notify_replies !== false && profile.gmail_email) {
-            await notifySelf(tok.accessToken, profile, ownerNote, subj.includes("Re:") ? `Re: ${subj.split("Re:").pop()?.trim()} — AI update` : `AI update: ${lead.name ?? lead.email}`).catch(() => {});
-          }
         } catch (convErr) {
           console.error("[inbox] conversation turn failed:", convErr instanceof Error ? convErr.message : convErr);
         }
@@ -1061,9 +1044,4 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
     await insertAudit(db, { user_id: userId, campaign_id: campaignId, lead_id: lead.id, event: "lead.suppressed", payload: { reason } });
   }
 
-  async function notifySelf(accessToken: string, profile: Record<string, any>, body: string, subject?: string): Promise<void> {
-    const self = profile.gmail_email || profile.email;
-    if (!self) return;
-    await sendGmailRaw(accessToken, buildRawEmail(self, subject ?? "OutreachAI update", body, self));
-  }
 });
