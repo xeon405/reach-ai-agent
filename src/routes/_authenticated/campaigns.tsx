@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send, Pencil, Eye } from "lucide-react";
+import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send, Pencil, Eye, Clock, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { TEMPLATES } from "@/lib/templates";
 
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_authenticated/campaigns")({
   component: CampaignsPage,
 });
 
-type Campaign = { id: string; name: string; status: string; created_at: string; ab_test?: boolean; autopilot?: boolean };
+type Campaign = { id: string; name: string; status: string; created_at: string; ab_test?: boolean; autopilot?: boolean; delivery?: string };
 
 function CampaignsPage() {
   const navigate = useNavigate();
@@ -76,6 +76,13 @@ function CampaignsPage() {
     const { error } = await supabase.from("campaigns").update(patch).eq("id", c.id);
     if (error) toast.error(error.message);
     else toast.success(value ? "Enabled" : "Disabled");
+    load();
+  }
+
+  async function setDelivery(c: Campaign, delivery: "smart" | "instant") {
+    const { error } = await supabase.from("campaigns").update({ delivery }).eq("id", c.id);
+    if (error) toast.error(error.message);
+    else toast.success(delivery === "instant" ? "⚡ Sending instantly on launch" : "⏰ Sending at each lead's local morning");
     load();
   }
 
@@ -358,6 +365,14 @@ function CampaignsPage() {
                       className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.autopilot ? "border-success bg-success/10 text-success" : "border-border text-muted-foreground hover:text-foreground"}`}
                     >
                       🤖 Autopilot replies {c.autopilot ? "ON" : "OFF"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDelivery(c, c.delivery === "instant" ? "smart" : "instant")}
+                      className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.delivery === "instant" ? "border-warning bg-warning/10 text-warning" : "border-border text-muted-foreground hover:text-foreground"}`}
+                      title={c.delivery === "instant" ? "Sends instantly on launch — may land in off-hours" : "Holds the send until each lead's local morning (8–11am)"}
+                    >
+                      {c.delivery === "instant" ? <><Zap className="mr-1 inline h-3 w-3" /> Instant send</> : <><Clock className="mr-1 inline h-3 w-3" /> Local morning</>}
                     </button>
                   </div>
                 </div>

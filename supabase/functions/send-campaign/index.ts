@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Eligibility gates at enqueue time (the worker re-checks everything again)
-    const { data: campaign } = await supabase.from("campaigns").select("id, status, ab_test").eq("id", campaignId).eq("user_id", userId).single();
+    const { data: campaign } = await supabase.from("campaigns").select("id, status, ab_test, delivery").eq("id", campaignId).eq("user_id", userId).single();
     if (!campaign) throw new Error("Campaign not found");
     if (campaign.status !== "active") throw new Error("Campaign is not active");
 
@@ -160,7 +160,8 @@ Deno.serve(async (req) => {
     const deliverable = freshLeads.filter((l) => !invalidLeadIds.includes(l.id));
     if (deliverable.length === 0) return json({ queued: 0, message: `${invalidLeadIds.length} undeliverable emails skipped` });
 
-    const eligible = deliverable.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
+    const instant = campaign.delivery === "instant";
+    const eligible = instant ? deliverable : deliverable.filter((l: { country?: string | null }) => isBusinessMorning(l.country));
     const waiting = deliverable.length - eligible.length;
 
     // Idempotency: uniq_queue_job blocks duplicate live jobs per (campaign, lead)
@@ -190,8 +191,8 @@ Deno.serve(async (req) => {
     if (et?.waitUntil) et.waitUntil(kickoff);
 
     const parts: string[] = [];
-    if (inserted > 0) parts.push(`${inserted} email${inserted === 1 ? "" : "s"} queued — sending one by one in the background`);
-    if (waiting > 0) parts.push(`${waiting} waiting for their local morning`);
+    if (inserted > 0) parts.push(`${inserted} email${inserted === 1 ? "" : "s"} queued — ${instant ? "sending now" : "sending as each lead enters their morning"}`);
+    if (waiting > 0 && !instant) parts.push(`${waiting} waiting for their local morning`);
     if (invalidLeadIds.length > 0) parts.push(`${invalidLeadIds.length} undeliverable skipped`);
     if (dupeIds.size > 0) parts.push(`${dupeIds.size} duplicates skipped`);
 
