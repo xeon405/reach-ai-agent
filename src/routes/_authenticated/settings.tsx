@@ -44,6 +44,7 @@ function SettingsPage() {
   const [cities, setCities] = useState("");
   const [communicationStyle, setCommunicationStyle] = useState("");
   const [dontClaim, setDontClaim] = useState("");
+  const [phone, setPhone] = useState("");
 
   async function exportData() {
     setExporting(true);
@@ -113,6 +114,7 @@ function SettingsPage() {
         setIndustries((p.icp as Record<string, string> | null)?.industry ?? "");
         setCommunicationStyle(p.communication_style ?? "");
         setDontClaim(p.dont_claim ?? "");
+        setPhone(p.phone ?? "");
         if (p.referral_code) {
           setReferral(p.referral_code);
           const { count } = await supabase.rpc("referral_count").single();
@@ -165,6 +167,7 @@ function SettingsPage() {
         cities: cities.split(",").map((c) => c.trim()).filter(Boolean) || null,
         communication_style: communicationStyle.trim() || null,
         dont_claim: dontClaim.trim() || null,
+        phone: phone.trim() || null,
       })
       .eq("id", u.user.id);
     setSaving(false);
@@ -205,6 +208,10 @@ function SettingsPage() {
         <div className="space-y-1.5">
           <Label>Email</Label>
           <Input value={email} disabled />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Phone <span className="text-muted-foreground">(shown to clients when the AI hands off a conversation to you)</span></Label>
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 1234" />
         </div>
       </Section>
 

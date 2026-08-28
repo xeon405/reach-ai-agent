@@ -195,7 +195,7 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
     const end = rawText.lastIndexOf("}");
     if (start === -1 || end <= start) return fallback;
     const obj = JSON.parse(rawText.slice(start, end + 1));
-    return {
+    const parsed: Classification = {
       intent: String(obj.intent ?? fallback.intent),
       confidence: Math.min(1, Math.max(0, Number(obj.confidence ?? 0.5))),
       interested: Boolean(obj.interested),
@@ -207,6 +207,18 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
       requires_human: Boolean(obj.requires_human),
       suggested_action: obj.suggested_action ?? "continue_conversation",
     };
+    // Reconciliation: deterministic objection/opt-out signals beat a flaky LLM
+    // verdict, so pushback (or "why would I need this") is never misfiled as
+    // 'unclear' or 'requires_human'. Human-only topics still force a handoff.
+    if (parsed.unsubscribe || /unsubscribe|opt.?out|remove me|stop emailing/i.test(fallbackSnippet)) {
+      parsed.intent = "other";
+      parsed.requires_human = false;
+    } else if (/not (the )?right time|too expensive|budget|already (have|using)|not (a )?priority|not convinced|skeptical|why should i|why (do|would|should) i (need|want)|how is this (different|better|any different)|already (saw|read|told|seen|offered|asked)|stop (emailing|pitching|asking)|are you (real|serious|human)|this is (annoying|ridiculous|a scam|too much)|i don'?t (need|want) another|why does everyone/i.test(fallbackSnippet)) {
+      parsed.intent = "objection";
+      parsed.requires_human = /legal|contract|invoice|complaint|refund|negotiat/i.test(fallbackSnippet) ? true : false;
+      if (!parsed.requires_human && parsed.sentiment === "NOT_INTERESTED") parsed.sentiment = "MAYBE";
+    }
+    return parsed;
   } catch (_e) {
     return fallback;
   }

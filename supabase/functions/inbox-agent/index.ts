@@ -542,11 +542,14 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
           if (cls.interested || cls.sentiment !== "NOT_INTERESTED") {
             tag = cls.sentiment === "INTERESTED" ? "INTERESTED" : cls.sentiment === "MAYBE" ? "Maybe later" : "Not interested";
             const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
+            const hasSite = Boolean(profile.website_url);
             const intentGuide = cls.intent === "objection"
               ? `They raised an OBJECTION, pushed back, or sound annoyed. FIRST genuinely acknowledge their point, then answer their real concern with 1-2 concrete facts. Do NOT push, re-pitch a call/booking, or repeat anything already said. If they seem done, close warmly.`
               : cls.intent === "unclear"
               ? `Their message was UNCLEAR or too short to determine intent. Ask a gentle clarifying question to understand what they need.`
-              : `Move toward booking a call.`;
+              : hasSite
+              ? `Answer their question clearly and helpfully using the company knowledge base. Do NOT push a call or booking — pure substance.`
+              : `Answer their question from the business context above (what the owner told us). Never invent facts you weren't given. Do NOT push a booking link.`;
             try {
               const threadHistory = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
               draft = await groqChat([{
@@ -562,7 +565,7 @@ COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factu
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff. ${intentGuide}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST: answer with the amount when the knowledge base contains one; if none, say the price is on the site / happy to confirm — never invent an amount and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there — but only once, and never repeat a link you already put in your original email above. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST: answer with the amount when the knowledge base contains one; if none${hasSite ? ", say the price is on the site / happy to confirm" : ", say you're happy to confirm it with them directly"} — never invent an amount and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there — but only once, and never repeat a link you already put in your original email above. ${hasSite ? "Do NOT ask them to book a call or meeting — answer fully and stop; if you ask anything, make it a genuine information question, not about booking." : "Politely leave the door open — you may invite one quick call to discuss further only if it's genuinely useful, and never mention booking links."} Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
@@ -802,7 +805,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             intent: cls.intent, confidence: cls.confidence ?? 0.5, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
-            suggested_action: cls.suggested_action, raw: { subject: subj.slice(0, 150) },
+            suggested_action: cls.suggested_action, raw: { subject: subj.slice(0, 150), snip: theirWords.slice(0, 150) },
           });
           if (clsErr) {
             // Duplicate message id → already processed by a previous run; just advance the pointer.
@@ -900,6 +903,54 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
             case "HANDOFF_TO_HUMAN": {
               handoffs++;
               const newTurns = (t.ai_turns ?? 0);
+              const phone = String(profile.phone ?? "").trim();
+              if (cls.requires_human && phone) {
+                // Escalation with the owner's direct number: reply NOW so the
+                // lead isn't left hanging, then stop. No owner alert here — the
+                // lead now calls/messages the number directly (avoids alert spam).
+                let esc = "";
+                try {
+                  const convHist = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
+                  esc = await groqChat([{
+                    role: "user",
+                    content: `${buildBIContext(profile)}A lead in an ongoing email conversation has asked something that needs the owner (${sanitizeForPrompt(profile.name ?? "the owner", 40)}) to answer personally — it should not be answered by automation.
+Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}.
+Their newest message: "${sanitizeForPrompt(theirWords, 700)}"
+Conversation so far (do not repeat anything already shared):
+"${sanitizeForPrompt(convHist, 2000)}"
+The owner's direct phone number (share it exactly once, as a real number): ${sanitizeForPrompt(phone, 40)}
+Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2) honestly say you'll get them the exact details personally, (3) give the phone number once and suggest they call or send a quick text. Never mention an AI assistant, never invent facts, never repeat links. Sign off as "Best regards". Return only the reply text.`,
+                  }], { maxTokens: 400, temperature: 0.7 });
+                } catch (ee) {
+                  groqFail = groqFail || String(ee).slice(0, 160);
+                }
+                if (esc?.trim()) {
+                  const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
+                    lead.email,
+                    subj.startsWith("Re:") ? subj : `Re: ${subj}`,
+                    `${esc.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
+                    profile.gmail_email || profile.email,
+                    `${SITE}/unsubscribe?l=${lead.id}`
+                  )).catch(() => null);
+                  if (ids) {
+                    aiRepliesSent++;
+                    await supabase.from("emails_sent").update({
+                      ai_paused: true, autoreplied: true, ai_draft: esc.trim(),
+                      ai_turns: newTurns + 1, last_ai_msg_at: new Date().toISOString(),
+                      last_lead_msg_at: new Date(msgDateMs).toISOString(), gmail_thread_id: ids.threadId,
+                    }).eq("id", t.id);
+                    await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
+                    await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "phone_handoff", turn: newTurns + 1 } });
+                    await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: "requires_human", escalated_with_phone: true } });
+                    break;
+                  }
+                }
+                // Generation or send failed — park quietly; the owner dashboard still shows the thread.
+                await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
+                await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
+                await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: "requires_human", escalated_with_phone: false } });
+                break;
+              }
               await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
               await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
               await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: decision.action === "HANDOFF_TO_HUMAN" && cls.requires_human ? "They need a human answer." : "Turn budget used.", priority: "high" });
@@ -931,7 +982,7 @@ COMPANY KNOWLEDGE BASE (from your website — answer questions factually from th
 Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}
 ${convIntentGuide}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, say the price is on the ${profile.website_url ? "site" : "details we can share"} — never invent an amount. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", keep it honest and brief — never guess"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, ${profile.website_url ? "say the price is on the site" : "explain you'd rather get them the exact details on a quick call"} — never invent an amount. Do NOT push a call or booking${profile.website_url ? " — answer fully from the knowledge base and stop" : " unless they explicitly ask to talk"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);

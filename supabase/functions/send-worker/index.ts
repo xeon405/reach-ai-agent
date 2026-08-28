@@ -42,6 +42,36 @@ function buildBIContext(profile: Record<string, unknown>): string {
   return `BUSINESS CONTEXT:\n${parts.join("\n")}\n\n`;
 }
 
+/** Curated, boring, deliverable fallback subjects — used when AI generation
+ *  produces something unusable (gibberish, repeated characters, spammy caps). */
+function pickFallbackSubject(offer: string, company: string): string {
+  const short = sanitizeForPrompt(String(offer || "my services"), 60).replace(/[,;:].*$/s, "").trim();
+  const companyShort = sanitizeForPrompt(String(company || "your company"), 40);
+  const list = [
+    `Quick question about ${companyShort}`,
+    `Idea for ${companyShort}`,
+    short ? `Helping with ${short}` : `An idea for ${companyShort}`,
+    `Reaching out to ${companyShort}`,
+  ];
+  return list[Math.floor(Math.random() * list.length)].slice(0, 60);
+}
+
+/** Makes any AI-produced subject professional and deliverable: strips weird
+ *  characters, rejects gibberish / repeated-character runs / spammy caps, and
+ *  falls back to a curated subject when it can't be salvaged. */
+function sanitizeSubject(subject: string, offer = "our services", company = "your company"): string {
+  let s = String(subject ?? "").replace(/\s+/g, " ").trim();
+  if (/(.)\1{2,}/.test(s)) return pickFallbackSubject(offer, company);        // "csssss" / "SSSS"
+  const words = s.split(/\s+/).filter(Boolean);
+  const wordy = words.filter((w) => /[a-zA-Z]{2,}/.test(w)).length;
+  if (words.length >= 2 && wordy < 2) return pickFallbackSubject(offer, company); // symbol/number salad
+  if (/\b[A-Z]{4,}\b/.test(s) || /[!]{2,}/.test(s) || /[$€₹£]/.test(s)) return pickFallbackSubject(offer, company);
+  s = s.replace(/[^\w .,!?&'@#+%:;-]/g, "").replace(/\s{2,}/g, " ").trim();
+  if (s.length < 4 || !/[a-zA-Z]{2,}/.test(s)) return pickFallbackSubject(offer, company);
+  if (!/^[A-Za-z]/.test(s)) s = s.charAt(0).toUpperCase() + s.slice(1);
+  return s.slice(0, 60);
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -201,12 +231,12 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
     try {
       const parsed = JSON.parse(text.slice(start, end + 1));
       if (parsed.subject && parsed.body) {
-        return { subject: String(parsed.subject), body: String(parsed.body).replace(/\\n/g, "\n") };
+        return { subject: sanitizeSubject(String(parsed.subject), userOffer, leadCompany), body: String(parsed.body).replace(/\\n/g, "\n") };
       }
     } catch { /* fall through */ }
   }
   const lines = text.split("\n").filter(Boolean);
-  return { subject: (lines[0] ?? "Quick question").slice(0, 90), body: lines.slice(1).join("\n") || text };
+  return { subject: sanitizeSubject(lines[0] ?? "Quick question", userOffer, leadCompany), body: lines.slice(1).join("\n") || text };
 }
 
 function localSpamScore(subject: string, body: string): { score: number; hint: string } {
@@ -241,7 +271,8 @@ async function getAltSubjects(campaignId: string, offer: string, biContext = "")
       content: `${biContext}Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
 Write 5 alternative email subject lines for this offer. Rules: max 8 words each, CLEAR and concrete about what we deliver — a busy person should understand the offer from the subject alone. No riddles, no vague curiosity hooks. Never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
     }], { maxTokens: 200, temperature: 0.9 });
-    subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5);
+    subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5)
+      .map((l: string) => sanitizeSubject(l, offer));
   } catch (_e) { /* variant B falls back to A */ }
   abCache.set(campaignId, { subs, at: Date.now() });
   return subs;
@@ -640,7 +671,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
       } catch { /* fall through */ }
     }
     const lines = text.split("\n").filter(Boolean);
-    return { subject: (lines[0] ?? "Follow-up").slice(0, 90), body: lines.slice(1).join("\n") || text };
+    return { subject: sanitizeSubject(lines[0] ?? "Follow-up", userOffer, leadCompany), body: lines.slice(1).join("\n") || text };
   }
 
   async function processDueFollowUps(db: ReturnType<typeof createClient>): Promise<{ followupsSent: number; followupsCancelled: number }> {
@@ -834,7 +865,9 @@ Get your own AI outreach agent → ${SITE}
 Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time with me directly: ${profile.booking_link}` : ""}${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
         const bodyText = `${gen.body}${footer}`;
-        const subject = String(gen.subject).startsWith("Re: ") ? gen.subject : `Re: ${gen.subject}`;
+        const originalSubject = (prevEmails ?? []).find((e) => e.sequence === 1)?.subject;
+        const followBase = sanitizeSubject(originalSubject || gen.subject, String(profile.offer ?? "our services"), lead.company ?? "your company");
+        const subject = followBase.toLowerCase().startsWith("re:") ? followBase : `Re: ${followBase}`;
         const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${campaign.id}`;
 
         // Tracking pixel + click tracking
