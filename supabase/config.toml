@@ -4,3 +4,5 @@ project_id = "lniciqpzvmvyalizwrjq"
 # and must not be gated by the platform JWT check.
 [functions.track-click]
 verify_jwt = false
+[functions.spam-check]
+verify_jwt = true
