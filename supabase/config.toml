@@ -1,1 +1,6 @@
 project_id = "lniciqpzvmvyalizwrjq"
+
+# Public/cron-facing functions authenticate internally (cron secret / service role / HMAC)
+# and must not be gated by the platform JWT check.
+[functions.track-click]
+verify_jwt = false
