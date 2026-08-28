@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     const { data: digestProfiles } = await supabase
       .from("profiles")
       .select("id, email, gmail_email, last_digest_date")
-      .neq("last_digest_date", today);
+      .or(`last_digest_date.is.null,last_digest_date.neq.${today}`);
     let digestsSent = 0;
 
     for (const dp of digestProfiles ?? []) {
