@@ -75,27 +75,211 @@ function stripQuoted(text: string): string {
   return out.trim();
 }
 
-/** Fetches the owner's website and reduces it to a compact text knowledge
- *  base so the AI can answer prospect questions about the business itself.
- *  Fails soft: any problem returns "" and prompts fall back to current behavior. */
+/** Crawls the owner's ENTIRE website (homepage + every internal page) and
+ *  reduces it to a compact structured text knowledge base so the AI can answer
+ *  prospect questions about the business, products, pricing, FAQ, etc.
+ *  Results are cached per origin (TTL 12h). Fails soft → "" → prompts fall back. */
+const siteKnowledgeCache = new Map<string, { at: number; kb: string }>();
+const SITE_CACHE_TTL = 12 * 3600 * 1000;
+const MAX_PAGES = 20;
+const MAX_PAGE_CHARS = 4000;
+const MAX_TOTAL_CHARS = 30000;
+
+function cleanPageText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<header[\s\S]*?<\/header>/gi, " ")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractInternalLinks(html: string, origin: string): string[] {
+  const links = new Set<string>();
+  const re = /href\s*=\s*["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && links.size < 300) {
+    const href = String(m[1]).split("#")[0].split("?")[0];
+    if (!href || /^(mailto:|tel:|javascript:|data:)/i.test(href)) continue;
+    try {
+      const u = new URL(href, origin);
+      if (u.origin !== origin || links.has(u.pathname)) continue;
+      if (/^\/assets\//i.test(u.pathname)) continue;                       // bundled assets
+      if (/\.(js|css|svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|otf|map|pdf|json|txt|xml)$/i.test(u.pathname)) continue; // static files
+      links.add(u.pathname);
+    } catch { /* skip malformed */ }
+  }
+  return [...links];
+}
+
+/** Harvests readable human copy from client-rendered (SPA) JS bundles:
+ *  extracts natural-language string literals and filters out minified markup,
+ *  identifiers, code glue and style noise. */
+const MAX_JS_CHUNKS = 12;
+
+function extractJsCopy(js: string): string[] {
+  const out: string[] = [];
+  for (const m of js.matchAll(/["`]([^"`]{12,220})["`]/g)) {
+    const raw = m[1];
+    const s = raw.replace(/\$\{[\s\S]*?\}/g, " ").replace(/\\n/g, " ").replace(/\s+/g, " ").trim();
+    if (s.length < 14 || s.length > 210) continue;
+    if (!/[a-zA-Z]{3,}/.test(s)) continue;                                   // needs real words
+    if (/^[a-zA-Z0-9_\-./\\:#%+()=,$]*$/.test(s) && !/\s/.test(s)) continue; // ids/paths/keys
+    if (!/\s/.test(s) && /[:{};,=<>]/.test(s)) continue;                     // minified glue
+    if (/<(div|p|span|a|h[1-6])(\s|>)/i.test(s)) continue;                   // stray HTML
+    if (/-webkit-|!important|background(Color)?|className|fontSize|--tw-/i.test(s)) continue; // CSS-in-JS
+    if (/^\s*(import|export|const |let |function|return|throw|class |jsx|href)/i.test(s)) continue;
+    out.push(s);
+  }
+  return [...new Set(out)];
+}
+
 async function fetchSiteKnowledge(url: string): Promise<string> {
   if (!url || !/^https?:\/\//i.test(url)) return "";
+  let origin = url;
+  try { origin = new URL(url).origin; } catch { return ""; }
+  const cached = siteKnowledgeCache.get(origin);
+  if (cached && Date.now() - cached.at < SITE_CACHE_TTL) return cached.kb;
+
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; OutreachAI/1.0)" }, redirect: "follow" });
-    clearTimeout(timer);
+    const fetchPage = async (u: string, ms = 6000): Promise<string> => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      try {
+        const r = await fetch(u, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; OutreachAI/1.0)" }, redirect: "follow" });
+        return r.ok ? (await r.text()).slice(0, 400_000) : "";
+      } catch { return ""; } finally { clearTimeout(timer); }
+    };
+
+    const pages = new Map<string, string>();
+    const homeHtml = await fetchPage(url);
+    if (!homeHtml) return "";
+    pages.set("/", homeHtml);
+
+    // Discover URLs three ways: sitemap.xml → SSR anchors → common paths.
+    const candidates = new Set<string>();
+    try {
+      const sitemap = await fetchPage(`${origin}/sitemap.xml`, 5000);
+      const locs = (sitemap.match(/<loc>\s*([^<]+?)\s*<\/loc>/gi) ?? [])
+        .map((l) => l.replace(/<\/?loc>/gi, "").trim())
+        .filter((l) => l.startsWith(origin));
+      for (const l of locs) {
+        try { candidates.add(new URL(l).pathname); } catch { /* skip */ }
+      }
+    } catch { /* no sitemap */ }
+    for (const p of extractInternalLinks(homeHtml, origin)) candidates.add(p);
+    const COMMON_PATHS = ["/pricing", "/price", "/features", "/about", "/faq", "/contact", "/services", "/products", "/plans"];
+    for (const p of COMMON_PATHS) candidates.add(p);
+
+    // Breadth-first over internal pages, bounded by MAX_PAGES.
+    for (const path of candidates) {
+      if (pages.size >= MAX_PAGES) break;
+      if (pages.has(path)) continue;
+      const html = await fetchPage(origin + path, 5000);
+      if (html) pages.set(path, html);
+    }
+
+    const sections: string[] = [];
+    let total = 0;
+    for (const [path, pageHtml] of pages) {
+      const title = sanitizeForPrompt((pageHtml.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? "").trim() || path, 120);
+      const h1 = sanitizeForPrompt((pageHtml.match(/<h1[^>]*>([^<]*)<\/h1>/i)?.[1] ?? "").trim(), 120);
+      const txt = cleanPageText(pageHtml).slice(0, MAX_PAGE_CHARS);
+      if (!txt) continue;
+      const pageUrl = path === "/" ? url : `${origin}${path}`;
+      sections.push(`== ${title}${h1 && h1.toLowerCase() !== title.toLowerCase() ? ` — ${h1}` : ""} (${pageUrl}) ==\n${txt}`);
+      total += txt.length;
+      if (total >= MAX_TOTAL_CHARS) break;
+    }
+
+    // SPA fallback: client-rendered sites ship their real copy inside JS
+    // bundles, so harvest readable strings from the entry chunks (plus one
+    // level of dynamic imports) and append them to the knowledge base.
+    let jsHarvest = "";
+    try {
+      const jsUrls = new Map<string, string>();
+      for (const m of homeHtml.matchAll(/(?:src|href)="([^"]+\.js)"/gi)) {
+        const href = m[1];
+        try {
+          const u = new URL(href, origin);
+          if (u.origin === origin) jsUrls.set(u.pathname, u.href);
+        } catch { /* skip */ }
+      }
+      for (const entry of jsUrls.entries()) {
+        if (jsUrls.size >= MAX_JS_CHUNKS) break;
+        const js = await fetchPage(entry[1], 6000);
+        if (!js) continue;
+        for (const imp of js.matchAll(/import\(\s*["']([^"']+\.js)["']\s*\)/gi)) {
+          const p = imp[1].replace(/^\.\//, "/");
+          if (!p.startsWith("/") || jsUrls.has(p)) continue;
+          if (jsUrls.size >= MAX_JS_CHUNKS) break;
+          jsUrls.set(p, `${origin}${p}`);
+        }
+      }
+      const strings = new Set<string>();
+      for (const [, url] of jsUrls) {
+        const js = await fetchPage(url, 6000);
+        if (!js) continue;
+        for (const s of extractJsCopy(js)) strings.add(s);
+        if (strings.size >= 400) break;
+      }
+      if (strings.size) {
+        const ranked = [...strings].sort((a, b) => b.length - a.length).slice(0, 180);
+        jsHarvest = ranked.join(". ");
+      }
+    } catch { /* SPA harvest is best-effort */ }
+    if (jsHarvest) {
+      sections.push(`== Site copy (client-rendered content) ==\n${jsHarvest.slice(0, 12000)}`);
+    }
+
+    const kb = sections.join("\n\n");
+    if (kb.length > MAX_TOTAL_CHARS) { /* trimmed already via per-page budget + total cap */ }
+    siteKnowledgeCache.set(origin, { at: Date.now(), kb });
+    return kb;
+  } catch {
+    return "";
+  }
+}
+
+/** Reconstructs the recent Gmail thread transcript (our messages + lead's
+ *  messages) so reply generation has real conversation memory. Excludes the
+ *  newest message (the one we're answering, which is passed separately). */
+async function fetchThreadHistory(
+  tok: { accessToken: string },
+  threadId: string | null | undefined,
+  leadEmail: string,
+  senderEmail: string,
+  maxMsgs = 5,
+): Promise<string> {
+  if (!threadId) return "";
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
+      { headers: { Authorization: `Bearer ${tok.accessToken}` } },
+    );
     if (!res.ok) return "";
-    const html = (await res.text()).slice(0, 200_000);
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-      .replace(/\s+/g, " ")
-      .trim();
-    return text.slice(0, 1500);
+    const data = await res.json();
+    const msgs = (data.messages ?? []) as Array<{ payload?: unknown }>;
+    if (msgs.length < 2) return "";
+    const priors = msgs.slice(0, -1).slice(-maxMsgs);
+    const senderNorm = String(senderEmail || "").toLowerCase();
+    const lines: string[] = [];
+    for (const m of priors) {
+      const from = (m.payload as { headers?: Array<{ name: string; value: string }> })?.headers
+        ?.find((h) => h.name === "From")?.value ?? "";
+      const fromEmail = (from.match(/<([^>]+)>/) ?? [ "", from ])[1].toLowerCase();
+      const body = stripQuoted(extractGmailBody((m.payload as { payload?: unknown }) ?? m.payload)).slice(0, 700);
+      if (!body) continue;
+      const who = fromEmail.includes(senderNorm) ? "You" : "Lead";
+      lines.push(`${who}: ${body}`);
+    }
+    return lines.join("\n");
   } catch {
     return "";
   }
@@ -309,16 +493,19 @@ Deno.serve(async (req) => {
               // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
               try {
                 const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
+                const histB = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
                 const bDraft = await groqChat([{
                   role: "user",
-                  content: `A lead just replied asking how to get started / book a meeting.
+                  content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 600)}"
+Conversation so far (do not repeat any link, offer, or CTA already there):
+"${sanitizeForPrompt(histB, 1800)}"
 What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
-COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factually; never invent anything not written here or above): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
+COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factually; never invent anything not written here or above): "${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}
 Your site — direct them there to get started: ${sanitizeForPrompt(profile.website_url, 200)}
 
-Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. Sign off as "Best regards". Return only the reply text.`,
+Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. If the site link / CTA already appears in the conversation above, do NOT paste it again — refer to it as already shared. If they asked about PRICE/PRICING/COST: answer using the company knowledge base; if pricing is not in the knowledge base, say so honestly and point them to the site above to see pricing — never invent an amount, and never defer to a human. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 400, temperature: 0.8 });
                 if (bDraft?.trim()) {
                   const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
@@ -356,23 +543,26 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
             tag = cls.sentiment === "INTERESTED" ? "INTERESTED" : cls.sentiment === "MAYBE" ? "Maybe later" : "Not interested";
             const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
             const intentGuide = cls.intent === "objection"
-              ? `They raised an OBJECTION (not a rejection). Acknowledge their concern, gently address it, and keep the door open. Do NOT push hard — be empathetic and offer to answer questions.`
+              ? `They raised an OBJECTION, pushed back, or sound annoyed. FIRST genuinely acknowledge their point, then answer their real concern with 1-2 concrete facts. Do NOT push, re-pitch a call/booking, or repeat anything already said. If they seem done, close warmly.`
               : cls.intent === "unclear"
               ? `Their message was UNCLEAR or too short to determine intent. Ask a gentle clarifying question to understand what they need.`
               : `Move toward booking a call.`;
             try {
+              const threadHistory = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
               draft = await groqChat([{
                 role: "user",
                 content: `${buildBIContext(profile)}A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 900)}"
+Your original email (read it — do not repeat its offer, link, or CTA):
+"${sanitizeForPrompt(threadHistory.split("\n")[0] ?? "", 800)}"
 You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
 COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factually; never invent anything not written here or above):
-"${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
+"${sanitizeForPrompt(siteKnowledge, 1800)}"` : ""}${profile.booking_link ? `
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff. ${intentGuide}
-Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST and the knowledge base contains no amount, answer honestly (pricing is on the site / happy to confirm details) and point them to the site — never invent a price and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
+Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST: answer with the amount when the knowledge base contains one; if none, say the price is on the site / happy to confirm — never invent an amount and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there — but only once, and never repeat a link you already put in your original email above. Ask exactly one question that moves toward a call. Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.`,
               }], { maxTokens: 600, temperature: 0.9 });
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
@@ -660,17 +850,20 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               } else {
                 // Self-serve funnel: AI answers and points to the owner's site; thread stays alive.
                 try {
-                  const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
+const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
+                  const convHistoryB = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
                    const bReply = await groqChat([{
                     role: "user",
                     content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
 Their newest message: "${sanitizeForPrompt(theirWords, 600)}"
+Conversation so far (do not repeat any link, offer or CTA already there):
+"${sanitizeForPrompt(convHistoryB, 1800)}"
 What we offer: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
-COMPANY KNOWLEDGE BASE (factual only — never invent anything beyond it): "${sanitizeForPrompt(siteKnowledge, 1000)}"` : ""}
+COMPANY KNOWLEDGE BASE (factual only — never invent anything beyond it): "${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}
 Your site — direct them there to get started: ${sanitizeForPrompt(profile.website_url, 200)}
 
-Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. If they asked about PRICE/PRICING/COST: answer using the company knowledge base; if pricing is not in the knowledge base, say so honestly and point them to the site above to see pricing — never invent an amount, and never defer to a human. Sign off as "Best regards". Return only the reply text.`,
+Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)} that answers them and clearly points them to the site link above as the next step. If the site link or booking link already appears in the conversation above, do NOT paste it again — refer to it as already shared. If they asked about PRICE/PRICING/COST: answer using the company knowledge base; if pricing is not in the knowledge base, say so honestly and point them to the site above to see pricing — never invent an amount, and never defer to a human. Sign off as "Best regards". Return only the reply text.`,
                   }], { maxTokens: 400, temperature: 0.8 });
                   if (bReply?.trim()) {
                     const newTurnsB = (t.ai_turns ?? 0) + 1;
@@ -719,23 +912,26 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
               try {
                 const siteKnowledge = profile.website_url ? await fetchSiteKnowledge(profile.website_url) : "";
                 const convIntentGuide = cls.intent === "objection"
-                  ? "They raised an OBJECTION (not a rejection). Acknowledge their concern, gently address it, and keep the door open. Be empathetic, not pushy."
+                  ? "They raised an OBJECTION, pushed back, or sound annoyed by something earlier in the thread. FIRST genuinely acknowledge their point, then answer their real concern with 1-2 concrete facts from the knowledge base. Do NOT pitch, re-offer a call/booking, or repeat anything already said. If they seem done, close warmly and invite them to reach out anytime."
                   : cls.intent === "unclear"
                   ? "Their message was UNCLEAR. Ask a gentle clarifying question to understand what they need."
-                  : t.ai_turns > 0 && t.last_ai_msg_at ? "You have already exchanged messages — keep continuity, do not reintroduce yourself." : "";
+                  : t.ai_turns > 0 ? "You have already exchanged messages — keep full continuity with the transcript below; do not reintroduce yourself, restate the offer, or repeat any link/CTA already shared." : "";
+                const threadHistory = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
                 aiReply = await groqChat([{
                   role: "user",
                   content: `${buildBIContext(profile)}Ongoing email conversation with a lead.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
 Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
 Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}
+Conversation so far (your messages + theirs — DO NOT repeat any offer, booking link, website link or CTA that appears here):
+"${sanitizeForPrompt(threadHistory, 2500)}"
 You originally offered: ${sanitizeForPrompt(profile.offer ?? "our services")}${siteKnowledge ? `
 COMPANY KNOWLEDGE BASE (from your website — answer questions factually from this; never invent anything not written here or above):
-"${sanitizeForPrompt(siteKnowledge, 1400)}"` : ""}${profile.booking_link ? `
+"${sanitizeForPrompt(siteKnowledge, 1600)}"` : ""}${profile.booking_link ? `
 Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}
 ${convIntentGuide}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", offer to cover specifics on a call"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, say the price is on the ${profile.website_url ? "site" : "details we can share"} — never invent an amount. Ask at most one question. Sign off as "Best regards". Return only the reply text.`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);

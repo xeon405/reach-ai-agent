@@ -146,7 +146,7 @@ export function classificationSystemPrompt(): string {
     "- unsubscribe: any stop/opt-out/remove request\n" +
     "- booking: meeting/calendar/schedule request\n" +
     "- question: asks about product, service, or process\n" +
-    "- objection: pushback on price, timing, relevance, or value but NOT a rejection\n" +
+    "- objection: pushback on price, timing, relevance, or value but NOT a rejection. ALSO treat as objection: annoyed or dismissive messages, repeated questions, pushback against something previously suggested by the sender (e.g. 'why do I need booking when everything is on your website?', 'how is this any different', 'I already told you', 'stop asking me about calls'). These are OBJECTIONS — not plain questions, and not human-only.\n" +
     "- unclear: message is too short or ambiguous to determine intent\n" +
     "- autoresponder: automated out-of-office or vacation reply\n" +
     "- other: none of the above\n\n" +
@@ -179,8 +179,8 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
     fallback.confidence = 0.95;
     fallback.requires_human = true;
   }
-  // Detect objection from snippet
-  if (/not (the )?right time|too expensive|budget|already (have|using)|not (a )?priority|not convinced|skeptical|why should i/i.test(fallbackSnippet)) {
+  // Detect objection from snippet (pushback on the sender's pitch, annoyance, repetitions)
+  if (/not (the )?right time|too expensive|budget|already (have|using)|not (a )?priority|not convinced|skeptical|why should i|why (do|would|should) i (need|want)|how is this (different|better|any different)|already (saw|read|told|seen|offered|asked)|stop (emailing|pitching|asking)|are you (real|serious|human)|this is (annoying|ridiculous|a scam|too much)|i don'?t (need|want) another|why does everyone/i.test(fallbackSnippet)) {
     fallback.intent = "objection";
     fallback.sentiment = "MAYBE";
   }
