@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, groqKeys, sanitizeForPrompt } from "../_shared/groq.ts";
+import { COLD_EMAIL_FEWSHOTS, containsArabic, pickOpenerDirective } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,21 +64,30 @@ serve(async (req) => {
     const senderSig = sanitizeForPrompt(prof?.signature ?? "", 200);
     const bookingLink = sanitizeForPrompt(prof?.booking_link ?? "", 300);
 
+    const arabic = containsArabic(leadName) || containsArabic(leadCompany);
+    const openerDirective = pickOpenerDirective(`${sanitizeForPrompt(leadName, 80)}-${sanitizeForPrompt(leadCompany, 120)}`);
+
     const content = await groqChat([{
       role: "user",
       content: `Write a short, personalized cold email from ${senderName || "a representative"} at ${sanitizeForPrompt(yourCompany ?? prof?.company ?? "our company", 120)} to ${sanitizeForPrompt(leadName, 80)} who is a ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
 Our offer: ${sanitizeForPrompt(yourOffer ?? "our service")}${bookingLink ? `
 Booking link you can mention for scheduling: ${bookingLink}` : ""}
+
+${openerDirective}
+
+${COLD_EMAIL_FEWSHOTS}
+
 Rules:
 - Maximum 5 sentences
 - Sound human and genuine, not salesy
-- Reference their specific role
+- Reference their specific role and one real detail from the lead facts
 - End with a simple question
 - No subject line, just the email body
 - Sign off exactly as: Best regards,
 ${senderName || `${sanitizeForPrompt(yourCompany ?? "the team", 120)} team`}
 - NEVER use placeholders like [Your Name] or [Company] — use only real details given above${senderSig ? `
-- Append this signature block verbatim at the end:\n${senderSig}` : ""}`,
+- Append this signature block verbatim at the end:\n${senderSig}` : ""}${arabic ? `
+- WRITE IN ARABIC with a professional Gulf business tone. Keep company names in Latin script.` : ""}`,
     }], { maxTokens: 800 });
 
     return json({ content });

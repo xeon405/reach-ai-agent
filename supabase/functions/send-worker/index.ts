@@ -10,6 +10,13 @@ import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
+import {
+  buildLeadFacts,
+  COLD_EMAIL_FEWSHOTS,
+  detectLeadLanguage,
+  hashString,
+  pickOpenerDirective,
+} from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -196,34 +203,48 @@ function isArabicLead(country: string | null | undefined): boolean {
 
 async function generateEmail(
   senderName: string,
-  leadName: string,
-  leadCompany: string,
-  leadJobTitle: string,
+  lead: Record<string, any>,
   userOffer: string,
-  avoidHint = "",
-  arabic = false,
   bookingLink = "",
-  biContext = ""
+  biContext = "",
+  arabic = false,
+  avoidHint = ""
 ): Promise<{ subject: string; body: string }> {
+  const leadName = sanitizeForPrompt(lead.name, 80);
+  const leadCompany = sanitizeForPrompt(lead.company ?? lead.category ?? "your company", 120);
+  const leadJobTitle = sanitizeForPrompt(lead.job_title, 80);
+  const lang = arabic ? `
+LANGUAGE REQUIREMENT — WRITE IN ARABIC:
+- Write the subject and body in fluent Modern Standard Arabic with a professional Gulf business tone.
+- Keep company names and technical terms in Latin script where natural.
+- The JSON keys stay "subject" and "body"; values are Arabic.` : "";
+  const openerDirective = pickOpenerDirective(`${leadName}-${leadCompany}-${leadJobTitle}`);
   const text = await groqChat([{
     role: "user",
-    content: `${biContext}Write a short cold email to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
+    content: `${biContext}${buildLeadFacts(lead)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
-The sender's name is ${sanitizeForPrompt(senderName, 60)} — sign off with their actual name, never a placeholder.
+A booking link is added automatically AFTER your text — do NOT type any URL yourself.
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
+${openerDirective}
+
+${COLD_EMAIL_FEWSHOTS}
+
 Rules for subject:
 - Under 50 characters. CLEAR and concrete about the outcome we deliver — a busy person should know what we do from the subject alone.
 - No riddles, no curiosity-only hooks like "what if...", no vague teasers.
 - No spam words, no ALL CAPS words, no emojis, no "Re:"/"Fwd:" prefixes.
+
 Rules for body:
 - 60-120 words max. Short paragraphs (1-3 sentences each).
-- Open with something tied to their role or industry. NEVER invent news, events, product launches, or claims about their company that were not provided — generic role-based openers are safer than fabricated facts.
+- Open with the ATTENTION angle above, made specific using the LEAD FACTS — reference something real about them, never invent.
 - Explain our offer in one clear sentence tied to THEIR pain.
-- Sell in this first message: state the offer plainly and end with one clear call-to-action.${bookingLink ? `\n- A booking link is added automatically right AFTER your text — do NOT type any URL yourself. Close with a line that points to it (e.g. "grab a time via the link below").` : "\n- End by inviting a one-word reply (e.g. \"yes\") if they want details."}
+- Sell plainly in this first message and end with one clear call-to-action pointing to the auto-added booking link, or a one-word reply ("yes") opening.
+- Sign off with the sender's ACTUAL name, never a placeholder.
 - Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.
+
 Return ONLY a JSON object with this exact format:
 {"subject":"...","body":"line1\\nline2\\nline3"}
-The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT — WRITE IN ARABIC:\n- Write the subject and body in fluent Modern Standard Arabic with a professional Gulf business tone.\n- Keep company names and technical terms in Latin script where natural.\n- The JSON keys stay \"subject\" and \"body\"; values are Arabic." : ""}`,
+The body must use \\n between paragraphs.${lang}`,
   }], { maxTokens: 700, temperature: 0.8 });
 
   const start = text.indexOf("{");
@@ -510,16 +531,14 @@ Deno.serve(async (req) => {
     }
 
     const destLink = String(ctx.profile.website_url || ctx.profile.booking_link || "");
+    const leadLang = detectLeadLanguage(lead, ctx.profile);
     let gen = await generateEmail(
       String(ctx.profile.name ?? "Best regards"),
-      lead.name ?? "there",
-      lead.company ?? "your company",
-      lead.job_title ?? "professional",
+      lead,
       String(ctx.profile.offer ?? "our service"),
-      "",
-      isArabicLead(lead.country),
       destLink,
-      biCtx
+      biCtx,
+      leadLang === "ar"
     );
     if (variant === "B") {
       const subs = abCache.get(job.campaign_id)?.subs ?? [];
@@ -528,7 +547,7 @@ Deno.serve(async (req) => {
     let check = localSpamScore(gen.subject, gen.body);
     if (check.score < 60 && check.hint) {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead.name ?? "there", lead.company ?? "your company", lead.job_title ?? "professional", String(ctx.profile.offer ?? "our service"), check.hint, isArabicLead(lead.country), String(ctx.profile.website_url || ctx.profile.booking_link || ""), biCtx);
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint);
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
@@ -637,6 +656,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     bookingLink = "",
     biContext = "",
     arabic = false,
+    openerDirective = "",
   ): Promise<{ subject: string; body: string }> {
     const history = previousEmails.map((e, i) => `Email ${i + 1}:\n${e}`).join("\n\n");
     const text = await groqChat([{
@@ -647,9 +667,10 @@ Write follow-up email #${currentStep} of ${totalSteps} to ${sanitizeForPrompt(le
 Our offer: ${sanitizeForPrompt(userOffer, 300)}
 Sender name: ${sanitizeForPrompt(senderName, 60)} — sign off with their actual name.
 
-Previous emails sent to this lead (for context — do NOT repeat them):
+Previous emails sent to this lead (for context — do NOT repeat their openers, phrasing or asks):
 ${history || "(no previous emails available)"}
 
+${openerDirective ? `\n${openerDirective}\n` : ""}
 ${bookingLink ? `A booking link exists: ${sanitizeForPrompt(bookingLink, 200)}. You may mention it once naturally if appropriate.` : "No booking link is configured. Do NOT invent one."}
 
 Rules:
@@ -820,6 +841,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
 
         // ── AI GENERATE FOLLOW-UP ──
         const destLink = String(profile.website_url || profile.booking_link || "");
+        const leadLang = detectLeadLanguage(lead, profile);
+        const fuOpener = pickOpenerDirective(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`);
         const gen = await generateFollowUp(
           String(profile.name ?? "Best regards"),
           lead.name ?? "there",
@@ -831,7 +854,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
           14,
           destLink,
           biCtx,
-          isArabicLead(lead.country),
+          leadLang === "ar",
+          fuOpener,
         );
 
         // Spam check
@@ -849,7 +873,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
               14,
               destLink,
               biCtx,
-              isArabicLead(lead.country),
+              leadLang === "ar",
+              fuOpener,
             );
             if (localSpamScore(retry.subject, retry.body).score > check.score) {
               Object.assign(gen, retry);
