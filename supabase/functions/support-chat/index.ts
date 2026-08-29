@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
+import { buildSupportUserContext, containsArabic } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,6 +67,7 @@ OutreachAI is an AI-powered cold-email agent. It finds leads, writes personalize
 - Rename or delete campaigns.
 - Campaign edit (/campaign-edit/:id): name, status, A/B test subject lines, autopilot toggle, follow-ups toggle.
 - Campaign review (/campaign-review/:id): shows the full 14-step follow-up sequence with visual timeline.
+- Referral rewards: inviting friends via your invite link can grant FREE temporary plan upgrades (e.g., 7 days of Starter).
 
 ### Follow-Up System
 - 14-step automated follow-up sequence per campaign.
@@ -100,6 +101,7 @@ OutreachAI is an AI-powered cold-email agent. It finds leads, writes personalize
 - Agency: $149/month — 500 emails, 5000 leads.
 - Powered by LemonSqueezy for payment processing.
 - Upgrades/downgrades take effect immediately with proration.
+- Referral rewards may temporarily raise your effective plan (free Starter days per friend who joins via your invite link).
 
 ### Free Tools (/tools)
 - Email Validator: paste an email, get verification result (valid, risky, invalid) with DNS checks.
@@ -143,11 +145,11 @@ Q: "How do I start?" / "What do I do first?"
 A: Three steps: (1) Go to Settings → connect your Gmail via Google OAuth. (2) Go to Lead Finder → pick a niche and country → search and save leads. (3) Go to Campaigns → Create → write your offer → AI Write to generate the email → Launch. Your first emails go out within minutes.
 
 Q: "How many emails can I send?"
-A: Depends on your plan. Free: 10/month. Starter ($37): 50/month. Growth ($79): 200/month. Agency ($149): 500/month. The system also enforces safe daily limits to protect your Gmail reputation.
+A: Depends on your plan. Free: 10/month. Starter ($37): 50/month. Growth ($79): 200/month. Agency ($149): 500/month. The system also enforces safe daily limits to protect your Gmail reputation. Use the ACCOUNT CONTEXT to cite their actual monthly usage when relevant.
 
 ### Sending Issues
 Q: "Why aren't my emails sending?"
-A: Check these: (1) Gmail must be connected in Settings (look for the green "Connected" badge). (2) Campaign must be Active (not paused). (3) Daily safe limit may be reached — it resets next day. (4) Check if you've hit your plan's monthly cap in Billing.
+A: Check these: (1) Gmail must be connected in Settings (look for the green "Connected" badge). (2) Campaign must be Active (not paused). (3) Daily safe limit may be reached — it resets next day. (4) Check if you've hit your plan's monthly cap in Billing. Use the ACCOUNT CONTEXT to confirm their actual today/month counts when helpful.
 
 Q: "Emails going to spam?"
 A: Common fixes: (1) Start with 5-10 emails/day and increase gradually. (2) Personalize your emails — the AI does this by default. (3) Avoid ALL-CAPS subject lines. (4) Use your real name in the signature. (5) Add a booking link instead of multiple links. (6) Make sure your Gmail account is aged (not brand new).
@@ -157,7 +159,7 @@ A: Yes. Before launching: go to Campaigns → click the campaign → edit the em
 
 ### Follow-Ups
 Q: "How do follow-ups work?"
-A: After the initial email, OutreachAI automatically sends up to 14 follow-up emails over months. Timing: 3 days, 8 days, 18 days, 33 days, 58 days, 88 days, 148 days, 268 days, 418 days, 568 days, 748 days, 1048 days, 1413 days. Each follow-up is AI-generated with context from previous emails. Automatically stops when the lead replies. You can toggle follow-ups off per campaign.
+A: After the initial email, OutreachAI automatically sends up to 14 follow-up emails over months. Timing: 3 days, 8 days, 18 days, 33 days, 58 days, 88 days, 148 days, 268 days, 418 days, 568 days, 748 days, 1048 days, 1413 days. Each follow-up is AI-generated with context from previous emails and follows a step-aware arc (early = new value, mid = proof, late = gentle decision, final = polite goodbye). Automatically stops when the lead replies. You can toggle follow-ups off per campaign.
 
 Q: "Can I turn off follow-ups?"
 A: Yes. Go to Campaigns → Edit Campaign → toggle "Follow-ups" off. This stops all pending follow-ups for that campaign.
@@ -185,6 +187,10 @@ A: Yes, anytime. Changes take effect immediately. Proration is handled by LemonS
 
 Q: "How do I cancel?"
 A: Go to Billing → manage your subscription. Or email outreachai.team@gmail.com.
+
+### Referrals
+Q: "How does the referral reward work?"
+A: Share your invite link (Settings → Invite link). When a friend signs up through it, they and you both get a FREE temporary plan upgrade — e.g., 7 days of Starter (50 emails, 250 leads). Rewards are per-friend and auto-expire. Check Settings to see your current reward status.
 
 ### Data & Privacy
 Q: "Delete my data?" / "How do I delete my account?"
@@ -215,12 +221,13 @@ A: For account-specific issues, billing disputes, or feature requests, email **o
 - Use numbered steps for how-tos.
 - Be friendly and confident. Emoji-light (max one per message).
 - If the user is frustrated, acknowledge it and offer the support email.
+- Be consistent with your OWN earlier answers in this conversation — if asked again, briefly restate the same answer instead of changing it.
 - For account-specific issues (billing problems, bugs, data requests), always provide outreachai.team@gmail.com.
 - Never invent features or pricing not listed above.
 - Never reveal the company's location, address, country, or any geographic/physical information about OutreachAI or its operators. If asked "where is this company based" or similar, respond: "For company information, please reach out to outreachai.team@gmail.com."
 - If asked about something outside OutreachAI's scope, gently redirect: "I'm best at helping with OutreachAI features. For that, I'd recommend emailing outreachai.team@gmail.com."`;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -235,22 +242,135 @@ serve(async (req) => {
       authHeader.replace("Bearer ", "")
     );
     if (authErr || !authData.user) return json({ error: "Invalid session" }, 401);
+    const userId = authData.user.id;
 
     const body = await req.json().catch(() => ({}));
-    const history = Array.isArray(body?.messages) ? body.messages.slice(-16) : [];
-    if (history.length === 0) throw new Error("No messages");
+    const givenThread = String(body?.thread_id ?? "").trim();
 
-    const sanitized = history.map((m: { role?: string; content?: string }) => ({
+    // ── Thread resolution: given id → latest open thread for user → new thread ──
+    let threadId = givenThread;
+    if (threadId) {
+      const { data: thr } = await admin
+        .from("support_chat_threads").select("id").eq("id", threadId).eq("user_id", userId).maybeSingle();
+      if (!thr) threadId = "";
+    }
+    if (!threadId) {
+      const { data: latest } = await admin
+        .from("support_chat_threads").select("id").eq("user_id", userId).eq("status", "auto")
+        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      threadId = latest?.id ?? "";
+    }
+
+    // ── 'history' action: rehydrate a thread (device switch / reload) ──
+    if (body?.action === "history") {
+      if (!threadId) return json({ thread_id: null, messages: [] });
+      const { data: msgs } = await admin
+        .from("support_chat_messages")
+        .select("role, content").eq("thread_id", threadId)
+        .order("created_at", { ascending: true }).limit(40);
+      return json({ thread_id: threadId, messages: msgs ?? [] });
+    }
+
+    const text = String(body?.text ?? "").trim();
+    if (!text) throw new Error("No message");
+    if (text.length > 1500) throw new Error("Message too long");
+
+    if (!threadId) {
+      const { data: created, error: cErr } = await admin
+        .from("support_chat_threads").insert({ user_id: userId, status: "auto" })
+        .select("id").single();
+      if (cErr || !created) throw new Error("Could not start thread");
+      threadId = created.id;
+    }
+    await admin.from("support_chat_messages").insert({
+      thread_id: threadId, role: "user", content: text.slice(0, 1500),
+    });
+    await admin.from("support_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+
+    // ── Load history (incl. the new message) for context ──
+    const { data: msgs } = await admin
+      .from("support_chat_messages")
+      .select("role, content").eq("thread_id", threadId)
+      .order("created_at", { ascending: true }).limit(16);
+    const history = (msgs ?? []).map((m, i) => ({
       role: m.role === "assistant" ? "assistant" : "user",
-      content: sanitizeForPrompt(String(m.content ?? "").slice(0, 1500), 1500),
+      content: String(m.content).slice(0, 1500),
     }));
+    // Language requirement lives ON the user's own message (system-level nudges
+    // get ignored after a long English history; inline wins every time).
+    if (containsArabic(text) && history.length > 0) {
+      const last = history[history.length - 1];
+      if (last.role === "user") {
+        last.content = `LANGUAGE NOTE — the user wrote to you in ARABIC. You MUST reply in ARABIC (clear, friendly Gulf business tone; keep product terms in English where natural).\n\n${last.content}`;
+      }
+    }
+
+    // ── Account context: real numbers so answers are specific, not generic ──
+    const { data: profile } = await admin.from("profiles")
+      .select("name, plan, referral_reward_plan, referral_reward_until, gmail_connected, gmail_state, gmail_email")
+      .eq("id", userId).maybeSingle();
+    const { data: usage } = await admin.from("usage_limits")
+      .select("emails_sent_today, limit_date").eq("user_id", userId).maybeSingle();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todaySent = usage && usage.limit_date === todayStr ? Number(usage.emails_sent_today ?? 0) : 0;
+
+    const { count: monthSent } = await admin.from("emails_sent")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId).gte("sent_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+      .not("gmail_message_id", "is", null);
+    const { count: leadCount } = await admin.from("leads")
+      .select("*", { count: "exact", head: true }).eq("user_id", userId);
+    const { count: campCount } = await admin.from("campaigns")
+      .select("*", { count: "exact", head: true }).eq("user_id", userId);
+    const { count: activeCampCount } = await admin.from("campaigns")
+      .select("*", { count: "exact", head: true }).eq("user_id", userId).eq("status", "active");
+    const { count: pendingFus } = await admin.from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("followup_status", "active").not("next_followup_at", "is", null)
+      .in("campaign_id", (await admin.from("campaigns").select("id").eq("user_id", userId)).data?.map((c: any) => c.id) ?? []);
+
+    // Resolve effective plan incl. referral reward, and whether follow-ups are enabled
+    const { data: fuCfg } = await admin.from("campaigns").select("followups_enabled").eq("user_id", userId).limit(1).maybeSingle();
+    const effPlanRaw = profile?.plan ?? "starter";
+    const rewardPlan = profile?.referral_reward_plan ?? null;
+    const rewardUntil = profile?.referral_reward_until ? new Date(profile.referral_reward_until).getTime() : 0;
+    let plan = effPlanRaw;
+    const ORDER = ["free", "starter", "growth", "agency"];
+    if (rewardPlan && ORDER.indexOf(rewardPlan) > -1 && rewardUntil > Date.now() && ORDER.indexOf(rewardPlan) > ORDER.indexOf(plan)) {
+      plan = rewardPlan;
+    }
+
+    const accountCtx = buildSupportUserContext({
+      name: profile?.name ?? null,
+      plan,
+      gmailConnected: profile?.gmail_connected ?? false,
+      gmailEmail: profile?.gmail_email ?? null,
+      todaySent,
+      monthSent: monthSent ?? 0,
+      leads: leadCount ?? 0,
+      campaigns: campCount ?? 0,
+      activeCampaigns: activeCampCount ?? 0,
+      pendingFollowups: pendingFus ?? 0,
+      followupsEnabled: fuCfg?.followups_enabled ?? true,
+    });
+
+    const arabic = containsArabic(text);
+    const system = `${MANUAL}
+
+${accountCtx}
+${arabic ? "\n\nLANGUAGE REQUIREMENT — the user writes in Arabic. Reply ONLY in Arabic (modern standard Arabic, friendly and clear). Product terms may stay in English where natural." : ""}`;
 
     const answer = await groqChat(
-      [{ role: "system", content: MANUAL }, ...sanitized],
+      [{ role: "system", content: system }, ...history],
       { maxTokens: 900, temperature: 0.3 }
     );
 
-    return json({ reply: answer });
+    await admin.from("support_chat_messages").insert({
+      thread_id: threadId, role: "assistant", content: answer.slice(0, 3000),
+    });
+    await admin.from("support_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+
+    return json({ reply: answer, thread_id: threadId });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }

@@ -13,6 +13,7 @@ const SUGGESTIONS = [
 ];
 
 const CHAT_KEY = "outreachai_support_chat";
+const THREAD_KEY = "outreachai_support_thread";
 const SUPPORT_EMAIL = "outreachai.team@gmail.com";
 
 const WELCOME: Msg = {
@@ -33,6 +34,17 @@ function loadMessages(): Msg[] {
   return [WELCOME];
 }
 
+function loadThreadId(): string | null {
+  try { return localStorage.getItem(THREAD_KEY); } catch { return null; }
+}
+
+function storeThreadId(id: string | null) {
+  try {
+    if (id) localStorage.setItem(THREAD_KEY, id);
+    else localStorage.removeItem(THREAD_KEY);
+  } catch { /* ignore */ }
+}
+
 function persistMessages(msgs: Msg[]) {
   try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-40))); } catch { /* quota — trim oldest */ }
 }
@@ -49,6 +61,39 @@ export function SupportChat() {
   }, [messages, open]);
 
   useEffect(() => { persistMessages(messages); }, [messages]);
+
+  // Rehydrate a previously started conversation from the server so chat state
+  // survives reloads and works across devices.
+  useEffect(() => {
+    if (!open) return;
+    const threadId = loadThreadId();
+    if (!threadId) return;
+    (async () => {
+      const { data: s } = await supabase.auth.getSession();
+      const token = s.session?.access_token;
+      if (!token) return;
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              apikey:
+                (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
+                "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ thread_id: threadId, action: "history" }),
+          }
+        );
+        const data = await res.json();
+        if (res.ok && data.messages?.length) {
+          setMessages(data.messages.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })));
+        }
+      } catch { /* keep local copy */ }
+    })();
+  }, [open]);
 
   async function send(text?: string) {
     const q = (text ?? input).trim();
@@ -72,11 +117,12 @@ export function SupportChat() {
               "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ messages: next.slice(-16) }),
+          body: JSON.stringify({ thread_id: loadThreadId(), text: q }),
         }
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
+      storeThreadId(data.thread_id ?? null);
       setMessages([...next, { role: "assistant", content: data.reply }]);
     } catch (e) {
       setMessages([

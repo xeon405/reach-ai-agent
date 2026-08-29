@@ -129,6 +129,47 @@ CONTINUITY RULES (non-negotiable):
 - Match the lead's energy and length. Answer the question they actually asked before anything else.
 `;
 
+export const PLAN_CAPS: Record<string, { emails: number; leads: number }> = {
+  free: { emails: 10, leads: 25 },
+  starter: { emails: 50, leads: 250 },
+  growth: { emails: 200, leads: 1000 },
+  agency: { emails: 500, leads: 5000 },
+};
+
+/** Real account numbers injected into the support-chat system prompt so answers
+ *  are specific ("you're on Starter, 30 of 50 monthly emails used") instead of
+ *  generic product boilerplate. Pure function → offline-testable. */
+export function buildSupportUserContext(p: {
+  name: string | null;
+  plan: string;
+  gmailConnected: boolean | null;
+  gmailEmail: string | null;
+  todaySent: number;
+  monthSent: number;
+  leads: number;
+  campaigns: number;
+  activeCampaigns: number;
+  pendingFollowups: number;
+  followupsEnabled: boolean | null;
+}): string {
+  const cap = PLAN_CAPS[p.plan]?.emails;
+  const leadCap = PLAN_CAPS[p.plan]?.leads;
+  const capLine = cap ? ` (monthly email cap ${cap}, ${leadCap} leads)` : "";
+  const fuLine = p.followupsEnabled === false
+    ? "follow-up engine currently toggled OFF for their campaigns"
+    : "follow-up engine active per campaign";
+  const lines: string[] = ["## USER'S ACCOUNT CONTEXT (REAL numbers from their account — use these exact values when they matter; never invent other numbers)"];
+  lines.push(`- User name: ${p.name ?? "unknown"}`);
+  lines.push(`- Current plan: ${p.plan}${capLine}`);
+  lines.push(`- Gmail: ${p.gmailConnected ? "connected" + (p.gmailEmail ? ` (${p.gmailEmail})` : "") : "NOT connected"}`);
+  lines.push(`- Emails sent today: ${p.todaySent}`);
+  lines.push(`- Emails sent this month: ${p.monthSent}${cap ? ` of ${cap}` : ""}`);
+  lines.push(`- Leads in database: ${p.leads}`);
+  lines.push(`- Campaigns: ${p.campaigns} total, ${p.activeCampaigns} active`);
+  lines.push(`- Follow-ups pending for this user: ${p.pendingFollowups} (${fuLine})`);
+  return lines.join("\n");
+}
+
 /** Step-aware follow-up arc. Each phase has a distinct JOB so the 13-step
  *  reminder chain reads like a person thinking, not a broken record.
  *  outbound step numbering: initial email = step 1, then follow-ups 2..14
