@@ -118,7 +118,6 @@ function AuthenticatedLayout() {
             <span className="text-sm text-muted-foreground">OutreachAI</span>
             <div className="ml-auto flex items-center gap-1">
               <NotificationBell />
-              <ThemeToggle />
             </div>
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-8">
