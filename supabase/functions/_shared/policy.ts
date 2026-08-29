@@ -11,6 +11,7 @@ export interface Classification {
   unsubscribe: boolean;
   sentiment: "INTERESTED" | "MAYBE" | "NOT_INTERESTED";
   requires_human: boolean;
+  reason: string;            // one-line evidence: WHY this label, what the lead's words showed
   suggested_action:
     | "suppress"
     | "notify_owner_booking"
@@ -139,6 +140,7 @@ export function classificationSystemPrompt(): string {
     '"unsubscribe":true|false,' +
     '"sentiment":"INTERESTED|MAYBE|NOT_INTERESTED",' +
     '"requires_human":true|false,' +
+    '"reason":"one short phrase quoting the evidence from their words",' +
     '"suggested_action":"suppress|notify_owner_booking|auto_reply|alert_owner|handoff|do_nothing|continue_conversation"}\n' +
     "Intent rules:\n" +
     "- interested: genuine interest, wants to learn more\n" +
@@ -154,11 +156,29 @@ export function classificationSystemPrompt(): string {
     "Set requires_human=true ONLY for: legal, contractual, invoice/payment, complaints, refunds, security/privacy, or hard price negotiation (e.g. 'too expensive'). " +
     "Set requires_human=true if you cannot determine intent at all. " +
     "Any meeting/time/calendar request => booking_intent=true. " +
-    "Any stop/remove/opt-out request => unsubscribe=true."
+    "Any stop/remove/opt-out request => unsubscribe=true.\n\n" +
+    CLASSIFICATION_FEWSHOTS
   );
 }
 
+// Few-shot reference — realistic cold-email replies with the correct verdict.
+// Demonstrates how to use the conversation history ('Earlier in this thread')
+// and how honest the 'reason' must be. Never copy sentences verbatim.
+const CLASSIFICATION_FEWSHOTS = [
+  { reply: "Sounds good — can we talk tomorrow around 3pm?", thread: "", verdict: { intent: "booking", confidence: 0.95, interested: true, booking_intent: true, unsubscribe: false, sentiment: "INTERESTED", requires_human: false, reason: "asked for a specific time (tomorrow 3pm)", suggested_action: "notify_owner_booking" } },
+  { reply: "why would I need this, it sounds like every other agency", thread: "You: we automate your cold outreach\nLead: why would I need this", verdict: { intent: "objection", confidence: 0.9, interested: false, booking_intent: false, unsubscribe: false, sentiment: "MAYBE", requires_human: false, reason: "pushback on differentiation, not a rejection", suggested_action: "auto_reply" } },
+  { reply: "yes", thread: "You: want a quick rundown of how it works?\nLead: yes", verdict: { intent: "interested", confidence: 0.85, interested: true, booking_intent: false, unsubscribe: false, sentiment: "INTERESTED", requires_human: false, reason: "'yes' answers my earlier question about seeing how it works", suggested_action: "auto_reply" } },
+  { reply: "please remove me from your list", thread: "", verdict: { intent: "unsubscribe", confidence: 0.98, interested: false, booking_intent: false, unsubscribe: true, sentiment: "NOT_INTERESTED", requires_human: false, reason: "explicit opt-out request", suggested_action: "suppress" } },
+  { reply: "not for us, thanks", thread: "", verdict: { intent: "not_interested", confidence: 0.92, interested: false, booking_intent: false, unsubscribe: false, sentiment: "NOT_INTERESTED", requires_human: false, reason: "polite but clear rejection", suggested_action: "do_nothing" } },
+  { reply: "how much does this cost?", thread: "", verdict: { intent: "question", confidence: 0.9, interested: true, booking_intent: false, unsubscribe: false, sentiment: "INTERESTED", requires_human: false, reason: "direct pricing question — answerable", suggested_action: "auto_reply" } },
+  { reply: "I'm out of the office until Monday", thread: "", verdict: { intent: "autoresponder", confidence: 0.95, interested: false, booking_intent: false, unsubscribe: false, sentiment: "NOT_INTERESTED", requires_human: true, reason: "automatic out-of-office reply", suggested_action: "handoff" } },
+  { reply: "we already have a tool for this and it's not worth switching", thread: "", verdict: { intent: "objection", confidence: 0.88, interested: false, booking_intent: false, unsubscribe: false, sentiment: "NOT_INTERESTED", requires_human: false, reason: "claims an existing solution — pushback, not a rejection", suggested_action: "auto_reply" } },
+].map(
+  (f) => `Example reply: "${f.reply}"${f.thread ? `\nEarlier in this thread:\n${f.thread}` : ""}\nCorrect verdict: ${JSON.stringify(f.verdict)}`
+).join("\n\n");
+
 export function parseClassification(rawText: string, fallbackSnippet: string): Classification {
+  let fallbackReason = "fallback heuristic — confident classification impossible";
   const fallback: Classification = {
     intent: fallbackSnippet ? "question" : "other",
     confidence: 0.3,
@@ -171,24 +191,29 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
         ? "INTERESTED"
         : "MAYBE",
     requires_human: /legal|contract|invoice|complaint|refund|negotiat|too expensive|\bbudget\b/i.test(fallbackSnippet),
+    reason: fallbackReason,
     suggested_action: "continue_conversation",
   };
+  if (fallback.unsubscribe) fallback.reason = "explicit opt-out request";
   // Detect autoresponder from snippet
   if (/auto.?reply|out of office|away from|on vacation|automatic response/i.test(fallbackSnippet)) {
     fallback.intent = "autoresponder";
     fallback.confidence = 0.95;
     fallback.requires_human = true;
+    fallback.reason = "automatic out-of-office reply";
   }
   // Detect objection from snippet (pushback on the sender's pitch, annoyance, repetitions)
   if (/not (the )?right time|too expensive|budget|already (have|using)|not (a )?priority|not convinced|skeptical|why should i|why (do|would|should) i (need|want)|how is this (different|better|any different)|already (saw|read|told|seen|offered|asked)|stop (emailing|pitching|asking)|are you (real|serious|human)|this is (annoying|ridiculous|a scam|too much)|i don'?t (need|want) another|why does everyone/i.test(fallbackSnippet)) {
     fallback.intent = "objection";
     fallback.sentiment = "MAYBE";
+    fallback.reason = "pushback on the pitch, not a rejection";
   }
   // Detect unclear (very short messages)
   if (fallbackSnippet.trim().length < 20 && !fallback.booking_intent && !fallback.unsubscribe) {
     fallback.intent = "unclear";
     fallback.confidence = 0.25;
     fallback.requires_human = true;
+    fallback.reason = "too short or ambiguous to decide safely";
   }
   try {
     const start = rawText.indexOf("{");
@@ -205,6 +230,7 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
         ? obj.sentiment
         : fallback.sentiment,
       requires_human: Boolean(obj.requires_human),
+      reason: String(obj.reason ?? fallback.reason).slice(0, 160),
       suggested_action: obj.suggested_action ?? "continue_conversation",
     };
     // Reconciliation: deterministic objection/opt-out signals beat a flaky LLM
@@ -213,9 +239,11 @@ export function parseClassification(rawText: string, fallbackSnippet: string): C
     if (parsed.unsubscribe || /unsubscribe|opt.?out|remove me|stop emailing/i.test(fallbackSnippet)) {
       parsed.intent = "other";
       parsed.requires_human = false;
+      parsed.reason = "explicit opt-out request";
     } else if (/not (the )?right time|too expensive|budget|already (have|using)|not (a )?priority|not convinced|skeptical|why should i|why (do|would|should) i (need|want)|how is this (different|better|any different)|already (saw|read|told|seen|offered|asked)|stop (emailing|pitching|asking)|are you (real|serious|human)|this is (annoying|ridiculous|a scam|too much)|i don'?t (need|want) another|why does everyone/i.test(fallbackSnippet)) {
       parsed.intent = "objection";
       parsed.requires_human = /legal|contract|invoice|complaint|refund|negotiat/i.test(fallbackSnippet) ? true : false;
+      parsed.reason = "reconciled: objective pushback signals override the model label";
       if (!parsed.requires_human && parsed.sentiment === "NOT_INTERESTED") parsed.sentiment = "MAYBE";
     }
     return parsed;

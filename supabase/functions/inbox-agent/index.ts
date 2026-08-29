@@ -410,6 +410,7 @@ Deno.serve(async (req) => {
           let replySubject = "";
           let fullReplyText = "";
           let snippet = "";
+          let threadId: string | null = null;
           try {
             const fullRes = await fetch(
               `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
@@ -417,6 +418,7 @@ Deno.serve(async (req) => {
             );
             if (fullRes.ok) {
               const fullData = await fullRes.json();
+              threadId = fullData?.threadId ?? null;
               replySubject = (fullData?.payload?.headers ?? []).find((h: { name: string }) => h.name === "Subject")?.value ?? "";
               snippet = fullData?.snippet ?? "";
               fullReplyText = stripQuoted(extractGmailBody(fullData?.payload)).slice(0, 900);
@@ -427,10 +429,14 @@ Deno.serve(async (req) => {
           let cls: Classification = parseClassification("", `${replySubject}\n${snippet || fullReplyText}`);
           if (groqKeys().length > 0 && (replySubject || fullReplyText || snippet)) {
             try {
+              const threadWindow = await fetchThreadHistory(tok, threadId, lead.email, profile.gmail_email || profile.email, 3);
+              const threadCtx = threadWindow
+                ? `\n\nEarlier in this thread (read this before classifying — a short reply like "yes" or "no" usually answers a question asked earlier):\n${sanitizeForPrompt(threadWindow, 1300)}`
+                : "";
               const raw = await groqChat([
                 { role: "system", content: classificationSystemPrompt() },
-                { role: "user", content: `Subject: ${sanitizeForPrompt(replySubject, 150)}\nMessage: ${sanitizeForPrompt(fullReplyText || snippet, 800)}` },
-              ], { maxTokens: 300, temperature: 0 });
+                { role: "user", content: `Subject: ${sanitizeForPrompt(replySubject, 150)}\nMessage: ${sanitizeForPrompt(fullReplyText || snippet, 800)}${threadCtx}` },
+              ], { maxTokens: 320, temperature: 0 });
               cls = parseClassification(raw, `${replySubject}\n${fullReplyText || snippet}`);
             } catch (ce) {
               groqFail = String(ce).slice(0, 160);
@@ -445,7 +451,7 @@ Deno.serve(async (req) => {
             intent: cls.intent, confidence: cls.confidence ?? 0.5, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
-            suggested_action: cls.suggested_action, raw: { subject: replySubject.slice(0, 150) },
+            suggested_action: cls.suggested_action, reason: cls.reason, raw: { subject: replySubject.slice(0, 150) },
           });
           if (clsErr && String(clsErr.message ?? "").includes("duplicate key")) continue;
           await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, confidence: cls.confidence, source: "first_reply" } });
@@ -590,7 +596,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
 
           // In-app alert for every detected first reply (slim + link)
           if (profile.notify_replies !== false) {
-            await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "first_reply", title: `${tag} — ${lead.name ?? lead.email}`, body: (fullReplyText || snippet).slice(0, 280), priority: cls.interested ? "high" : "normal" });
+            await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "first_reply", title: `${tag} — ${lead.name ?? lead.email}`, body: `${(fullReplyText || snippet).slice(0, 280)}${cls.reason ? `\n\nBecause: ${cls.reason}` : ""}`, priority: cls.interested ? "high" : "normal" });
           }
         } catch (rowErr) {
           console.error("[inbox] first-reply row failed:", rowErr instanceof Error ? rowErr.message : rowErr);
@@ -751,6 +757,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               intent: "autoresponder", confidence: 0.95, interested: false,
               booking_intent: false, unsubscribe: false,
               sentiment: "NOT_INTERESTED", requires_human: false,
+              reason: "automatic out-of-office / vacation reply",
               suggested_action: "do_nothing", raw: { subject: subj.slice(0, 150) },
             });
             if (!autoClsInsert.error) {
@@ -783,10 +790,14 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           let cls: Classification = parseClassification("", `${subj}\n${theirWords}`);
           if (groqKeys().length > 0) {
             try {
+              const threadWindow = await fetchThreadHistory(tok, hits[0].threadId ?? msg.threadId ?? null, lead.email, profile.gmail_email || profile.email, 3);
+              const threadCtx = threadWindow
+                ? `\n\nEarlier in this thread (read this before classifying — a short reply like "yes" or "no" usually answers a question asked earlier):\n${sanitizeForPrompt(threadWindow, 1300)}`
+                : "";
               const raw = await groqChat([
                 { role: "system", content: classificationSystemPrompt() },
-                { role: "user", content: `Subject: ${sanitizeForPrompt(subj, 150)}\nMessage: ${sanitizeForPrompt(theirWords, 800)}` },
-              ], { maxTokens: 300, temperature: 0 });
+                { role: "user", content: `Subject: ${sanitizeForPrompt(subj, 150)}\nMessage: ${sanitizeForPrompt(theirWords, 800)}${threadCtx}` },
+              ], { maxTokens: 320, temperature: 0 });
               cls = parseClassification(raw, `${subj}\n${theirWords}`);
             } catch (ce) { groqFail = groqFail || String(ce).slice(0, 160); }
           }
@@ -799,7 +810,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             intent: cls.intent, confidence: cls.confidence ?? 0.5, interested: cls.interested,
             booking_intent: cls.booking_intent, unsubscribe: cls.unsubscribe,
             sentiment: cls.sentiment, requires_human: cls.requires_human,
-            suggested_action: cls.suggested_action, raw: { subject: subj.slice(0, 150), snip: theirWords.slice(0, 150) },
+            suggested_action: cls.suggested_action, reason: cls.reason, raw: { subject: subj.slice(0, 150), snip: theirWords.slice(0, 150) },
           });
           if (clsErr) {
             // Duplicate message id → already processed by a previous run; just advance the pointer.
