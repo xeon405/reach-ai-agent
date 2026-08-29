@@ -30,6 +30,7 @@ interface NewTextSearchResponse {
     websiteUri?: string;
     internationalPhoneNumber?: string;
     formattedAddress?: string;
+    countryCode?: string;
     rating?: number;
     types?: string[];
     primaryType?: string;
@@ -43,6 +44,7 @@ interface NewPlaceDetailsResponse {
   websiteUri?: string;
   internationalPhoneNumber?: string;
   formattedAddress?: string;
+  countryCode?: string;
   rating?: number;
   types?: string[];
   primaryType?: string;
@@ -50,16 +52,21 @@ interface NewPlaceDetailsResponse {
 
 // Map country name to Google Maps region bias
 const COUNTRY_REGIONS: Record<string, string> = {
-  "united states": "us", "united kingdom": "gb", canada: "ca", australia: "au",
-  india: "in", germany: "de", france: "fr", spain: "es", italy: "it",
-  netherlands: "nl", brazil: "br", mexico: "mx", "south africa": "za",
-  nigeria: "ng", uae: "ae", "saudi arabia": "sa", singapore: "sg",
+  "united states": "us", usa: "us", us: "us", america: "us",
+  "united kingdom": "gb", uk: "gb", england: "gb", scotland: "gb",
+  canada: "ca", australia: "au", india: "in", germany: "de",
+  france: "fr", spain: "es", italy: "it", netherlands: "nl",
+  brazil: "br", mexico: "mx", "south africa": "za", nigeria: "ng",
+  uae: "ae", emirates: "ae", "united arab emirates": "ae", dubai: "ae",
+  "saudi arabia": "sa", ksa: "sa", singapore: "sg",
   malaysia: "my", philippines: "ph", pakistan: "pk", egypt: "eg",
   turkey: "tr", poland: "pl", sweden: "se", norway: "no", denmark: "dk",
   japan: "jp", "south korea": "kr", china: "cn", thailand: "th",
   indonesia: "id", vietnam: "vn", colombia: "co", argentina: "ar",
-  chile: "cl", peru: "pe", "new zealand": "nz", ireland: "ie",
-  portugal: "pt", austria: "at", switzerland: "ch", belgium: "be",
+  chile: "cl", peru: "pe", portugal: "pt", ireland: "ie", belgium: "be",
+  austria: "at", switzerland: "ch", finland: "fi", "new zealand": "nz",
+  israel: "il", qatar: "qa", kuwait: "kw", bahrain: "bh", oman: "om",
+  morocco: "ma", tunisia: "tn", jordan: "jo", lebanon: "lb", "hong kong": "hk",
 };
 
 // Pretty-print a Google Maps place type: "dentist" -> "Dentist", "health_care" -> "Health Care"
@@ -100,16 +107,18 @@ export async function searchGoogleMaps(
   const seenEmails = new Set<string>();
 
   // Step 1: Text Search via Places API (New)
-  const fieldMask = "places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.formattedAddress,places.rating,places.types,places.primaryType,nextPageToken";
+  const fieldMask = "places.id,places.displayName,places.websiteUri,places.internationalPhoneNumber,places.formattedAddress,places.countryCode,places.rating,places.types,places.primaryType,nextPageToken";
   let pageToken: string | undefined;
   let pagesFetched = 0;
   const MAX_PAGES = 3;
+  const region = COUNTRY_REGIONS[String(country ?? "").toLowerCase().trim()];
 
   while (leads.length < limit && pagesFetched < MAX_PAGES) {
     const body: Record<string, unknown> = {
       textQuery: query,
       maxResultCount: 20,
     };
+    if (region) body.regionCode = region;
     if (pageToken) body.pageToken = pageToken;
 
     const controller = new AbortController();
@@ -159,6 +168,7 @@ export async function searchGoogleMaps(
       if (!website) continue;
 
       const { city, country: parsedCountry } = parseCityCountry(address, country);
+      const countryName = String(place.countryCode ?? parsedCountry ?? "").toLowerCase();
       const category = formatCategory(place.types, place.primaryType);
 
       // Step 3: Enrich website for publicly displayed emails
@@ -174,7 +184,7 @@ export async function searchGoogleMaps(
             email: ee.email,
             company: place.displayName?.text || "",
             job_title: jobTitle,
-            country: parsedCountry,
+            country: countryName,
             city,
             website,
             phone,
@@ -196,7 +206,7 @@ export async function searchGoogleMaps(
           email: "",
           company: place.displayName?.text || "",
           job_title: jobTitle,
-          country: parsedCountry,
+          country: countryName,
           city,
           website,
           phone,
@@ -225,7 +235,7 @@ async function getPlaceDetailsNew(
   placeId: string,
   apiKey: string,
 ): Promise<NewPlaceDetailsResponse | null> {
-  const fieldMask = "websiteUri,internationalPhoneNumber,formattedAddress,rating";
+  const fieldMask = "websiteUri,internationalPhoneNumber,formattedAddress,countryCode,rating";
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
