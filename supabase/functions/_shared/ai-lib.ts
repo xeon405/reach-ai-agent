@@ -128,3 +128,23 @@ CONTINUITY RULES (non-negotiable):
 - Never invent prices, deadlines, features, availability, or facts that are not written in the knowledge base or context provided. If you don't know, say so honestly and stop — never guess.
 - Match the lead's energy and length. Answer the question they actually asked before anything else.
 `;
+
+/** Step-aware follow-up arc. Each phase has a distinct JOB so the 13-step
+ *  reminder chain reads like a person thinking, not a broken record.
+ *  outbound step numbering: initial email = step 1, then follow-ups 2..14
+ *  (14 = the final breakup message). */
+export function followUpArc(step: number, totalSteps: number): string {
+  const final = step >= totalSteps;
+  const late = step >= Math.max(9, Math.ceil(totalSteps * 0.6));
+  const mid = step >= 5;
+  if (final) {
+    return "ARC PHASE — FINAL MESSAGE (polite breakup): This is the LAST email to this lead. Close the thread warmly and honestly: acknowledge you've reached out several times, say you'll stop here, and leave the door genuinely open if they ever want to reconsider ('if things change, hit reply — this thread stays open'). Do NOT pitch again, do NOT add a new reason or link, do NOT sound disappointed. Brief (2-3 sentences), dignified, zero pressure.";
+  }
+  if (late) {
+    return "ARC PHASE — LATE DECISION: The lead has seen multiple emails and stayed silent. Make ONE simple ask: a clear, low-friction decision (e.g. 'if this is a maybe, a one-word reply is enough; if it's a no, no reply needed'). Respect their time explicitly. Do NOT add new value pitches, do NOT sound pushy or needy — sound calm and final-but-open.";
+  }
+  if (mid) {
+    return "ARC PHASE — PROOF/CREDIBILITY: The brief value emails have not landed. Shift the emphasis from the offer to WHY you can do it: reference the real facts from the BUSINESS CONTEXT above (who you help, the problem you solve, what you do) as quietly confident proof. NEVER invent numbers, statistics, timelines, case studies, or testimonials — only restate the business context you were given. Stay short and warm.";
+  }
+  return "ARC PHASE — EARLY VALUE: The lead has seen your first email once. Bring ONE genuinely NEW angle or use-case they have not seen yet (something relevant to their business from the LEAD FACTS / BUSINESS CONTEXT if available — never invent). Do NOT restate the original pitch or ask; this is a fresh, useful thought, not a repeat. Short, light, zero pressure.";
+}

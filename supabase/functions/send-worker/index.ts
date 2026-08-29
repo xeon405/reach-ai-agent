@@ -14,6 +14,7 @@ import {
   buildLeadFacts,
   COLD_EMAIL_FEWSHOTS,
   detectLeadLanguage,
+  followUpArc,
   hashString,
   pickOpenerDirective,
 } from "../_shared/ai-lib.ts";
@@ -657,27 +658,30 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     biContext = "",
     arabic = false,
     openerDirective = "",
+    leadFacts = "",
   ): Promise<{ subject: string; body: string }> {
     const history = previousEmails.map((e, i) => `Email ${i + 1}:\n${e}`).join("\n\n");
+    const arc = followUpArc(currentStep, totalSteps);
     const text = await groqChat([{
       role: "user",
-      content: `${biContext}${FOLLOWUP_COPY_CONTEXT}
+      content: `${biContext}${leadFacts}${FOLLOWUP_COPY_CONTEXT}
 
 Write follow-up email #${currentStep} of ${totalSteps} to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
 Our offer: ${sanitizeForPrompt(userOffer, 300)}
 Sender name: ${sanitizeForPrompt(senderName, 60)} — sign off with their actual name.
 
-Previous emails sent to this lead (for context — do NOT repeat their openers, phrasing or asks):
+Previous emails sent to this lead (for context — do NOT repeat their openers, phrasing, asks, links or answers):
 ${history || "(no previous emails available)"}
 
+${arc}
+
 ${openerDirective ? `\n${openerDirective}\n` : ""}
-${bookingLink ? `A booking link exists: ${sanitizeForPrompt(bookingLink, 200)}. You may mention it once naturally if appropriate.` : "No booking link is configured. Do NOT invent one."}
+${bookingLink ? `A booking link exists: ${sanitizeForPrompt(bookingLink, 200)}. Mention it at most ONCE total across the whole thread — if a previous email already shared it, do NOT paste it again.` : "No booking link is configured. Do NOT invent one."}
 
 Rules:
 - Subject: Keep the SAME subject as the previous email (or a slight variation). Do NOT create a new subject.
 - Body: 30-80 words. Natural, conversational. Acknowledge you've reached out before.
-- Tone depends on step: early follow-ups (#2-4) are casual. Mid (#5-8) are brief. Late (#9+) are respectful final touches.
-- If step >= 10, consider saying this may be your last outreach.
+- Follow the ARC PHASE above exactly — every step must feel like a different, thoughtful touch, never a re-send dressed up.
 - Return ONLY a JSON object: {"subject":"...","body":"line1\\nline2"}
 The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT — WRITE IN ARABIC with professional Gulf business tone. Keep company names in Latin script." : ""}`,
     }], { maxTokens: 500, temperature: 0.85 });
@@ -856,6 +860,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
           biCtx,
           leadLang === "ar",
           fuOpener,
+          buildLeadFacts(lead),
         );
 
         // Spam check
@@ -875,6 +880,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
               biCtx,
               leadLang === "ar",
               fuOpener,
+              buildLeadFacts(lead),
             );
             if (localSpamScore(retry.subject, retry.body).score > check.score) {
               Object.assign(gen, retry);
