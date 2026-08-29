@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { AlertTriangle, Check } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 function SettingsPage() {
   const navigate = useNavigate();
+  const push = usePushNotifications();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [gmail, setGmail] = useState(false);
@@ -452,6 +454,41 @@ function SettingsPage() {
             </>
           )}
         </div>
+      </Section>
+
+      <Section title="Notifications">
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex items-center gap-2 font-medium">
+              Push notifications on this device
+              {push.active && <Badge className="bg-green-600">On</Badge>}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Get notified when a lead replies, books a call, or sends an intro request — even when the app is closed.
+            </div>
+          </div>
+          <Switch
+            checked={!!push.active}
+            disabled={push.busy || push.active === null}
+            onCheckedChange={async (on) => {
+              if (on) {
+                const res = await push.enable();
+                if (res.ok) toast.success("Notifications enabled on this device.");
+                else {
+                  toast.error(res.reason ?? "Couldn't enable notifications.");
+                  push.refresh();
+                }
+              } else {
+                await push.disable();
+                toast.success("Notifications disabled on this device.");
+              }
+            }}
+            className="shrink-0 self-start sm:self-auto"
+          />
+        </div>
+        <p className="mt-2 px-1 text-xs text-muted-foreground">
+          Works on desktop browsers, Android, and the installed app (iOS needs the app icon on your home screen).
+        </p>
       </Section>
 
       <Section title="Your data">

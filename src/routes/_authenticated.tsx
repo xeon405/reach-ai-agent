@@ -9,6 +9,8 @@ import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut, 
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
+import { NotificationBell } from "@/components/notification-bell";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -31,10 +33,16 @@ function AuthenticatedLayout() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const { autoSync } = usePushNotifications();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
+
+  // Keep any existing push subscription registered on this device in sync.
+  useEffect(() => {
+    if (user) autoSync();
+  }, [user, autoSync]);
 
   // Onboarding guard: redirect to /onboarding if profile is incomplete
   useEffect(() => {
@@ -108,6 +116,10 @@ function AuthenticatedLayout() {
           <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
             <span className="text-sm text-muted-foreground">OutreachAI</span>
+            <div className="ml-auto flex items-center gap-1">
+              <NotificationBell />
+              <ThemeToggle />
+            </div>
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-8">
             <Outlet />

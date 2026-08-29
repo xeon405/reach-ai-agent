@@ -697,6 +697,66 @@ export type Database = {
         }
         Relationships: []
       }
+      push_queue: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: number
+          kind: string | null
+          lead_id: string | null
+          priority: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: number
+          kind?: string | null
+          lead_id?: string | null
+          priority?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: number
+          kind?: string | null
+          lead_id?: string | null
+          priority?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth_secret: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth_secret: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth_secret?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       referrals: {
         Row: {
           created_at: string
