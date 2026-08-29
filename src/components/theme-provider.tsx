@@ -45,14 +45,19 @@ export function useTheme() {
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const { theme, toggle } = useTheme();
+  // Defer the icon/label to after mount so the first client paint always
+  // matches the SSR'd light render (avoids a React hydration mismatch).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const dark = mounted && theme === "dark";
   return (
     <button
       onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      title={theme === "dark" ? "Light mode" : "Dark mode"}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dark ? "Light mode" : "Dark mode"}
       className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground ${className}`}
     >
-      {theme === "dark" ? (
+      {dark ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="2" />
           <path
