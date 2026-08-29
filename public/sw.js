@@ -5,7 +5,7 @@
  *  - /assets/* (hashed, immutable): cache-first.
  *  - Supabase REST/auth/functions + cross-origin: network only (never cached).
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const SHELL_URL = "/";
@@ -54,6 +54,12 @@ self.addEventListener("fetch", (event) => {
   if (isDynamic(url)) return;
   if (url.origin !== self.location.origin && !url.hostname.includes("fonts.")) return;
 
+  // Google Fonts: always live pass-through, never cached (cross-origin, versioned).
+  if (url.hostname.includes("fonts.")) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
   // App shell navigations: network-first (fresh deploys always win),
   // fall back to cached shell, then offline page.
   if (req.mode === "navigate") {
@@ -101,13 +107,14 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.open(ASSET_CACHE).then(async (cache) => {
       const cached = await cache.match(req);
-      const fetchPromise = fetch(req)
-        .then((res) => {
-          if (res.ok) cache.put(req, res.clone());
-          return res;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
+      if (cached) return cached;
+      try {
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      } catch {
+        return cached || Response.error();
+      }
     })
   );
 });
