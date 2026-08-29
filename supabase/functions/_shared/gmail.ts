@@ -109,13 +109,25 @@ export async function sendGmailRaw(accessToken: string, raw: string): Promise<Se
   return { id: json.id ?? null, threadId: json.threadId ?? null };
 }
 
+/** RFC 2047-encodes a header value when it contains non-ASCII characters.
+ *  Sending a raw 8-bit Subject header makes providers (Gmail included) guess
+ *  the charset and mangle it (Arabic/emoji become "Ã¢Â˜Â€" / "Ã™Â…" garbage).
+ *  Encoded-words "=?UTF-8?B?...?=" are unambiguous and always display right. */
+export function encodeHeaderValue(value: string): string {
+  if (!/[^\x00-\x7F]/.test(value)) return value;
+  const bytes = new TextEncoder().encode(value);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return `=?UTF-8?B?${btoa(bin)}?=`;
+}
+
 /** Back-compat fire-and-forget send. */
 export async function sendGmail(accessToken: string, raw: string): Promise<void> {
   await sendGmailRaw(accessToken, raw);
 }
 
 export function buildRawEmail(to: string, subject: string, body: string, from: string, unsubUrl?: string): string {
-  let header = `To: ${to}\r\nFrom: ${from}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset="UTF-8"\r\n`;
+  let header = `To: ${to}\r\nFrom: ${from}\r\nSubject: ${encodeHeaderValue(subject)}\r\nContent-Type: text/plain; charset="UTF-8"\r\n`;
   if (unsubUrl) {
     // RFC 2369 + RFC 8058 one-click (provider POSTs this URL directly).
     header += `List-Unsubscribe: <mailto:${to}?subject=unsubscribe>, <${unsubUrl}>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n`;

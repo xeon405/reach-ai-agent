@@ -7,7 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
-import { getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
+import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
 import {
@@ -128,7 +128,7 @@ function buildRawEmail(
   const boundary = "oai-alt-" + Math.random().toString(36).slice(2);
   const headers = [
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodeHeaderValue(subject)}`,
     `MIME-Version: 1.0`,
     `List-Unsubscribe: <${unsubUrl}>, <mailto:${fromEmail}?subject=unsubscribe>`,
     `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
