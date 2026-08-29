@@ -4,6 +4,17 @@ import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
 import { searchGoogleMaps, isGoogleMapsAvailable } from "../_shared/google-maps.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { verifyEmail, type EmailVerification } from "../_shared/email-verifier.ts";
+import { planSearchQueries, curateLeads, isAiConfigured } from "../_shared/lead-ai.ts";
+import { cacheGet, cacheSet, LEADS_TTL_MS } from "../_shared/search-cache.ts";
+
+interface CachePayload {
+  leads: unknown[];
+  count: number;
+  source: string;
+  network: unknown[];
+  ai: { planned: string | null; curated: string | null } | null;
+  message: string;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,7 +52,7 @@ serve(async (req) => {
     } else {
       userId = await getAuthedUserId(req);
     }
-    const { campaignId, jobTitle, country, limit = 25 } = body;
+    const { campaignId, jobTitle, country, location, limit = 25 } = body;
     if (!jobTitle) throw new Error("jobTitle is required");
 
     const supabase = createClient(
@@ -60,6 +71,21 @@ serve(async (req) => {
     }
 
     const cappedLimit = Math.max(1, Math.min(Number(limit) || 25, 50));
+    const cacheKey = [String(jobTitle), String(country ?? ""), String(location ?? "")]
+      .map((s) => s.trim().toLowerCase()).join("|");
+
+    // Serve fresh cached results first — quota is only spent on new chemistry.
+    const cached = await cacheGet<CachePayload>(supabase, "leads", cacheKey);
+    if (cached) {
+      await insertAudit(supabase, {
+        user_id: userId,
+        campaign_id: campaignId,
+        event: "lead.searched",
+        payload: { count: cached.leads?.length ?? 0, country, jobTitle, source: cached.source, cached: true },
+      });
+      return json({ ...cached, cached: true });
+    }
+
     let leads: Array<{
       name: string; email: string; company: string;
       job_title: string; country: string; city: string;
@@ -72,13 +98,35 @@ serve(async (req) => {
       email_verification_reason?: string;
     }> = [];
     let source = "open-business-directory";
+    let quotaHit = false;
+
+    // AI planning: expand the niche into search variants and (when no area was
+    // typed) suggest strong metros. Optional — any failure falls back cleanly.
+    const aiPlan = !location
+      ? await planSearchQueries({
+          jobTitle: String(jobTitle),
+          country: country ?? "United States",
+          limit: cappedLimit,
+        }).catch(() => null)
+      : null;
 
     // Try Google Maps first if API key is configured
     if (isGoogleMapsAvailable()) {
       try {
-        const googleLeads = await searchGoogleMaps(jobTitle, country ?? "United States", cappedLimit);
-        if (googleLeads.length > 0) {
-          leads = googleLeads.map((l) => ({
+        const extraAreas = !location && aiPlan?.areas?.length
+          ? aiPlan.areas.map((a) => ({ query: a.query, cap: Math.max(5, Math.ceil(cappedLimit / 3)) }))
+          : undefined;
+        const gres = await searchGoogleMaps(
+          jobTitle,
+          country ?? "United States",
+          cappedLimit,
+          location,
+          aiPlan?.variants ?? [],
+          extraAreas,
+        );
+        if (gres.quotaHit) quotaHit = true;
+        if (gres.leads.length > 0) {
+          leads = gres.leads.map((l) => ({
             name: l.name,
             email: l.email,
             company: l.company,
@@ -98,9 +146,21 @@ serve(async (req) => {
           source = "google-maps";
         }
       } catch (err) {
-        // Google Maps failed — fallback to OSM below
-        console.error("Google Maps search failed, falling back to OSM:", err);
+        console.error("Google Maps search failed:", err);
       }
+    }
+
+    if (leads.length === 0 && quotaHit) {
+      return json({
+        leads: [],
+        count: 0,
+        source: "google-maps",
+        network: [],
+        ai: { planned: aiPlan?.note ?? null, curated: null },
+        message:
+          "Google Maps' daily search quota is used up for today, so no new searches could run. Results from earlier searches still work from cache. Either wait for the quota to reset or raise the Places API limit in Google Cloud, then retry.",
+        quota_exceeded: true,
+      });
     }
 
     // Fallback to OSM if Google Maps returned nothing or isn't configured
@@ -114,6 +174,26 @@ serve(async (req) => {
         source = "open-business-directory";
       }
     }
+
+    // Dedupe per business (same website host + city, or same company name when no
+    // website): keep the lead with an email, prefer mailto-sourced emails.
+    const bestByKey = new Map<string, typeof leads[number]>();
+    for (const lead of leads) {
+      const host = lead.website
+        ? new URL(lead.website.startsWith("http") ? lead.website : `https://${lead.website}`).hostname.replace(/^www\./, "")
+        : "";
+      const company = String(lead.company || lead.name || "").toLowerCase().replace(/\s+/g, " ").trim();
+      const key = host ? `${host}|${lead.city}` : company;
+      if (!key) continue;
+      const existing = bestByKey.get(key);
+      if (!existing) {
+        bestByKey.set(key, lead);
+        continue;
+      }
+      const score = (l: typeof lead) => (l.email ? (l.email_source === "website-mailto" ? 2 : 1) : 0);
+      if (score(lead) > score(existing)) bestByKey.set(key, lead);
+    }
+    leads = [...bestByKey.values()];
 
     // Warm network matches — other outreach businesses that opted in (no contact exposed).
     let network: Array<{
@@ -161,7 +241,7 @@ serve(async (req) => {
     });
 
     // Verify emails in parallel — enrich each lead with verification data
-    const verifiedLeads = await Promise.all(
+    let verifiedLeads = await Promise.all(
       leads.map(async (lead) => {
         if (!lead.email) {
           return {
@@ -188,18 +268,42 @@ serve(async (req) => {
       }),
     );
 
-    return json({
-      leads: verifiedLeads,
-      count: verifiedLeads.length,
-      source,
-      network,
-      message:
-        leads.length === 0
-          ? source === "google-maps"
-            ? `No businesses with public emails found for "${jobTitle}" in ${country}. Try another niche or country, or import a CSV.`
-            : `No public emails found for "${jobTitle}" in ${country}. Try "dentist", "gym", "restaurant", "salon", "lawyer" — or import a CSV.`
-          : `Found ${leads.length} businesses with public emails (${source}). Review and add the ones you want.`,
-    });
+    // AI curation: pick the highest-value subset (relevance, email quality, local
+    // independents, dedupe of same-brand repeats) and order it. Optional.
+    let aiCurated: string | null = null;
+    if (isAiConfigured() && verifiedLeads.length > 0) {
+      const curated = await curateLeads({
+        jobTitle: String(jobTitle),
+        country: country ?? "United States",
+        location,
+        leads: verifiedLeads,
+        limit: cappedLimit,
+      }).catch(() => null);
+      if (curated && curated.order.length > 0) {
+        const ordered = curated.order.map((i) => verifiedLeads[i]).filter(Boolean);
+        if (ordered.length > 0) {
+          verifiedLeads = ordered;
+          aiCurated = curated.summary || null;
+        }
+      }
+    }
+
+    let message =
+      leads.length === 0
+        ? source === "google-maps"
+          ? `No businesses with public emails found for "${jobTitle}" in ${country || "United States"}. Try another niche or country, or import a CSV.`
+          : `No public emails found for "${jobTitle}" in ${country || "United States"}. Try "dentist", "gym", "restaurant", "salon", "lawyer" — or import a CSV.`
+        : `Found ${verifiedLeads.length} businesses with public emails (${source}). Review and add the ones you want.`;
+    if (aiCurated) message += ` AI: ${aiCurated}`;
+
+    // Cache the finished result so the next identical request (within TTL) is
+    // served without spending more Places quota or re-enriching websites.
+    const payload: CachePayload = { leads: verifiedLeads, count: verifiedLeads.length, source, network, ai: { planned: aiPlan?.note ?? null, curated: aiCurated }, message };
+    if (!quotaHit && verifiedLeads.length > 0) {
+      await cacheSet(supabase, "leads", cacheKey, payload, LEADS_TTL_MS);
+    }
+
+    return json({ ...payload, cached: false });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }

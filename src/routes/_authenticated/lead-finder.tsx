@@ -34,6 +34,11 @@ type NetworkMatch = {
   matched: string[];
 };
 
+type AreaSuggestion = {
+  city: string; region: string; businesses: number;
+  with_websites: number; score: number;
+};
+
 const PRESET_NICHES = [
   { label: "Dentists", value: "dentist" },
   { label: "Gyms", value: "gym" },
@@ -55,6 +60,11 @@ function LeadFinderPage() {
   const [campaignId, setCampaignId] = useState("");
   const [country, setCountry] = useState("United States");
   const [limit, setLimit] = useState("25");
+  const [location, setLocation] = useState("");
+  const [suggestingAreas, setSuggestingAreas] = useState(false);
+  const [areaSuggestions, setAreaSuggestions] = useState<AreaSuggestion[]>([]);
+  const [areaError, setAreaError] = useState("");
+  const [autoBadges, setAutoBadges] = useState(false);
   const [customNiche, setCustomNiche] = useState("");
   const [selectedNiche, setSelectedNiche] = useState("");
   const [finding, setFinding] = useState(false);
@@ -114,6 +124,35 @@ function LeadFinderPage() {
   }, [results]);
 
   // --- Search ---
+  async function suggestAreas(auto = false) {
+    if (!activeNiche || suggestingAreas) return;
+    setSuggestingAreas(true);
+    setAreaError("");
+    try {
+      const { data, error } = await supabase.functions.invoke("suggest-areas", {
+        body: { jobTitle: activeNiche, country: country || "United States" },
+      });
+      if (data?.error) throw new Error(data.error);
+      if (error) throw new Error(error.message);
+      const areas: AreaSuggestion[] = data?.areas ?? [];
+      setAreaSuggestions(areas);
+      if (auto) setAutoBadges(true);
+      if (!auto && areas.length === 0 && data?.message) toast.info(data.message);
+    } catch (err) {
+      console.error("suggest-areas failed", err);
+      if (!auto) setAreaError(err instanceof Error ? err.message : "Could not load area suggestions");
+    } finally {
+      setSuggestingAreas(false);
+    }
+  }
+
+  function applyArea(city: string) {
+    setLocation(city);
+    setAreaSuggestions([]);
+    setAreaError("");
+    setAutoBadges(false);
+  }
+
   async function search() {
     if (!activeNiche) { toast.error("Select or type a business type"); return; }
     setFinding(true);
@@ -137,6 +176,7 @@ function LeadFinderPage() {
           campaignId: campaignId || null,
           jobTitle: activeNiche,
           country: country || "United States",
+          location: location.trim() || undefined,
           limit: parseInt(limit),
         },
       });
@@ -152,6 +192,7 @@ function LeadFinderPage() {
         setResults(leads);
         setSelected(new Set(leads.map((_, i) => i)));
         toast.success(`Found ${leads.length} leads`);
+        if (!location.trim()) suggestAreas(true);
       }
     } catch (e: any) {
       toast.error(e.message ?? "Search failed");
@@ -338,6 +379,67 @@ function LeadFinderPage() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              City / Area <span className="font-normal text-muted-foreground">(optional — target a metro)</span>
+            </label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. Austin, Jackson Heights, London"
+                value={location}
+                onChange={(e) => { setLocation(e.target.value); setAutoBadges(false); }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => suggestAreas(false)}
+                disabled={suggestingAreas || !activeNiche}
+                className="shrink-0"
+              >
+                {suggestingAreas ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Suggest areas
+              </Button>
+            </div>
+            {suggestingAreas && <p className="text-xs text-muted-foreground">Probing top metros for this niche…</p>}
+            {areaSuggestions.length > 0 && !autoBadges && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {areaSuggestions.map((a, i) => (
+                  <button
+                    key={a.city}
+                    onClick={() => applyArea(`${a.city}, ${a.region}`)}
+                    title={`${a.businesses} businesses · ${a.with_websites} with websites`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                      i < 3
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {i < 3 ? "★ " : ""}{a.city} · {a.businesses}
+                  </button>
+                ))}
+                {areaSuggestions.length > 0 && (
+                  <span className="text-xs text-muted-foreground self-center">
+                    {areaSuggestions.length >= 3 ? "★ top 3 = best" : ""}
+                  </span>
+                )}
+              </div>
+            )}
+            {autoBadges && areaSuggestions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+                <span className="text-muted-foreground">Best areas for this search:</span>
+                {areaSuggestions.slice(0, 3).map((a) => (
+                  <button
+                    key={a.city}
+                    onClick={() => applyArea(`${a.city}, ${a.region}`)}
+                    className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary hover:bg-primary/20"
+                  >
+                    {a.city}
+                  </button>
+                ))}
+                <span className="text-muted-foreground">— pick one, or type any city</span>
+              </div>
+            )}
+            {areaError && <p className="text-xs text-destructive">{areaError}</p>}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Country</label>
