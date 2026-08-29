@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -25,6 +25,7 @@ export type Database = {
           lead_id: string | null
           message_id: string | null
           raw: Json | null
+          reason: string | null
           requires_human: boolean | null
           sentiment: string | null
           suggested_action: string | null
@@ -41,6 +42,7 @@ export type Database = {
           lead_id?: string | null
           message_id?: string | null
           raw?: Json | null
+          reason?: string | null
           requires_human?: boolean | null
           sentiment?: string | null
           suggested_action?: string | null
@@ -57,6 +59,7 @@ export type Database = {
           lead_id?: string | null
           message_id?: string | null
           raw?: Json | null
+          reason?: string | null
           requires_human?: boolean | null
           sentiment?: string | null
           suggested_action?: string | null
@@ -101,7 +104,8 @@ export type Database = {
           autopilot: boolean
           campaign_image_url: string | null
           created_at: string
-          followups_enabled: boolean
+          delivery: string
+          followups_enabled: boolean | null
           id: string
           name: string
           status: string
@@ -113,7 +117,8 @@ export type Database = {
           autopilot?: boolean
           campaign_image_url?: string | null
           created_at?: string
-          followups_enabled?: boolean
+          delivery?: string
+          followups_enabled?: boolean | null
           id?: string
           name: string
           status?: string
@@ -125,7 +130,8 @@ export type Database = {
           autopilot?: boolean
           campaign_image_url?: string | null
           created_at?: string
-          followups_enabled?: boolean
+          delivery?: string
+          followups_enabled?: boolean | null
           id?: string
           name?: string
           status?: string
@@ -268,6 +274,47 @@ export type Database = {
           },
         ]
       }
+      follow_up_sequences: {
+        Row: {
+          active: boolean
+          campaign_id: string
+          created_at: string
+          delay_days: number
+          id: string
+          step_number: number
+          template: string | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          campaign_id: string
+          created_at?: string
+          delay_days: number
+          id?: string
+          step_number: number
+          template?: string | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          campaign_id?: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_number?: number
+          template?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_up_sequences_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_tokens: {
         Row: {
           profile_id: string
@@ -294,6 +341,51 @@ export type Database = {
           },
         ]
       }
+      intro_requests: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          requester_user_id: string
+          resolved_at: string | null
+          status: string
+          target_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          requester_user_id: string
+          resolved_at?: string | null
+          status?: string
+          target_user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          requester_user_id?: string
+          resolved_at?: string | null
+          status?: string
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intro_requests_requester_user_id_fkey"
+            columns: ["requester_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intro_requests_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           address: string | null
@@ -308,12 +400,12 @@ export type Database = {
           email_confidence: number | null
           email_is_disposable: boolean | null
           email_is_role: boolean | null
-          email_status: string | null
           email_source: string | null
           email_source_url: string | null
+          email_status: string | null
           email_verification_reason: string | null
-          followup_step: number
-          followup_status: string
+          followup_status: string | null
+          followup_step: number | null
           id: string
           job_title: string | null
           lead_source: string | null
@@ -342,12 +434,12 @@ export type Database = {
           email_confidence?: number | null
           email_is_disposable?: boolean | null
           email_is_role?: boolean | null
-          email_status?: string | null
           email_source?: string | null
           email_source_url?: string | null
+          email_status?: string | null
           email_verification_reason?: string | null
-          followup_step?: number
-          followup_status?: string
+          followup_status?: string | null
+          followup_step?: number | null
           id?: string
           job_title?: string | null
           lead_source?: string | null
@@ -376,12 +468,12 @@ export type Database = {
           email_confidence?: number | null
           email_is_disposable?: boolean | null
           email_is_role?: boolean | null
-          email_status?: string | null
           email_source?: string | null
           email_source_url?: string | null
+          email_status?: string | null
           email_verification_reason?: string | null
-          followup_step?: number
-          followup_status?: string
+          followup_status?: string | null
+          followup_step?: number | null
           id?: string
           job_title?: string | null
           lead_source?: string | null
@@ -508,12 +600,16 @@ export type Database = {
           id: string
           last_digest_date: string | null
           name: string | null
+          network_mode: boolean
           notify_replies: boolean
           offer: string | null
           onboarded: boolean
+          phone: string | null
           plan: string
           problem_solved: string | null
           referral_code: string | null
+          referral_reward_plan: string | null
+          referral_reward_until: string | null
           referred_by: string | null
           signature: string | null
           target_customer: string | null
@@ -544,12 +640,16 @@ export type Database = {
           id: string
           last_digest_date?: string | null
           name?: string | null
+          network_mode?: boolean
           notify_replies?: boolean
           offer?: string | null
           onboarded?: boolean
+          phone?: string | null
           plan?: string
           problem_solved?: string | null
           referral_code?: string | null
+          referral_reward_plan?: string | null
+          referral_reward_until?: string | null
           referred_by?: string | null
           signature?: string | null
           target_customer?: string | null
@@ -580,12 +680,16 @@ export type Database = {
           id?: string
           last_digest_date?: string | null
           name?: string | null
+          network_mode?: boolean
           notify_replies?: boolean
           offer?: string | null
           onboarded?: boolean
+          phone?: string | null
           plan?: string
           problem_solved?: string | null
           referral_code?: string | null
+          referral_reward_plan?: string | null
+          referral_reward_until?: string | null
           referred_by?: string | null
           signature?: string | null
           target_customer?: string | null
@@ -679,6 +783,62 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      support_chat_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_chat_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "support_chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_chat_threads: {
+        Row: {
+          created_at: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       suppressions: {
         Row: {
@@ -803,6 +963,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_lead_followup: {
+        Args: {
+          p_campaign_id: string
+          p_current_step: number
+          p_lead_id: string
+        }
+        Returns: undefined
+      }
+      cancel_lead_followup: {
+        Args: { p_lead_id: string; p_reason?: string }
+        Returns: undefined
+      }
       claim_queue_jobs_v2: {
         Args: { p_lease_minutes?: number; p_limit?: number }
         Returns: {
@@ -827,6 +999,18 @@ export type Database = {
         }
       }
       consume_ai_quota: { Args: { cap: number; uid: string }; Returns: boolean }
+      create_default_follow_ups: {
+        Args: { p_campaign_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      init_lead_followup: {
+        Args: {
+          p_campaign_id: string
+          p_initial_send_at: string
+          p_lead_id: string
+        }
+        Returns: undefined
+      }
       public_stats: {
         Args: never
         Returns: {

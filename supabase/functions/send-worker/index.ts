@@ -13,6 +13,7 @@ import { effectivePlan } from "../_shared/effective-plan.ts";
 import {
   buildLeadFacts,
   COLD_EMAIL_FEWSHOTS,
+  containsArabic,
   detectLeadLanguage,
   followUpArc,
   hashString,
@@ -65,19 +66,33 @@ function pickFallbackSubject(offer: string, company: string): string {
   return list[Math.floor(Math.random() * list.length)].slice(0, 60);
 }
 
-/** Makes any AI-produced subject professional and deliverable: strips weird
- *  characters, rejects gibberish / repeated-character runs / spammy caps, and
- *  falls back to a curated subject when it can't be salvaged. */
-function sanitizeSubject(subject: string, offer = "our services", company = "your company"): string {
+/** Arabic-curated fallback subjects — used when an Arabic email's subject
+ *  can't be salvaged, so we never ship an English title stuck onto Arabic. */
+function arabicFallbackSubject(company: string): string {
+  const companyShort = sanitizeForPrompt(String(company || "شركتكم"), 40);
+  const list = [
+    `فكرة سريعة خاصة بـ ${companyShort}`,
+    `سؤال سريع عن ${companyShort}`,
+    `عرض قصير لـ ${companyShort}`,
+    `تواصل حول ${companyShort}`,
+  ];
+  return list[Math.floor(Math.random() * list.length)].slice(0, 60);
+}
+
+/** Makes any AI-produced subject professional and deliverable: preserves all
+ *  scripts (Arabic emoji-free), rejects gibberish / repeated-character runs /
+ *  spammy caps, and falls back to a curated subject when it can't be salvaged. */
+function sanitizeSubject(subject: string, offer = "our services", company = "your company", arabic = false): string {
+  const fb = arabic ? arabicFallbackSubject(company) : pickFallbackSubject(offer, company);
   let s = String(subject ?? "").replace(/\s+/g, " ").trim();
-  if (/(.)\1{2,}/.test(s)) return pickFallbackSubject(offer, company);        // "csssss" / "SSSS"
+  if (/(.)\1{2,}/.test(s)) return fb;                                        // "csssss" / "SSSS"
   const words = s.split(/\s+/).filter(Boolean);
-  const wordy = words.filter((w) => /[a-zA-Z]{2,}/.test(w)).length;
-  if (words.length >= 2 && wordy < 2) return pickFallbackSubject(offer, company); // symbol/number salad
-  if (/\b[A-Z]{4,}\b/.test(s) || /[!]{2,}/.test(s) || /[$€₹£]/.test(s)) return pickFallbackSubject(offer, company);
-  s = s.replace(/[^\w .,!?&'@#+%:;-]/g, "").replace(/\s{2,}/g, " ").trim();
-  if (s.length < 4 || !/[a-zA-Z]{2,}/.test(s)) return pickFallbackSubject(offer, company);
-  if (!/^[A-Za-z]/.test(s)) s = s.charAt(0).toUpperCase() + s.slice(1);
+  const wordy = words.filter((w) => /[\p{L}]{2,}/u.test(w)).length;          // letters in ANY script
+  if (words.length >= 2 && wordy < 2) return fb;                             // symbol/number salad
+  if (/\b[A-Z]{4,}\b/.test(s) || /[!]{2,}/.test(s) || /[$€₹£]/.test(s)) return fb;
+  s = s.replace(/[^\p{L}\p{M}\p{N}_ .,!?&'@#+%:;-]/gu, "").replace(/[\uFE00-\uFE0F\u200D]/g, "").replace(/\s{2,}/g, " ").trim(); // strips emojis, keeps Arabic
+  if (s.length < 4 || s === "" || !/[\p{L}]{2,}/u.test(s)) return fb;
+  if (/^[A-Za-z]/.test(s) && /^[a-z]/.test(s)) s = s.charAt(0).toUpperCase() + s.slice(1);
   return s.slice(0, 60);
 }
 
@@ -217,6 +232,7 @@ async function generateEmail(
   const lang = arabic ? `
 LANGUAGE REQUIREMENT — WRITE IN ARABIC:
 - Write the subject and body in fluent Modern Standard Arabic with a professional Gulf business tone.
+- The subject must be FULLY IN ARABIC with no English words — a foreign brand/company name may appear in Latin inside the Arabic subject, but never write an English subject or mix English and Arabic in the same phrase.
 - Keep company names and technical terms in Latin script where natural.
 - The JSON keys stay "subject" and "body"; values are Arabic.` : "";
   const openerDirective = pickOpenerDirective(`${leadName}-${leadCompany}-${leadJobTitle}`);
@@ -254,12 +270,16 @@ The body must use \\n between paragraphs.${lang}`,
     try {
       const parsed = JSON.parse(text.slice(start, end + 1));
       if (parsed.subject && parsed.body) {
-        return { subject: sanitizeSubject(String(parsed.subject), userOffer, leadCompany), body: String(parsed.body).replace(/\\n/g, "\n") };
+        let subj = sanitizeSubject(String(parsed.subject), userOffer, leadCompany, arabic);
+        if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
+        return { subject: subj, body: String(parsed.body).replace(/\\n/g, "\n") };
       }
     } catch { /* fall through */ }
   }
   const lines = text.split("\n").filter(Boolean);
-  return { subject: sanitizeSubject(lines[0] ?? "Quick question", userOffer, leadCompany), body: lines.slice(1).join("\n") || text };
+  let subj = sanitizeSubject(lines[0] ?? "Quick question", userOffer, leadCompany, arabic);
+  if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
+  return { subject: subj, body: lines.slice(1).join("\n") || text };
 }
 
 function localSpamScore(subject: string, body: string): { score: number; hint: string } {
