@@ -116,3 +116,15 @@ export function buildLeadFacts(lead: Record<string, any>): string {
   if (bits.length === 0) return "";
   return `LEAD FACTS (use them; never invent anything beyond these):\n${bits.join("\n")}\n\n`;
 }
+
+/** Non-negotiable self-continuity + honesty rules for ANY reply the AI writes
+ *  mid-conversation. Appended to every reply-generation prompt so the writer
+ *  never contradicts itself, re-promises, or invents facts. */
+export const REPLY_CONTINUITY_RULES = `
+CONTINUITY RULES (non-negotiable):
+- In the conversation above, lines marked "You:" are the sender's OWN previous replies. Never contradict them, never withdraw a promise or answer already given, and never change a price, capability, or commitment you already stated.
+- Never repeat any link, offer, call-to-action, or answer that already appears in the conversation — refer to it as already shared ("the link I sent earlier").
+- If the lead asks something already answered, briefly RESTATE the same answer (same facts, fewer words) rather than re-answering differently or dodging.
+- Never invent prices, deadlines, features, availability, or facts that are not written in the knowledge base or context provided. If you don't know, say so honestly and stop — never guess.
+- Match the lead's energy and length. Answer the question they actually asked before anything else.
+`;

@@ -4,6 +4,7 @@ import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import { nextLifecycle } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,45 @@ function extractGmailBody(payload: unknown, depth = 0): string {
     if (inner) return inner;
   }
   return "";
+}
+
+function stripQuoted(s: string): string {
+  return String(s ?? "").split("\n").filter((l) => !/^\s*(>|\u2016|On \w).*$/i.test(l.trim()) && !/^(On .+ wrote:?)$/i.test(l.trim())).join("\n");
+}
+
+async function fetchThreadHistory(
+  tok: { accessToken: string },
+  threadId: string | null | undefined,
+  leadEmail: string,
+  senderEmail: string,
+  maxMsgs = 5,
+): Promise<string> {
+  if (!threadId) return "";
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
+      { headers: { Authorization: `Bearer ${tok.accessToken}` } },
+    );
+    if (!res.ok) return "";
+    const data = await res.json();
+    const msgs = (data.messages ?? []) as Array<{ payload?: unknown }>;
+    if (msgs.length < 2) return "";
+    const priors = msgs.slice(0, -1).slice(-maxMsgs);
+    const senderNorm = String(senderEmail || "").toLowerCase();
+    const lines: string[] = [];
+    for (const m of priors) {
+      const from = (m.payload as { headers?: Array<{ name: string; value: string }> })?.headers
+        ?.find((h) => h.name === "From")?.value ?? "";
+      const fromEmail = (from.match(/<([^>]+)>/) ?? ["", from])[1].toLowerCase();
+      const body = stripQuoted(extractGmailBody((m.payload as { payload?: unknown }) ?? m.payload)).slice(0, 700);
+      if (!body) continue;
+      const who = fromEmail.includes(senderNorm) ? "You" : "Lead";
+      lines.push(`${who}: ${body}`);
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
 }
 
 serve(async (req) => {
@@ -104,6 +144,7 @@ serve(async (req) => {
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       let theirWords = "";
+      let msgThreadId: string | null = null;
       if (searchRes.ok) {
         const hits = (await searchRes.json()).messages ?? [];
         if (hits[0]?.id) {
@@ -111,20 +152,26 @@ serve(async (req) => {
             `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
-          if (mRes.ok) theirWords = extractGmailBody((await mRes.json())?.payload).slice(0, 900);
+          if (mRes.ok) {
+            const mData = await mRes.json();
+            theirWords = extractGmailBody(mData?.payload).slice(0, 900);
+            msgThreadId = mData?.threadId ?? null;
+          }
         }
       }
+      const threadHistory = await fetchThreadHistory(tok, msgThreadId, toEmail, profile?.gmail_email ?? "");
       const fresh = await groqChat([{
         role: "user",
         content: `A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(leadRow?.name ?? toEmail, 80)} (${sanitizeForPrompt(leadRow?.job_title, 80) || "professional"}) at ${sanitizeForPrompt(leadRow?.company, 120)}${leadRow?.country ? `, ${sanitizeForPrompt(String(leadRow.country), 40)}` : ""}
 Their exact words: "${theirWords || "(no newer message found — write a gentle nudge referencing the original outreach)"}"
 You originally offered: ${sanitizeForPrompt(prof?.offer ?? "our services")}${prof?.booking_link ? `
-Their booking link: ${prof.booking_link} — invite them to book there.` : ""}
+Their booking link: ${prof.booking_link} — invite them to book there (only if not already shared in the thread below).` : ""}
+${threadHistory ? `\nConversation so far (lines marked "You:" are the sender's OWN previous replies — never contradict them, never re-offer what is already there):\n"${sanitizeForPrompt(threadHistory, 1800)}"` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${prof?.name || "the sender"}. Warm, confident, zero fluff.
-Rules: respond to something SPECIFIC they said. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Sign off as "Best regards". Return only the reply text.${row.ai_draft ? `
-IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft, 300)}" — write COMPLETELY different wording, structure and opening line.` : ""}`,
+Rules: respond to something SPECIFIC they said. Answer the question they actually asked first. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Never invent prices or facts. Sign off as "Best regards". Return only the reply text.${row.ai_draft ? `
+IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft, 300)}" — write COMPLETELY different wording, structure and opening line.` : ""}${REPLY_CONTINUITY_RULES}`,
       }], { maxTokens: 600, temperature: 0.9 });
       if (fresh?.trim()) {
         replyBody = fresh.trim();
