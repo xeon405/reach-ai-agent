@@ -18,10 +18,27 @@ const SUPPORT_EMAIL = "outreachai.team@gmail.com";
 
 const WELCOME: Msg = {
   role: "assistant",
-  content: `Hey! I'm your OutreachAI guide. I can help with anything — finding leads, launching campaigns, follow-ups, Gmail setup, billing, and more.
+  content: `Hey! I'm your OutreachAI guide. I can help with anything — how the app works, finding leads, launching campaigns, follow-ups, Gmail setup, billing, and more.
+
+Just exploring? Ask what OutreachAI does or what the free plan includes.
 
 Need human support? Reach us at ${SUPPORT_EMAIL}`,
 };
+
+const GUEST_KEY = "outreachai_guest_id";
+
+function guestId(): string {
+  try {
+    let id = localStorage.getItem(GUEST_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(GUEST_KEY, id);
+    }
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
 
 function loadMessages(): Msg[] {
   try {
@@ -55,6 +72,15 @@ export function SupportChat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const gidRef = useRef<string | null>(null);
+
+  async function authHeaders(): Promise<Record<string, string>> {
+    const { data: s } = await supabase.auth.getSession();
+    const token = s.session?.access_token;
+    return token
+      ? { Authorization: `Bearer ${token}` }
+      : { "x-guest-id": (gidRef.current ??= guestId()) };
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -69,16 +95,14 @@ export function SupportChat() {
     const threadId = loadThreadId();
     if (!threadId) return;
     (async () => {
-      const { data: s } = await supabase.auth.getSession();
-      const token = s.session?.access_token;
-      if (!token) return;
+      const headers = await authHeaders();
       try {
         const res = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${token}`,
+              ...headers,
               apikey:
                 (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
                 "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
@@ -103,15 +127,13 @@ export function SupportChat() {
     setMessages(next);
     setLoading(true);
     try {
-      const { data: s } = await supabase.auth.getSession();
-      const token = s.session?.access_token;
-      if (!token) throw new Error("Please log in first");
+      const headers = await authHeaders();
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
+            ...headers,
             apikey:
               (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
               "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",

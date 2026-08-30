@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Logo } from "@/components/Logo";
+import { SupportChat } from "@/components/support-chat";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
@@ -149,6 +150,8 @@ function AuthPage() {
           <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
         </p>
       </div>
+
+      <SupportChat />
     </div>
   );
 }

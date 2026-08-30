@@ -232,31 +232,50 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Not authenticated" }, 401);
+    const guestId = String(req.headers.get("x-guest-id") ?? "").trim();
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
-    const { data: authData, error: authErr } = await admin.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-    if (authErr || !authData.user) return json({ error: "Invalid session" }, 401);
-    const userId = authData.user.id;
+
+    // Either a signed-in user (Bearer token) or a visitor identifier
+    // (x-guest-id: a UUID the browser generates once and reuses).
+    let userId: string | null = null;
+    let isGuest = false;
+    if (authHeader) {
+      const { data: authData, error: authErr } = await admin.auth.getUser(
+        authHeader.replace("Bearer ", "")
+      );
+      if (authErr || !authData.user) return json({ error: "Invalid session" }, 401);
+      userId = authData.user.id;
+    } else if (guestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(guestId)) {
+      isGuest = true;
+    } else {
+      return json({ error: "Not authenticated" }, 401);
+    }
 
     const body = await req.json().catch(() => ({}));
     const givenThread = String(body?.thread_id ?? "").trim();
 
-    // ── Thread resolution: given id → latest open thread for user → new thread ──
+    // ── Thread resolution: given id → latest open thread for user/guest → new thread ──
     let threadId = givenThread;
     if (threadId) {
+      const ownerFilter = isGuest
+        ? { guest_id: guestId }
+        : { user_id: userId! };
       const { data: thr } = await admin
-        .from("support_chat_threads").select("id").eq("id", threadId).eq("user_id", userId).maybeSingle();
+        .from("support_chat_threads").select("id").eq("id", threadId)
+        .match(ownerFilter).maybeSingle();
       if (!thr) threadId = "";
     }
     if (!threadId) {
+      const ownerFilter = isGuest
+        ? { guest_id: guestId }
+        : { user_id: userId! };
       const { data: latest } = await admin
-        .from("support_chat_threads").select("id").eq("user_id", userId).eq("status", "auto")
+        .from("support_chat_threads").select("id").eq("status", "auto")
+        .match(ownerFilter)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle();
       threadId = latest?.id ?? "";
     }
@@ -275,9 +294,17 @@ Deno.serve(async (req) => {
     if (!text) throw new Error("No message");
     if (text.length > 1500) throw new Error("Message too long");
 
+    if (isGuest) {
+      const { count: guestMsgs } = await admin.from("support_chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("thread_id", threadId);
+      if ((guestMsgs ?? 0) >= 60) throw new Error("Conversation limit reached — please email outreachai.team@gmail.com");
+    }
+
     if (!threadId) {
+      const row = isGuest ? { guest_id: guestId, status: "auto" } : { user_id: userId, status: "auto" };
       const { data: created, error: cErr } = await admin
-        .from("support_chat_threads").insert({ user_id: userId, status: "auto" })
+        .from("support_chat_threads").insert(row)
         .select("id").single();
       if (cErr || !created) throw new Error("Could not start thread");
       threadId = created.id;
@@ -305,7 +332,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Account context: real numbers so answers are specific, not generic ──
+    // ── Account context: real numbers so answers are specific, not generic.
+//    Guests have no account → stay product-level. ──
+    let accountCtx = "";
+    if (!isGuest) {
     const { data: profile } = await admin.from("profiles")
       .select("name, plan, referral_reward_plan, referral_reward_until, gmail_connected, gmail_state, gmail_email")
       .eq("id", userId).maybeSingle();
@@ -340,7 +370,7 @@ Deno.serve(async (req) => {
       plan = rewardPlan;
     }
 
-    const accountCtx = buildSupportUserContext({
+    accountCtx = buildSupportUserContext({
       name: profile?.name ?? null,
       plan,
       gmailConnected: profile?.gmail_connected ?? false,
@@ -353,12 +383,20 @@ Deno.serve(async (req) => {
       pendingFollowups: pendingFus ?? 0,
       followupsEnabled: fuCfg?.followups_enabled ?? true,
     });
+    }
 
     const arabic = containsArabic(text);
+    const guestNote = isGuest
+      ? `\n\n## VISITOR MODE
+- This person is NOT signed in — they are exploring the site or thinking about signing up.
+- Explain OutreachAI and its features clearly and simply. Cover what it does, how it works (finding leads, personalized cold emails from their own Gmail, follow-ups, reply classification), and the free plan.
+- If they ask about their account, billing or settings, explain they must create a free account first and point them to Sign up.
+- If they mention an email/phone or ask to be contacted, suggest emailing outreachai.team@gmail.com — never collect personal details.`
+      : "";
     const system = `${MANUAL}
 
 ${accountCtx}
-${arabic ? "\n\nLANGUAGE REQUIREMENT — the user writes in Arabic. Reply ONLY in Arabic (modern standard Arabic, friendly and clear). Product terms may stay in English where natural." : ""}`;
+${arabic ? "\n\nLANGUAGE REQUIREMENT — the user writes in Arabic. Reply ONLY in Arabic (modern standard Arabic, friendly and clear). Product terms may stay in English where natural." : ""}${guestNote}`;
 
     const answer = await groqChat(
       [{ role: "system", content: system }, ...history],

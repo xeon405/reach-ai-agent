@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -333,6 +334,8 @@ function Landing() {
       </footer>
 
       <style>{`@keyframes fadeUp { from { opacity:0; transform: translateY(20px);} to {opacity:1; transform:none;} }`}</style>
+
+      <SupportChat />
     </div>
   );
 }
