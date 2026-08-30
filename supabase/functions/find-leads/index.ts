@@ -357,7 +357,7 @@ serve(async (req) => {
       verifiedLeads = verifiedLeads.slice(0, cappedLimit);
     }
     await saveBusinesses(supabase, verifiedLeads, nicheKey, countryStr);
-    if (cityKey) await markCoverageRefreshed(supabase, nicheKey, countryStr, cityKey);
+    if (cityKey) await markCoverageRefreshed(supabase, nicheKey, countryStr, cityKey, String(location ?? ""));
 
     // Cache the finished result so the next identical request (within TTL) is
     // served without spending more Places quota or re-enriching websites.

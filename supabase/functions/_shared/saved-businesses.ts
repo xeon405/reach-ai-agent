@@ -180,6 +180,7 @@ export async function markCoverageRefreshed(
   niche: string,
   country: string,
   city: string,
+  query?: string,
 ): Promise<void> {
   const prev = await supabase
     .from("lead_refresh")
@@ -192,7 +193,7 @@ export async function markCoverageRefreshed(
   const { error } = await supabase
     .from("lead_refresh")
     .upsert(
-      { niche, country, city, last_live_search_at: new Date().toISOString(), refreshes },
+      { niche, country, city, last_live_search_at: new Date().toISOString(), refreshes, query: query ?? null },
       { onConflict: "niche,country,city" },
     );
   if (error) console.error("markCoverageRefreshed:", error.message);
