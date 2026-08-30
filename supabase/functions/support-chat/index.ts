@@ -290,6 +290,15 @@ Deno.serve(async (req) => {
       return json({ thread_id: threadId, messages: msgs ?? [] });
     }
 
+    // ── 'delete' action: wipe this conversation (owner-scoped; thread resolved above) ──
+    if (body?.action === "delete") {
+      if (!threadId) return json({ ok: true });
+      const { error: delMsgs } = await admin.from("support_chat_messages").delete().eq("thread_id", threadId);
+      if (delMsgs) throw new Error("Could not delete conversation");
+      await admin.from("support_chat_threads").delete().eq("id", threadId);
+      return json({ ok: true });
+    }
+
     const text = String(body?.text ?? "").trim();
     if (!text) throw new Error("No message");
     if (text.length > 1500) throw new Error("Message too long");

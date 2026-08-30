@@ -160,6 +160,35 @@ export function SupportChat() {
     }
   }
 
+  async function deleteChat() {
+    if (loading) return;
+    if (!window.confirm("Delete this conversation? This cannot be undone.")) return;
+    const threadId = loadThreadId();
+    try {
+      if (threadId) {
+        const headers = await authHeaders();
+        await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
+          {
+            method: "POST",
+            headers: {
+              ...headers,
+              apikey:
+                (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
+                "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ thread_id: threadId, action: "delete" }),
+          }
+        );
+      }
+    } catch { /* still clear locally even if the request failed */ }
+    storeThreadId(null);
+    persistMessages([WELCOME]);
+    setMessages([WELCOME]);
+    setInput("");
+  }
+
   return (
     <>
       {!open && (
@@ -189,15 +218,33 @@ export function SupportChat() {
                 <span className="h-1.5 w-1.5 rounded-full bg-green-400" /> Online
               </div>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="rounded-full p-1 text-primary-foreground/70 hover:bg-primary-foreground/15 hover:text-primary-foreground"
-              aria-label="Close"
-            >
-              <svg width="16" height="16" viewBox="0 0 12 12" fill="none">
-                <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
+            <div className="flex items-center">
+              <button
+                onClick={deleteChat}
+                disabled={loading}
+                className="rounded-full p-1 text-primary-foreground/70 hover:bg-primary-foreground/15 hover:text-primary-foreground disabled:opacity-40"
+                aria-label="Delete conversation"
+                title="Delete conversation"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-full p-1 text-primary-foreground/70 hover:bg-primary-foreground/15 hover:text-primary-foreground"
+                aria-label="Close"
+              >
+                <svg width="16" height="16" viewBox="0 0 12 12" fill="none">
+                  <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
