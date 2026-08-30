@@ -5,6 +5,10 @@ import { metrosFor, rankAreas, type AreaRecommendation } from "../_shared/areas.
 import { groqChat, extractJson, sanitizeForPrompt, groqKeys } from "../_shared/groq.ts";
 import { cacheGet, cacheSet, AREA_TTL_MS } from "../_shared/search-cache.ts";
 
+// Deterministic slice for cache stability: always the same top metros per
+// country, in a fixed order (largest first), so a cached ranking is stable.
+const MAX_METROS_PROBED = 12;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -62,13 +66,15 @@ serve(async (req) => {
       );
     }
 
-    const metros = metrosFor(country);
+    const metros = metrosFor(country).slice(0, MAX_METROS_PROBED);
     const raw = await pMap(metros, 4, async (metro) => {
       const r = await probeArea(apiKey, String(jobTitle), metro, country);
       return { metro, ...r };
     });
-    const quotaHit = raw.some((r) => r.quotaHit);
-    if (quotaHit || raw.every((r) => r.businesses === 0)) {
+    // Progress beats perfection: use whatever cities actually answered.
+    const viable = raw.filter((r) => !r.quotaHit && r.businesses > 0);
+    const quotaHit = viable.length === 0 && raw.some((r) => r.quotaHit);
+    if (viable.length === 0) {
       return new Response(
         JSON.stringify({
           areas: [],
@@ -86,8 +92,8 @@ serve(async (req) => {
       );
     }
 
-    const ranked = rankAreas(raw).slice(0, 15);
-    let areas: AreaRecommendation[] = rankAreas(raw).slice(0, 10);
+    const ranked = rankAreas(viable).slice(0, 15);
+    let areas: AreaRecommendation[] = rankAreas(viable).slice(0, 10);
     let aiNote: string | null = null;
 
     // AI refinement: let the model re-prioritize using both the measured data and

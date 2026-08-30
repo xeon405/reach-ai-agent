@@ -1,0 +1,151 @@
+// "Our own map": a permanent, ever-growing ledger of every business the lead
+// finder has legitimately found (Google, OpenStreetMap, website enrichment).
+// Searches check this table FIRST — zero external cost, never runs out.
+// Access via the service-role client (bypasses RLS).
+
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+export interface SavedLead {
+  name: string;
+  email: string;
+  company: string;
+  job_title: string;
+  country: string;
+  city: string;
+  website: string;
+  phone: string;
+  address: string;
+  rating: number | null;
+  source: string;
+  category: string;
+  place_id: string;
+  email_source?: string;
+  email_source_url?: string;
+  email_status?: string;
+  email_confidence?: number;
+  email_is_role?: boolean;
+  email_is_disposable?: boolean;
+  email_verification_reason?: string;
+}
+
+function domainOf(website?: string): string {
+  if (!website) return "";
+  try {
+    return new URL(website.startsWith("http") ? website : `https://${website}`).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+// Stable unique key per business: google/OSM place id, else website host,
+// else the email's domain.
+export function placeKey(lead: { place_id?: string; email?: string; website?: string }): string {
+  if (lead.place_id) return String(lead.place_id);
+  const d = domainOf(lead.website);
+  if (d) return `mem-${d}`;
+  if (lead.email) return `mem-${String(lead.email).split("@")[1] || String(lead.email)}`;
+  return "";
+}
+
+export async function findSavedLeads(
+  supabase: SupabaseClient,
+  q: { niche: string; country: string; location?: string; limit: number },
+): Promise<SavedLead[]> {
+  let query = supabase
+    .from("saved_businesses")
+    .select("*")
+    .eq("niche", q.niche)
+    .eq("country", q.country)
+    .not("email", "is", null)
+    .order("last_seen", { ascending: false })
+    .limit(Math.max(1, Math.min(q.limit, 100)));
+  const locCity = (q.location ?? "").split(",")[0].trim().toLowerCase();
+  if (locCity) {
+    query = query.or(`city.ilike.%${locCity}%,address.ilike.%${locCity}%`);
+  }
+  const { data, error } = await query;
+  if (error) {
+    console.error("findSavedLeads:", error.message);
+    return [];
+  }
+  const leads: SavedLead[] = (data ?? []).map((r) => ({
+    name: String(r.name ?? r.company ?? r.email.split("@")[0] ?? ""),
+    email: String(r.email ?? ""),
+    company: String(r.company ?? ""),
+    job_title: String(r.job_title ?? "Owner"),
+    country: String(r.country ?? ""),
+    city: String(r.city ?? ""),
+    website: String(r.website ?? ""),
+    phone: String(r.phone ?? ""),
+    address: String(r.address ?? ""),
+    rating: typeof r.rating === "number" ? r.rating : null,
+    source: String(r.source ?? "database"),
+    category: String(r.category ?? ""),
+    place_id: String(r.place_id ?? ""),
+    email_source: r.email_source ? String(r.email_source) : undefined,
+    email_source_url: r.email_source_url ? String(r.email_source_url) : undefined,
+    email_status: r.email_status ? String(r.email_status) : undefined,
+    email_confidence: typeof r.email_confidence === "number" ? r.email_confidence : undefined,
+    email_is_role: typeof r.email_is_role === "boolean" ? r.email_is_role : undefined,
+    email_is_disposable: typeof r.email_is_disposable === "boolean" ? r.email_is_disposable : undefined,
+    email_verification_reason: r.email_verification_reason ? String(r.email_verification_reason) : undefined,
+  }));
+
+  // Light per-business dedupe (same website host or same email domain + city).
+  const seen = new Set<string>();
+  const out: SavedLead[] = [];
+  for (const l of leads) {
+    const d = domainOf(l.website) || (l.email.split("@")[1] ?? "");
+    const key = d ? `${d}|${String(l.city).toLowerCase()}` : l.email;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(l);
+  }
+  return out;
+}
+
+export async function saveBusinesses(
+  supabase: SupabaseClient,
+  leads: Array<Record<string, unknown>>,
+  niche: string,
+  country: string,
+): Promise<number> {
+  const rows: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  for (const l of leads) {
+    const email = String(l.email ?? "").trim().toLowerCase();
+    if (!email || !email.includes("@")) continue;
+    const key = placeKey(l as { place_id?: string; email?: string; website?: string });
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      place_id: key,
+      email,
+      website: String(l.website ?? ""),
+      domain: domainOf(String(l.website ?? "")),
+      name: String(l.name ?? ""),
+      company: String(l.company ?? l.name ?? ""),
+      job_title: String(l.job_title ?? "Owner"),
+      niche: String(niche ?? "").trim().toLowerCase(),
+      country: String(country ?? "").trim(),
+      city: String(l.city ?? ""),
+      source: String(l.source ?? ""),
+      category: String(l.category ?? ""),
+      phone: String(l.phone ?? ""),
+      address: String(l.address ?? ""),
+      rating: typeof l.rating === "number" ? l.rating : null,
+      email_source: l.email_source ? String(l.email_source) : null,
+      email_source_url: l.email_source_url ? String(l.email_source_url) : null,
+      email_status: l.email_status ? String(l.email_status) : null,
+      email_confidence: typeof l.email_confidence === "number" ? l.email_confidence : null,
+      email_is_role: typeof l.email_is_role === "boolean" ? l.email_is_role : null,
+      email_is_disposable: typeof l.email_is_disposable === "boolean" ? l.email_is_disposable : null,
+      last_seen: new Date().toISOString(),
+    });
+  }
+  if (rows.length === 0) return 0;
+  const { error } = await supabase.from("saved_businesses").upsert(rows, { onConflict: "place_id" });
+  if (error) console.error("saveBusinesses:", error.message);
+  return error ? 0 : rows.length;
+}

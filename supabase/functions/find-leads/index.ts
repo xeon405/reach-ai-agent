@@ -6,6 +6,7 @@ import { insertAudit } from "../_shared/audit.ts";
 import { verifyEmail, type EmailVerification } from "../_shared/email-verifier.ts";
 import { planSearchQueries, curateLeads, isAiConfigured } from "../_shared/lead-ai.ts";
 import { cacheGet, cacheSet, LEADS_TTL_MS } from "../_shared/search-cache.ts";
+import { findSavedLeads, saveBusinesses, type SavedLead } from "../_shared/saved-businesses.ts";
 
 interface CachePayload {
   leads: unknown[];
@@ -100,6 +101,33 @@ serve(async (req) => {
     let source = "open-business-directory";
     let quotaHit = false;
 
+    // Memory layer ("our own map"): permanent businesses from prior searches.
+    // If we already own enough for this niche+area, serve instantly — no Google.
+    const nicheKey = String(jobTitle).trim().toLowerCase();
+    const remembered = await findSavedLeads(supabase, {
+      niche: nicheKey,
+      country: String(country ?? "United States").trim(),
+      location: location ? String(location) : undefined,
+      limit: cappedLimit,
+    });
+    if (remembered.length >= cappedLimit) {
+      await insertAudit(supabase, {
+        user_id: userId,
+        campaign_id: campaignId,
+        event: "lead.searched",
+        payload: { count: remembered.length, country, jobTitle, source: "database", from_memory: true },
+      });
+      return json({
+        leads: remembered,
+        count: remembered.length,
+        source: "database",
+        network: [],
+        ai: { planned: null, curated: null },
+        message: `Found ${remembered.length} saved businesses for "${jobTitle}"${country ? ` in ${country}` : ""} instantly from our own saved database — no live search needed. Try another city or niche to discover new ones.`,
+        cached: false,
+      });
+    }
+
     // AI planning: expand the niche into search variants and (when no area was
     // typed) suggest strong metros. Optional — any failure falls back cleanly.
     const aiPlan = !location
@@ -151,6 +179,18 @@ serve(async (req) => {
     }
 
     if (leads.length === 0 && quotaHit) {
+      if (remembered.length > 0) {
+        return json({
+          leads: remembered,
+          count: remembered.length,
+          source: "database",
+          network: [],
+          ai: { planned: null, curated: null },
+          message: `Google Maps' daily search quota is used up, but here are ${remembered.length} business${remembered.length === 1 ? "" : "es"} saved from earlier searches. Live search resumes when the quota resets.`,
+          cached: false,
+          quota_exceeded: true,
+        });
+      }
       return json({
         leads: [],
         count: 0,
@@ -295,6 +335,19 @@ serve(async (req) => {
           : `No public emails found for "${jobTitle}" in ${country || "United States"}. Try "dentist", "gym", "restaurant", "salon", "lawyer" — or import a CSV.`
         : `Found ${verifiedLeads.length} businesses with public emails (${source}). Review and add the ones you want.`;
     if (aiCurated) message += ` AI: ${aiCurated}`;
+
+    // Grow "our own map": merge any remembered rows not already shown, then save
+    // everything (live + remembered) back to the permanent ledger.
+    if (remembered.length > 0) {
+      const seenEmails = new Set(verifiedLeads.map((l) => String(l.email).toLowerCase()));
+      for (const r of remembered) {
+        if (seenEmails.has(String(r.email).toLowerCase())) continue;
+        seenEmails.add(String(r.email).toLowerCase());
+        verifiedLeads.push(r);
+      }
+      verifiedLeads = verifiedLeads.slice(0, cappedLimit);
+    }
+    await saveBusinesses(supabase, verifiedLeads, nicheKey, String(country ?? "United States").trim());
 
     // Cache the finished result so the next identical request (within TTL) is
     // served without spending more Places quota or re-enriching websites.
