@@ -5,6 +5,12 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Refresh policy: an area we already covered gets ONE new live search every
+// REFRESH_INTERVAL, so businesses that open later still get discovered.
+export const REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+// Safety: never spend more than this many live refreshes per day.
+export const DAILY_REFRESH_CAP = 40;
+
 export interface SavedLead {
   name: string;
   email: string;
@@ -148,4 +154,64 @@ export async function saveBusinesses(
   const { error } = await supabase.from("saved_businesses").upsert(rows, { onConflict: "place_id" });
   if (error) console.error("saveBusinesses:", error.message);
   return error ? 0 : rows.length;
+}
+
+// ---- Refresh rotation: keep covered areas fresh without wasting quota ----
+
+export async function coverageStale(
+  supabase: SupabaseClient,
+  niche: string,
+  country: string,
+  city: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("lead_refresh")
+    .select("last_live_search_at")
+    .eq("niche", niche)
+    .eq("country", country)
+    .eq("city", city)
+    .maybeSingle();
+  if (!data || !data.last_live_search_at) return true;
+  return Date.now() - new Date(data.last_live_search_at).getTime() > REFRESH_INTERVAL_MS;
+}
+
+export async function markCoverageRefreshed(
+  supabase: SupabaseClient,
+  niche: string,
+  country: string,
+  city: string,
+): Promise<void> {
+  const prev = await supabase
+    .from("lead_refresh")
+    .select("refreshes")
+    .eq("niche", niche)
+    .eq("country", country)
+    .eq("city", city)
+    .maybeSingle();
+  const refreshes = Number(prev.data?.refreshes ?? 0) + 1;
+  const { error } = await supabase
+    .from("lead_refresh")
+    .upsert(
+      { niche, country, city, last_live_search_at: new Date().toISOString(), refreshes },
+      { onConflict: "niche,country,city" },
+    );
+  if (error) console.error("markCoverageRefreshed:", error.message);
+}
+
+// Grants one refresh slot for today (subject to the daily cap). Returns false
+// when the cap is spent — callers then serve memory instead of re-searching.
+export async function grantRefresh(supabase: SupabaseClient): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("refresh_usage")
+    .select("count")
+    .eq("day", today)
+    .maybeSingle();
+  const used = Number(data?.count ?? 0);
+  if (used >= DAILY_REFRESH_CAP) return false;
+  const { error } = await supabase
+    .from("refresh_usage")
+    .upsert({ day: today, count: used + 1 }, { onConflict: "day" });
+  if (error) console.error("grantRefresh:", error.message);
+  return !error;
 }

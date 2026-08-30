@@ -6,7 +6,9 @@ import { insertAudit } from "../_shared/audit.ts";
 import { verifyEmail, type EmailVerification } from "../_shared/email-verifier.ts";
 import { planSearchQueries, curateLeads, isAiConfigured } from "../_shared/lead-ai.ts";
 import { cacheGet, cacheSet, LEADS_TTL_MS } from "../_shared/search-cache.ts";
-import { findSavedLeads, saveBusinesses, type SavedLead } from "../_shared/saved-businesses.ts";
+import {
+  findSavedLeads, saveBusinesses, coverageStale, markCoverageRefreshed, grantRefresh,
+} from "../_shared/saved-businesses.ts";
 
 interface CachePayload {
   leads: unknown[];
@@ -104,13 +106,20 @@ serve(async (req) => {
     // Memory layer ("our own map"): permanent businesses from prior searches.
     // If we already own enough for this niche+area, serve instantly — no Google.
     const nicheKey = String(jobTitle).trim().toLowerCase();
+    const countryStr = String(country ?? "United States").trim();
+    const cityKey = location ? String(location).split(",")[0].trim().toLowerCase() : null;
     const remembered = await findSavedLeads(supabase, {
       niche: nicheKey,
-      country: String(country ?? "United States").trim(),
+      country: countryStr,
       location: location ? String(location) : undefined,
       limit: cappedLimit,
     });
-    if (remembered.length >= cappedLimit) {
+    let refreshWanted = false;
+    if (remembered.length >= cappedLimit && cityKey && (await coverageStale(supabase, nicheKey, countryStr, cityKey))) {
+      refreshWanted = (await grantRefresh(supabase)) && isGoogleMapsAvailable();
+    }
+    const memoryFresh = !refreshWanted;
+    if (remembered.length >= cappedLimit && memoryFresh) {
       await insertAudit(supabase, {
         user_id: userId,
         campaign_id: campaignId,
@@ -347,7 +356,8 @@ serve(async (req) => {
       }
       verifiedLeads = verifiedLeads.slice(0, cappedLimit);
     }
-    await saveBusinesses(supabase, verifiedLeads, nicheKey, String(country ?? "United States").trim());
+    await saveBusinesses(supabase, verifiedLeads, nicheKey, countryStr);
+    if (cityKey) await markCoverageRefreshed(supabase, nicheKey, countryStr, cityKey);
 
     // Cache the finished result so the next identical request (within TTL) is
     // served without spending more Places quota or re-enriching websites.
