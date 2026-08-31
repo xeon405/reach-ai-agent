@@ -115,7 +115,7 @@ function AuthenticatedLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
-            <span className="text-sm text-muted-foreground">OutShipAI</span>
+            <span className="text-sm text-muted-foreground">OutshipAi</span>
             <div className="ml-auto flex items-center gap-1">
               <NotificationBell />
             </div>

@@ -1,4 +1,4 @@
-# OutShipAI — Concurrency Audit (Part 4)
+# OutshipAi — Concurrency Audit (Part 4)
 **Date:** 2026-08-25
 
 ---

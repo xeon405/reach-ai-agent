@@ -18,9 +18,9 @@ const SUPPORT_EMAIL = "outreachai.team@gmail.com";
 
 const WELCOME: Msg = {
   role: "assistant",
-  content: `Hey! I'm your OutShipAI guide. I can help with anything — how the app works, finding leads, launching campaigns, follow-ups, Gmail setup, billing, and more.
+  content: `Hey! I'm your OutshipAi guide. I can help with anything — how the app works, finding leads, launching campaigns, follow-ups, Gmail setup, billing, and more.
 
-Just exploring? Ask what OutShipAI does or what the free plan includes.
+Just exploring? Ask what OutshipAi does or what the free plan includes.
 
 Need human support? Reach us at ${SUPPORT_EMAIL}`,
 };
@@ -213,7 +213,7 @@ export function SupportChat() {
         <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 flex h-[520px] max-h-[80vh] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
           <div className="flex items-center justify-between bg-primary px-4 py-3">
             <div>
-              <div className="text-sm font-semibold text-primary-foreground">OutShipAI Guide</div>
+              <div className="text-sm font-semibold text-primary-foreground">OutshipAi Guide</div>
               <div className="flex items-center gap-1.5 text-xs text-primary-foreground/70">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-400" /> Online
               </div>

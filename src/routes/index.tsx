@@ -11,13 +11,13 @@ import { useLang, LangToggle } from "@/lib/i18n";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "OutShipAI — AI Sales Agent That Finds Leads & Sends Cold Emails For You" },
+      { title: "OutshipAi — AI Sales Agent That Finds Leads & Sends Cold Emails For You" },
       {
         name: "description",
         content:
-          "OutShipAI finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
+          "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
       },
-      { property: "og:title", content: "OutShipAI — Your AI Sales Agent" },
+      { property: "og:title", content: "OutshipAi — Your AI Sales Agent" },
       {
         property: "og:description",
         content:
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/")({
       { property: "og:image", content: "/og.png" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "OutShipAI — Your AI Sales Agent" },
+      { name: "twitter:title", content: "OutshipAi — Your AI Sales Agent" },
       {
         name: "twitter:description",
         content:
@@ -123,7 +123,7 @@ function Landing() {
           {stats && stats.emails_sent >= 100 && (
             <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400">
               <Flame className="h-3.5 w-3.5" />
-              {stats.emails_sent.toLocaleString()} cold emails already sent by OutShipAI agents
+              {stats.emails_sent.toLocaleString()} cold emails already sent by OutshipAi agents
             </div>
           )}
           <h1 className="text-balance text-5xl font-bold tracking-tight md:text-7xl">
@@ -329,7 +329,7 @@ function Landing() {
             <Link to="/privacy" className="hover:text-foreground">{t("footer_privacy")}</Link>
             <Link to="/auth" className="hover:text-foreground">{t("nav_login")}</Link>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 OutShipAI</p>
+          <p className="text-xs text-muted-foreground">© 2026 OutshipAi</p>
         </div>
       </footer>
 

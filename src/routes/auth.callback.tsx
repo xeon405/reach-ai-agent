@@ -33,7 +33,7 @@ function GmailCallbackPage() {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error("no session from link");
         }
-        toast.success("Email confirmed! Welcome to OutShipAI.");
+        toast.success("Email confirmed! Welcome to OutshipAi.");
         const redirectTo = params.get("redirect_to") || params.get("next");
         navigate({ to: redirectTo && redirectTo.startsWith("/") ? redirectTo : "/" });
       } catch {

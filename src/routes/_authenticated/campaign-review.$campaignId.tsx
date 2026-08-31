@@ -143,7 +143,7 @@ function CampaignReviewPage() {
           leadName: lead.name ?? "there",
           leadCompany: lead.company ?? "your company",
           leadJobTitle: lead.job_title ?? "professional",
-          yourCompany: profile?.name ?? "OutShipAI",
+          yourCompany: profile?.name ?? "OutshipAi",
           yourOffer: profile?.offer ?? "our service",
         },
       });

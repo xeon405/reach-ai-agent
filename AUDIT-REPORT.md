@@ -1,4 +1,4 @@
-# OutShipAI — Full Architecture Audit Report
+# OutshipAi — Full Architecture Audit Report
 **Date:** 2026-08-25  
 **Baseline:** commit `3be7d6b` → status fix `298ae16` → Phase 1 `f1c1829`
 

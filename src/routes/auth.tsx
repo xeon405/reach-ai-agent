@@ -15,8 +15,8 @@ import { Loader2 } from "lucide-react";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — OutShipAI" },
-      { name: "description", content: "Log in or create your OutShipAI account." },
+      { title: "Sign in — OutshipAi" },
+      { name: "description", content: "Log in or create your OutshipAi account." },
     ],
   }),
   component: AuthPage,

@@ -24,8 +24,8 @@ def twaManifest = [
     applicationId: 'com.outreachai.app',
     hostName: 'outreach-ochre-sigma.vercel.app', // The domain being opened in the TWA.
     launchUrl: '/', // The start path for the TWA. Must be relative to the domain.
-    name: 'OutShipAI — AI Cold Email Agent', // The application name.
-    launcherName: 'OutShipAI', // The name shown on the Android Launcher.
+    name: 'OutshipAi — AI Cold Email Agent', // The application name.
+    launcherName: 'OutshipAi', // The name shown on the Android Launcher.
     themeColor: '#7C3AED', // The color used for the status bar.
     themeColorDark: '#000000', // The color used for the dark status bar.
     navigationColor: '#000000', // The color used for the navigation bar.

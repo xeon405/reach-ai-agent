@@ -58,3 +58,6 @@ android-app/local.properties
 android-app/*.log
 android-app/rebuild*.log
 .cron-secret.txt
+
+.vercel
+.env*

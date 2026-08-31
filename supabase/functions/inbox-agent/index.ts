@@ -153,7 +153,7 @@ async function fetchSiteKnowledge(url: string): Promise<string> {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), ms);
       try {
-        const r = await fetch(u, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; OutShipAI/1.0)" }, redirect: "follow" });
+        const r = await fetch(u, { signal: ctrl.signal, headers: { "User-Agent": "Mozilla/5.0 (compatible; OutshipAi/1.0)" }, redirect: "follow" });
         return r.ok ? (await r.text()).slice(0, 400_000) : "";
       } catch { return ""; } finally { clearTimeout(timer); }
     };

@@ -576,7 +576,7 @@ Deno.serve(async (req) => {
     const destLink2 = String(ctx.profile.website_url || ctx.profile.booking_link || "");
     const bodyText = `${gen.body}${destLink2 ? (ctx.profile.website_url ? `\n\n🔗 See how it works & get started: ${destLink2}` : `\n\n📅 Want details or a quick demo? Book a time that suits you: ${destLink2}`) : ""}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
 
-PS: I use an AI assistant (OutShipAI) to help manage my outreach — this note was drafted with its help.
+PS: I use an AI assistant (OutshipAi) to help manage my outreach — this note was drafted with its help.
 Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
 
     // Generate tracking ID BEFORE send so we can reference it in the pixel.

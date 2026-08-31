@@ -1,8 +1,8 @@
 {
   "packageId": "com.outreachai.app",
   "host": "outreach-ochre-sigma.vercel.app",
-  "name": "OutShipAI — AI Cold Email Agent",
-  "launcherName": "OutShipAI",
+  "name": "OutshipAi — AI Cold Email Agent",
+  "launcherName": "OutshipAi",
   "display": "standalone",
   "themeColor": "#7C3AED",
   "themeColorDark": "#000000",

@@ -66,7 +66,7 @@ function SettingsPage() {
       ]);
       const bundle = {
         exported_at: new Date().toISOString(),
-        note: "Full export of your OutShipAI data. Gmail access tokens are intentionally excluded — disconnect in Settings or via Google Account to revoke them.",
+        note: "Full export of your OutshipAi data. Gmail access tokens are intentionally excluded — disconnect in Settings or via Google Account to revoke them.",
         profile: profile.data ?? [],
         campaigns: campaigns.data ?? [],
         leads: leads.data ?? [],
@@ -273,12 +273,12 @@ function SettingsPage() {
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label>What should OutShipAI communicate?</Label>
+          <Label>What should OutshipAi communicate?</Label>
           <Textarea rows={2} value={communicationStyle} onChange={(e) => setCommunicationStyle(e.target.value)}
             placeholder="e.g. Be direct, lead with ROI, sound like a peer." />
         </div>
         <div className="space-y-1.5">
-          <Label>What should OutShipAI NEVER claim?</Label>
+          <Label>What should OutshipAi NEVER claim?</Label>
           <Textarea rows={2} value={dontClaim} onChange={(e) => setDontClaim(e.target.value)}
             placeholder="e.g. Never promise specific revenue numbers." />
         </div>
@@ -367,7 +367,7 @@ function SettingsPage() {
           <div>
             <div className="font-medium">Discoverable by other businesses</div>
             <div className="text-xs text-muted-foreground">
-              Let other OutShipAI users find your business in their AI lead search and request a warm intro. Your email and phone are never shown — you approve every intro first.
+              Let other OutshipAi users find your business in their AI lead search and request a warm intro. Your email and phone are never shown — you approve every intro first.
             </div>
           </div>
           <Switch checked={networkMode} onCheckedChange={setNetworkMode} />

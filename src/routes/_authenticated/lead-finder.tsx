@@ -848,7 +848,7 @@ function LeadFinderPage() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Businesses already on OutShipAI matching "{activeNiche}". Their email stays private — request a warm intro and they
+            Businesses already on OutshipAi matching "{activeNiche}". Their email stays private — request a warm intro and they
             choose to accept (so does the steady drip cadence you know).
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

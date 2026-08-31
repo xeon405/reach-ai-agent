@@ -71,7 +71,7 @@ serve(async (req) => {
           console.error("subscriptions fetch error:", sErr.message);
         } else if (subs && subs.length > 0) {
           const payload = JSON.stringify({
-            title: item.title ?? "OutShipAI",
+            title: item.title ?? "OutshipAi",
             body: item.body ?? "",
             kind: item.kind ?? "",
             url: routeFor(item.kind, item.lead_id),

@@ -1,4 +1,4 @@
-# OutShipAI — Failure / Recovery Audit (Part 3)
+# OutshipAi — Failure / Recovery Audit (Part 3)
 **Date:** 2026-08-25
 
 ---

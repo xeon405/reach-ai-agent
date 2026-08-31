@@ -4,7 +4,7 @@ import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
-    meta: [{ title: "Terms of Service — OutShipAI" }],
+    meta: [{ title: "Terms of Service — OutshipAi" }],
   }),
   component: Terms,
 });
@@ -22,7 +22,7 @@ function Terms() {
           <section>
             <h2 className="text-lg font-semibold">1. Acceptance</h2>
             <p className="mt-2">
-              By creating an account or using OutShipAI ("the Service"), you agree to these Terms.
+              By creating an account or using OutshipAi ("the Service"), you agree to these Terms.
               If you do not agree, do not use the Service.
             </p>
           </section>
@@ -30,7 +30,7 @@ function Terms() {
           <section>
             <h2 className="text-lg font-semibold">2. The Service</h2>
             <p className="mt-2">
-              OutShipAI finds business leads, drafts personalized emails using artificial
+              OutshipAi finds business leads, drafts personalized emails using artificial
               intelligence, and sends them through your own Gmail account, including automated
               follow-ups.
             </p>

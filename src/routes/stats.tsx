@@ -8,10 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/stats")({
   head: () => ({
     meta: [
-      { title: "Live Stats — OutShipAI" },
+      { title: "Live Stats — OutshipAi" },
       {
         name: "description",
-        content: "Radical transparency: live numbers from the OutShipAI platform — agents running, cold emails sent, replies detected.",
+        content: "Radical transparency: live numbers from the OutshipAi platform — agents running, cold emails sent, replies detected.",
       },
     ],
   }),

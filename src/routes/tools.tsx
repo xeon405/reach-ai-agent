@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/tools")({
   head: () => ({
     meta: [
-      { title: "Free Email Tools — Validate Lists & Generate Subject Lines | OutShipAI" },
+      { title: "Free Email Tools — Validate Lists & Generate Subject Lines | OutshipAi" },
       {
         name: "description",
         content:

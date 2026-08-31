@@ -58,7 +58,7 @@ export const TEMPLATES: Template[] = [
     niche: "SaaS / Startups",
     name: "Founder-led sales",
     subject: "{{first_name}}, outbound without hiring an SDR",
-    body: "Hi {{first_name}},\n\nMost founders wait too long to hire sales — then pay $80k+ for someone who spends half their day writing emails.\n\nOutShipAI does that part automatically: finds your ideal customers, writes personal emails in your voice, follows up until they answer. Founders book 10-20 demos/month without touching a spreadsheet.\n\nWant me to show you a sample list of your ideal customers? {{booking_link}}\n\nBest regards,\n{{sender_name}}",
+    body: "Hi {{first_name}},\n\nMost founders wait too long to hire sales — then pay $80k+ for someone who spends half their day writing emails.\n\nOutshipAi does that part automatically: finds your ideal customers, writes personal emails in your voice, follows up until they answer. Founders book 10-20 demos/month without touching a spreadsheet.\n\nWant me to show you a sample list of your ideal customers? {{booking_link}}\n\nBest regards,\n{{sender_name}}",
   },
   {
     niche: "SaaS / Startups",

@@ -12,7 +12,7 @@ users' businesses fitted to the search intent, and surface them as "network" lea
   (derivable from offer/website), plan tier.
 - Near-zero new data collection.
 - Higher intent than scraped leads; the personalized first line is naturally stronger
-  ("You run X on OutShipAI too...").
+  ("You run X on OutshipAi too...").
 
 ## The trap (why it must be warm, not cold)
 If User A's AI cold-emails User B's personal Gmail as a lead, User B feels surveilled and churns.
