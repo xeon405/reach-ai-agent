@@ -297,13 +297,13 @@ function Onboarding() {
             <h2 className="text-xl font-semibold">How the AI communicates</h2>
             <p className="text-sm text-muted-foreground">Set the tone and guardrails — what the AI should and should never say.</p>
             <div className="space-y-1.5">
-              <Label>What should OutreachAI communicate?</Label>
+              <Label>What should OutShipAI communicate?</Label>
               <Textarea rows={4} value={communicationStyle} onChange={(e) => setCommunicationStyle(e.target.value)}
                 placeholder="e.g. Be direct and value-focused. Lead with ROI. Sound like a peer, not a salesperson. Always mention our free trial." />
               <p className="text-xs text-muted-foreground">Tone, key messages, things to always include. The AI follows these instructions.</p>
             </div>
             <div className="space-y-1.5">
-              <Label>What should OutreachAI NEVER claim?</Label>
+              <Label>What should OutShipAI NEVER claim?</Label>
               <Textarea rows={4} value={dontClaim} onChange={(e) => setDontClaim(e.target.value)}
                 placeholder="e.g. Never promise specific revenue numbers. Never claim we're endorsed by competitors. Never mention pricing — book a call for that." />
               <p className="text-xs text-muted-foreground">Guardrails — the AI will not say anything you list here.</p>

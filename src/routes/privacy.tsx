@@ -4,7 +4,7 @@ import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
-    meta: [{ title: "Privacy Policy — OutreachAI" }],
+    meta: [{ title: "Privacy Policy — OutShipAI" }],
   }),
   component: Privacy,
 });

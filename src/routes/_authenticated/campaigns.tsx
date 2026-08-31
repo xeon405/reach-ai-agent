@@ -32,7 +32,7 @@ function CampaignsPage() {
   const [editingName, setEditingName] = useState("");
   const [aiForm, setAiForm] = useState({
     leadName: "", leadCompany: "", leadJobTitle: "",
-    yourCompany: "OutreachAI",
+    yourCompany: "OutShipAI",
     yourOffer: "AI-powered cold email automation that finds leads and books meetings automatically",
   });
 
@@ -225,7 +225,7 @@ function CampaignsPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium">Your Company</label>
-                    <Input placeholder="OutreachAI" value={aiForm.yourCompany}
+                    <Input placeholder="OutShipAI" value={aiForm.yourCompany}
                       onChange={(e) => setAiForm({ ...aiForm, yourCompany: e.target.value })} />
                   </div>
                 </div>

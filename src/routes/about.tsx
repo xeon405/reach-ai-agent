@@ -39,7 +39,7 @@ function AboutPage() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
           <Compass className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">About OutreachAI</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">About OutShipAI</h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
           We build an AI sales agent so small teams can reach the world without hiring a sales department.
         </p>
@@ -47,7 +47,7 @@ function AboutPage() {
 
       <section className="mx-auto max-w-2xl px-4 pb-10">
         <p className="text-center text-lg leading-relaxed text-muted-foreground">
-          OutreachAI started with a simple observation: great products lose to louder competitors
+          OutShipAI started with a simple observation: great products lose to louder competitors
           because outreach is expensive, slow, and uncomfortable. We believed an AI agent — one
           that finds the right people, writes like a human, and respects every rule of good
           emailing — could level that field.

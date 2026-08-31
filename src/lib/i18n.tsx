@@ -16,8 +16,8 @@ const DICT: Record<string, { en: string; ar: string }> = {
   hero_title_a: { en: "Your AI sales agent finds,", ar: "وكيل المبيعات الذكي يجد،" },
   hero_title_b: { en: "writes & sends.", ar: "يكتب ويُرسل." },
   hero_sub: {
-    en: "OutreachAI builds your lead list, writes personalized cold emails with AI, and sends them on autopilot — while you focus on closing.",
-    ar: "يبني OutreachAI قائمة عملائك المحتملين، ويكتب رسائل بريد مخصصة بالذكاء الاصطناعي، ويرسلها تلقائياً — بينما تركّز أنت على إتمام الصفقات.",
+    en: "OutShipAI builds your lead list, writes personalized cold emails with AI, and sends them on autopilot — while you focus on closing.",
+    ar: "يبني OutShipAI قائمة عملائك المحتملين، ويكتب رسائل بريد مخصصة بالذكاء الاصطناعي، ويرسلها تلقائياً — بينما تركّز أنت على إتمام الصفقات.",
   },
   hero_cta: { en: "Start free — no card needed", ar: "ابدأ مجاناً — بدون بطاقة" },
   hero_cta2: { en: "See how it works", ar: "كيف يعمل" },
@@ -35,10 +35,10 @@ const DICT: Record<string, { en: string; ar: string }> = {
   start_free: { en: "Start free", ar: "ابدأ مجاناً" },
   // Founder note
   founder_quote: {
-    en: "\"We built OutreachAI because small teams deserve the same outreach firepower as companies with entire SDR departments — without expensive tools or extra hires.\"",
-    ar: "\"بنينا OutreachAI لأن الفرق الصغيرة تستحق نفس قوة التواصل التي تملكها الشركات بأقسام مبيعات كاملة — دون أدوات باهظة أو توظيف إضافي.\"",
+    en: "\"We built OutShipAI because small teams deserve the same outreach firepower as companies with entire SDR departments — without expensive tools or extra hires.\"",
+    ar: "\"بنينا OutShipAI لأن الفرق الصغيرة تستحق نفس قوة التواصل التي تملكها الشركات بأقسام مبيعات كاملة — دون أدوات باهظة أو توظيف إضافي.\"",
   },
-  founder_role: { en: "The OutreachAI Team", ar: "فريق OutreachAI" },
+  founder_role: { en: "The OutShipAI Team", ar: "فريق OutShipAI" },
   founder_note: { en: "Our team responds to every email within 24 hours", ar: "فريق الدعم يرد خلال 24 ساعة" },
   // Footer
   footer_terms: { en: "Terms", ar: "الشروط" },

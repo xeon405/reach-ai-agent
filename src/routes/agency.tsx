@@ -110,7 +110,7 @@ function AgencyPage() {
       </section>
 
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} OutreachAI ·{" "}
+        © {new Date().getFullYear()} OutShipAI ·{" "}
         <Link to="/privacy" className="underline">Privacy</Link>{" "}
         <Link to="/terms" className="ml-2 underline">Terms</Link>
       </footer>

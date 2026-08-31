@@ -39,7 +39,7 @@ function UnsubscribePage() {
               We respect inboxes — one click and it's done.
             </p>
             <Link to="/" className="mt-6 inline-block text-sm text-primary underline underline-offset-4">
-              What is OutreachAI? →
+              What is OutShipAI? →
             </Link>
           </>
         )}

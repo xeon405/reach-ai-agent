@@ -6,7 +6,7 @@ export function Logo({ className = "" }: { className?: string }) {
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
         <Zap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
       </span>
-      <span className="text-lg group-data-[collapsible=icon]:hidden">OutreachAI</span>
+      <span className="text-lg group-data-[collapsible=icon]:hidden">OutShipAI</span>
     </div>
   );
 }

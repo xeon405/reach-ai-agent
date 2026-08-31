@@ -1,4 +1,4 @@
-/* OutreachAI Service Worker
+/* OutShipAI Service Worker
  * Strategies:
  *  - Navigations: stale-while-revalidate on the app shell (instant loads),
  *    offline.html as last-resort fallback.
@@ -132,7 +132,7 @@ self.addEventListener("push", (event) => {
   } catch {
     /* plain text fallback */
   }
-  const title = data.title || "OutreachAI";
+  const title = data.title || "OutShipAI";
   const options = {
     body: data.body || "",
     icon: "/icon-192.png",

@@ -83,17 +83,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "apple-mobile-web-app-status-bar-style",
         content: "black-translucent",
       },
-      { name: "apple-mobile-web-app-title", content: "OutreachAI" },
+      { name: "apple-mobile-web-app-title", content: "OutShipAI" },
       { name: "mobile-web-app-capable", content: "yes" },
-      { title: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot" },
+      { title: "OutShipAI — AI Cold Email Agent That Books Meetings On Autopilot" },
       {
         name: "description",
         content:
-          "OutreachAI finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
+          "OutShipAI finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
       },
       {
         property: "og:title",
-        content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot",
+        content: "OutShipAI — AI Cold Email Agent That Books Meetings On Autopilot",
       },
       {
         property: "og:description",
@@ -104,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:title",
-        content: "OutreachAI — AI Cold Email Agent That Books Meetings On Autopilot",
+        content: "OutShipAI — AI Cold Email Agent That Books Meetings On Autopilot",
       },
       {
         property: "og:image",

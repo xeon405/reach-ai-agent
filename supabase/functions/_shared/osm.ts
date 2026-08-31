@@ -86,7 +86,7 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "OutreachAI-LeadFinder/1.0 (https://outreach-ochre-sigma.vercel.app)",
+          "User-Agent": "OutShipAI-LeadFinder/1.0 (https://outreach-ochre-sigma.vercel.app)",
         },
         body,
         signal: ctrl.signal,

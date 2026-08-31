@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
         if (!tok) continue;
         await sendGmailRaw(tok.accessToken, buildRawEmail(self,
           `☀️ Your agent's last 24h: ${sentRows.length} sent · ${replies.length} replies · ${hot} hot 🔥`,
-          `Morning report from your OutreachAI agent:
+          `Morning report from your OutShipAI agent:
 
 • Emails sent: ${sentRows.length}
 • Failed/dead queue jobs: ${failed24 ?? 0}
@@ -86,7 +86,7 @@ ${campLines || "   • (none)"}
 
 ${hot > 0 || (bookings24 ?? 0) > 0 ? "You have HOT leads waiting — check Gmail now!" : "Keep the pipeline full — import fresh leads today."}
 
-— OutreachAI Agent`,
+— OutShipAI Agent`,
           self));
         await supabase.from("profiles").update({ last_digest_date: today }).eq("id", dp.id);
         await insertAudit(supabase, { user_id: dp.id, event: "digest.sent", payload: { sent: sentRows.length, replies: replies.length, hot } });

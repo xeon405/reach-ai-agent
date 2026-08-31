@@ -17,7 +17,7 @@ export interface QueryPlan {
 }
 
 const PLAN_SYSTEM =
-  "You plan localized B2B lead-discovery searches for the OutreachAI lead finder. You respond ONLY with valid JSON, no markdown, no commentary.";
+  "You plan localized B2B lead-discovery searches for the OutShipAI lead finder. You respond ONLY with valid JSON, no markdown, no commentary.";
 
 /** Expand one niche into several search phrases and (when no area was given)
  *  suggest strong metros for that niche in the country. Returns a QueryPlan. */

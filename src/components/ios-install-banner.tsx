@@ -72,7 +72,7 @@ export function IosInstallBanner() {
           </div>
           <div>
             <p className="text-sm font-semibold text-white">
-              Install OutreachAI on your iPhone
+              Install OutShipAI on your iPhone
             </p>
             <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
               Full-screen app, offline mode, instant access — just like the App

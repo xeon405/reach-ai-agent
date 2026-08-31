@@ -75,7 +75,7 @@ function SecurityPage() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
           <ShieldCheck className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Security at OutreachAI</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">Security at OutShipAI</h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
           We treat your Gmail account like it's our own. Here is exactly how your data is protected — in plain English.
         </p>

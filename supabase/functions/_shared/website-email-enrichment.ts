@@ -162,7 +162,7 @@ async function fetchPage(url: string, signal: AbortSignal): Promise<string | nul
     const res = await fetch(url, {
       signal,
       headers: {
-        "User-Agent": "OutreachAI-EmailEnrichment/1.0 (https://outreach-ochre-sigma.vercel.app; +https://outreach-ochre-sigma.vercel.app/privacy)",
+        "User-Agent": "OutShipAI-EmailEnrichment/1.0 (https://outreach-ochre-sigma.vercel.app; +https://outreach-ochre-sigma.vercel.app/privacy)",
         "Accept": "text/html,application/xhtml+xml",
       },
       redirect: "follow",
