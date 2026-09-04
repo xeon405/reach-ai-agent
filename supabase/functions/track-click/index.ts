@@ -3,20 +3,16 @@
 // An open is a weak signal; a click is a strong signal of interest.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertAudit } from "../_shared/audit.ts";
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   const dest = url.searchParams.get("url");
 
   if (!id || !dest || !/^[0-9a-f-]{36}$/i.test(id)) {
-    return new Response("Missing parameters", { status: 400, headers: cors });
+    return new Response("Missing parameters", { status: 400, headers: getCorsHeaders(req) });
   }
 
   // Validate destination is a real URL
@@ -25,7 +21,7 @@ Deno.serve(async (req) => {
     destUrl = new URL(dest);
     if (!["http:", "https:"].includes(destUrl.protocol)) throw new Error("bad protocol");
   } catch {
-    return new Response("Invalid destination", { status: 400, headers: cors });
+    return new Response("Invalid destination", { status: 400, headers: getCorsHeaders(req) });
   }
 
   try {

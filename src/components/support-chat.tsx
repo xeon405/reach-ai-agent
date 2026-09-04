@@ -98,14 +98,12 @@ export function SupportChat() {
       const headers = await authHeaders();
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
           {
             method: "POST",
             headers: {
               ...headers,
-              apikey:
-                (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
-                "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ thread_id: threadId, action: "history" }),
@@ -129,14 +127,12 @@ export function SupportChat() {
     try {
       const headers = await authHeaders();
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
         {
           method: "POST",
           headers: {
             ...headers,
-            apikey:
-              (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
-              "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ thread_id: loadThreadId(), text: q }),
@@ -168,14 +164,12 @@ export function SupportChat() {
       if (threadId) {
         const headers = await authHeaders();
         await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL ?? "https://zvohdvopmvzsujktrdmu.supabase.co"}/functions/v1/support-chat`,
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
           {
             method: "POST",
             headers: {
               ...headers,
-              apikey:
-                (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ??
-                "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM",
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ thread_id: threadId, action: "delete" }),

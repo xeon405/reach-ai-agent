@@ -67,7 +67,8 @@ export async function findSavedLeads(
     .limit(Math.max(1, Math.min(q.limit, 100)));
   const locCity = (q.location ?? "").split(",")[0].trim().toLowerCase();
   if (locCity) {
-    query = query.or(`city.ilike.%${locCity}%,address.ilike.%${locCity}%`);
+    const safeLoc = locCity.replace(/[%_]/g, "\\$&");
+    query = query.or(`city.ilike.%${safeLoc}%,address.ilike.%${safeLoc}%`);
   }
   const { data, error } = await query;
   if (error) {

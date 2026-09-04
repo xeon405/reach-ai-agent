@@ -37,7 +37,7 @@ function StatusPage() {
 
   async function runAll() {
     setRows((r) => r.map((x) => ({ ...x, state: "checking" as const, ms: null })));
-    const key = { apikey: "sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM", Authorization: "Bearer sb_publishable_HzeVbGj6DI3klatdPuQnhA_qqTzZ0uM" };
+    const key = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` };
 
     await Promise.allSettled([
       ping(0, () => fetch(window.location.origin).then((res) => { if (!res.ok) throw new Error(); })),
@@ -62,7 +62,7 @@ function StatusPage() {
     <div className="min-h-screen bg-background">
         <EnOnlyNotice />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
-        <Link to="/" className="text-lg font-bold">Outreach<span className="text-primary">AI</span></Link>
+        <Link to="/" className="text-lg font-bold">Outship<span className="text-primary">Ai</span></Link>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Link to="/auth"><Button variant="outline" size="sm">Open app</Button></Link>

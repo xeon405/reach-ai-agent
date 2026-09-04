@@ -3,26 +3,22 @@
 // (with DB triggers blocking queue/sent inserts), and worker re-checks.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertAudit } from "../_shared/audit.ts";
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
   try {
     const url = new URL(req.url);
     const leadId = url.searchParams.get("l");
     // NOTE: "c" (campaign) accepted for compatibility but deliberately ignored —
     // an opt-out must suppress the lead EVERYWHERE, unconditionally.
     if (!leadId || !/^[0-9a-f-]{36}$/i.test(leadId)) {
-      return new Response(JSON.stringify({ error: "missing lead" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "missing lead" }), { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
     // RFC 8058: mailbox providers one-click via POST with no interaction.
     // Humans who land here via GET get redirected to the branded confirmation page instead.
     if (req.method === "GET") {
-      const target = new URL("https://outreach-ochre-sigma.vercel.app/unsubscribe");
+      const target = new URL("https://reach-ai-agent.vercel.app/unsubscribe");
       target.searchParams.set("l", leadId);
       return new Response(null, { status: 302, headers: { Location: target.toString() } });
     }
@@ -58,8 +54,8 @@ Deno.serve(async (req) => {
       await insertAudit(admin, { user_id: lead.user_id, campaign_id: lead.campaign_id, lead_id: lead.id, event: "lead.unsubscribed", payload: { via: "link_one_click" } });
     }
 
-    return new Response(JSON.stringify({ ok: true, updated }), { headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, updated }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
   } catch (_e) {
-    return new Response(JSON.stringify({ error: "Something went wrong" }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Something went wrong" }), { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
   }
 });

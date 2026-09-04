@@ -1,17 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { buildSupportUserContext, containsArabic } from "../_shared/ai-lib.ts";
+import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function json(body: unknown, status = 200, req?: Request) {
+  return jsonCors(body, status, req);
 }
 
 const MANUAL = `You are the OutshipAi Guide — an expert product assistant inside OutshipAi. You know every feature, setting, pricing detail, and workflow in depth. You give precise, actionable answers.
@@ -228,7 +221,7 @@ A: For account-specific issues, billing disputes, or feature requests, email **o
 - If asked about something outside OutshipAi's scope, gently redirect: "I'm best at helping with OutshipAi features. For that, I'd recommend emailing outreachai.team@gmail.com."`;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return corsResponse(req);
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -311,6 +304,14 @@ Deno.serve(async (req) => {
     }
 
     if (!threadId) {
+      if (isGuest) {
+        const todayStart = new Date(Date.now() - 86400_000).toISOString();
+        const { count: threadCount } = await admin.from("support_chat_threads")
+          .select("id", { count: "exact", head: true })
+          .eq("guest_id", guestId)
+          .gte("created_at", todayStart);
+        if ((threadCount ?? 0) >= 3) throw new Error("Too many conversations — please email outreachai.team@gmail.com");
+      }
       const row = isGuest ? { guest_id: guestId, status: "auto" } : { user_id: userId, status: "auto" };
       const { data: created, error: cErr } = await admin
         .from("support_chat_threads").insert(row)

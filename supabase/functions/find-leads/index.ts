@@ -51,6 +51,11 @@ serve(async (req) => {
     const cronSecret = Deno.env.get("CRON_SECRET");
     const body = await req.json().catch(() => ({}));
     if (cronSecret && req.headers.get("x-cron-secret") === cronSecret && typeof body.user_id === "string") {
+      const { data: validUser } = await createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      ).from("profiles").select("id").eq("id", body.user_id).maybeSingle();
+      if (!validUser) throw new Error("Invalid user_id");
       userId = body.user_id;
     } else {
       userId = await getAuthedUserId(req);

@@ -88,8 +88,10 @@ Deno.serve(async (req) => {
   const status = attrs.status ?? "";
   if (eventName === "subscription_updated" && ["cancelled", "expired", "unpaid"].includes(status)) {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    await supabase.from("profiles").update({ plan: "starter" }).eq("id", userId);
-    return json({ ok: true, downgraded: true });
+    const { data: current } = await supabase.from("profiles").select("plan").eq("id", userId).maybeSingle();
+    const downgradeTo = current?.plan === "free" ? "free" : "starter";
+    await supabase.from("profiles").update({ plan: downgradeTo }).eq("id", userId);
+    return json({ ok: true, downgraded: true, plan: downgradeTo });
   }
 
   const plan = resolvePlan(attrs.variant_id, attrs.variant_name);

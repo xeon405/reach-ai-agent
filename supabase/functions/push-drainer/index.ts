@@ -111,7 +111,7 @@ serve(async (req) => {
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }), {
-      status: 200,
+      status: 500,
       headers: { "Content-Type": "application/json" },
     });
   }

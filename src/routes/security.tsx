@@ -64,7 +64,7 @@ function SecurityPage() {
     <div className="min-h-screen bg-background">
         <EnOnlyNotice />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
-        <Link to="/" className="text-lg font-bold">Outreach<span className="text-primary">AI</span></Link>
+        <Link to="/" className="text-lg font-bold">Outship<span className="text-primary">Ai</span></Link>
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Link to="/auth"><Button variant="outline" size="sm">Open app</Button></Link>
