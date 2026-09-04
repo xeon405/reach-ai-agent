@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertAudit } from "../_shared/audit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { verifyToken } from "../_shared/crypto.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
@@ -22,6 +23,15 @@ Deno.serve(async (req) => {
     if (!["http:", "https:"].includes(destUrl.protocol)) throw new Error("bad protocol");
   } catch {
     return new Response("Invalid destination", { status: 400, headers: getCorsHeaders(req) });
+  }
+
+  // Verify HMAC signature — only the server can generate valid redirect URLs.
+  // Prevents open-redirect / link-tampering attacks. Signed over the raw dest string
+  // (the same value encoded into the email link), decoded once from the query param.
+  const sig = url.searchParams.get("s") ?? "";
+  const validSig = await verifyToken(`${id}|${dest}`, sig);
+  if (!validSig) {
+    return new Response("Invalid signature", { status: 403, headers: getCorsHeaders(req) });
   }
 
   try {

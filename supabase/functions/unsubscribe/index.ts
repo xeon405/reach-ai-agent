@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertAudit } from "../_shared/audit.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { verifyToken } from "../_shared/crypto.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
@@ -15,12 +16,20 @@ Deno.serve(async (req) => {
     if (!leadId || !/^[0-9a-f-]{36}$/i.test(leadId)) {
       return new Response(JSON.stringify({ error: "missing lead" }), { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
+    // Verify HMAC token when present (signed URLs prevent unauthorized lead state manipulation)
+    const token = url.searchParams.get("t") ?? "/no-token/";
     // RFC 8058: mailbox providers one-click via POST with no interaction.
     // Humans who land here via GET get redirected to the branded confirmation page instead.
     if (req.method === "GET") {
       const target = new URL("https://reach-ai-agent.vercel.app/unsubscribe");
       target.searchParams.set("l", leadId);
+      target.searchParams.set("t", token);
       return new Response(null, { status: 302, headers: { Location: target.toString() } });
+    }
+    // POST (one-click) must carry a valid signature
+    const validSig = await verifyToken(leadId, token);
+    if (!validSig) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), { status: 403, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
     }
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 

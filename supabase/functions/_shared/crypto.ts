@@ -26,7 +26,10 @@ export function encryptionEnabled(): boolean {
 
 export async function encryptSecret(plain: string): Promise<string> {
   const material = getKeyMaterial();
-  if (!material) return plain; // fail-open to legacy behavior, never crash OAuth
+  if (!material) {
+    console.warn("[crypto] GOOGLE_TOKEN_ENC_KEY is not set — storing OAuth token in PLAINTEXT. Set the key in edge function secrets.");
+    return plain; // fail-open to legacy behavior, never crash OAuth
+  }
   const key = await importKey(material);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt(
@@ -54,4 +57,29 @@ export async function decryptSecret(stored: string): Promise<string> {
     ct as unknown as ArrayBuffer
   );
   return decoder.decode(pt);
+}
+
+// ── HMAC signing for unsubscribe / track-click URLs ──
+// Uses CRON_SECRET as the HMAC key. Tokens prevent unauthorized URL manipulation.
+
+async function getHmacKey(): Promise<CryptoKey> {
+  const secret = Deno.env.get("CRON_SECRET") || Deno.env.get("GOOGLE_TOKEN_ENC_KEY") || "";
+  const keyBytes = encoder.encode(secret.padEnd(32, "0").slice(0, 32));
+  return crypto.subtle.importKey("raw", keyBytes as unknown as ArrayBuffer, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+
+export async function signToken(data: string): Promise<string> {
+  const key = await getHmacKey();
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/[+/=]/g, (c) => ({ "+": "-", "/": "_", "=": "" })[c] as string).slice(0, 32);
+}
+
+export async function verifyToken(data: string, token: string): Promise<boolean> {
+  if (!token) return false;
+  const key = await getHmacKey();
+  const expected = await signToken(data);
+  if (expected.length !== token.length) return false;
+  let result = 0;
+  for (let i = 0; i < expected.length; i++) result |= expected.charCodeAt(i) ^ token.charCodeAt(i);
+  return result === 0;
 }

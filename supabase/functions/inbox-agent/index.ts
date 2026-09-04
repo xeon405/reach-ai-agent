@@ -17,6 +17,7 @@ import {
   type Classification,
 } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { signToken } from "../_shared/crypto.ts";
 import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
@@ -518,7 +519,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                     replySubject.startsWith("Re:") ? replySubject : `Re: ${replySubject}`,
                     `${bDraft.trim()}\n\n--\nReply with UNSUBSCRIBE to stop further emails.`,
                     profile.gmail_email || profile.email,
-                    `${SITE}/unsubscribe?l=${lead.id}`
+                    `${SITE}/unsubscribe?l=${lead.id}&t=${await signToken(lead.id)}`
                   )).catch(() => null);
                   if (ids) {
                     aiRepliesSent++;
@@ -585,8 +586,8 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               replySubject.startsWith("Re:") ? replySubject : `Re: ${replySubject}`,
               `${draft}\n\n--\nReply with UNSUBSCRIBE to stop further emails.`,
               profile.gmail_email || profile.email,
-              `${SITE}/unsubscribe?l=${lead.id}`
-            )).catch(() => null);
+                    `${SITE}/unsubscribe?l=${lead.id}&t=${await signToken(lead.id)}`
+                  )).catch(() => null);
             if (ids) {
               aiRepliesSent++;
               await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: draft, gmail_thread_id: ids.threadId }).eq("id", email.id);
@@ -881,7 +882,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                         subj.startsWith("Re:") ? subj : `Re: ${subj}`,
                         `${bReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
                         profile.gmail_email || profile.email,
-                        `${SITE}/unsubscribe?l=${lead.id}`
+                        `${SITE}/unsubscribe?l=${lead.id}&t=${await signToken(lead.id)}`
                       )).catch(() => null);
                       if (ids) {
                         aiRepliesSent++;
@@ -930,7 +931,7 @@ Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2
                     subj.startsWith("Re:") ? subj : `Re: ${subj}`,
                     `${esc.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
                     profile.gmail_email || profile.email,
-                    `${SITE}/unsubscribe?l=${lead.id}`
+                    `${SITE}/unsubscribe?l=${lead.id}&t=${await signToken(lead.id)}`
                   )).catch(() => null);
                   if (ids) {
                     aiRepliesSent++;
@@ -992,9 +993,9 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
                   subj.startsWith("Re:") ? subj : `Re: ${subj}`,
                   `${aiReply.trim()}\n\n--\nReply UNSUBSCRIBE anytime to opt out.`,
                   profile.gmail_email || profile.email,
-                  `${SITE}/unsubscribe?l=${lead.id}`
-                )).catch(() => null);
-                if (ids) {
+                    `${SITE}/unsubscribe?l=${lead.id}&t=${await signToken(lead.id)}`
+                  )).catch(() => null);
+                  if (ids) {
                   aiRepliesSent++;
                   const newTurns = (t.ai_turns ?? 0) + 1;
                   await supabase.from("emails_sent").update({

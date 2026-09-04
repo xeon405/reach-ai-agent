@@ -10,6 +10,7 @@ import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
+import { signToken } from "../_shared/crypto.ts";
 import {
   buildLeadFacts,
   COLD_EMAIL_FEWSHOTS,
@@ -114,16 +115,29 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function wrapUrlsForTracking(html: string, trackingBase: string): string {
-  // Wrap plain-text URLs in the HTML body with click-tracking redirects
-  // Only wrap http/https URLs that are NOT already tracking pixels or unsubscribe links
-  return html.replace(/(href=["']|(?<=\s>|>))(https?:\/\/(?!zvohdvopmvzsujktrdmu\.supabase\.co\/functions\/v1\/track-|.*unsubscribe))/gi,
-    (match, prefix, url) => {
-      if (prefix.startsWith("href=")) {
-        return `href="${trackingBase}${encodeURIComponent(url)}"`;
-      }
-      return `${prefix}${trackingBase}${encodeURIComponent(url)}`;
+async function wrapUrlsForTracking(html: string, trackingBase: string, signer: (url: string) => Promise<string>): Promise<string> {
+  // Wrap plain-text URLs / href links in the HTML body with click-tracking redirects
+  // Only wrap http/https URLs that are NOT already tracking pixels or unsubscribe links.
+  const tokenRegex = /(href=["'])?(https?:\/\/(?!zvohdvopmvzsujktrdmu\.supabase\.co\/functions\/v1\/track-|.*unsubscribe)[^\s"']+)/gi;
+  const matches = html.matchAll(tokenRegex);
+  const jobs: Array<{ start: number; end: number; replaceWith: string }> = [];
+  for (const m of Array.from(matches)) {
+    const prefix = m[1] ?? "";
+    const url = m[2];
+    const sig = await signer(url);
+    jobs.push({
+      start: m.index ?? 0,
+      end: (m.index ?? 0) + m[0].length,
+      replaceWith: `${prefix}${trackingBase}${encodeURIComponent(url)}&s=${sig}${prefix ? '"' : ""}`,
     });
+  }
+  let out = "";
+  let cursor = 0;
+  for (const j of jobs) {
+    out += html.slice(cursor, j.start) + j.replaceWith;
+    cursor = j.end;
+  }
+  return out + html.slice(cursor);
 }
 
 function buildHtmlBody(plain: string, pixel?: string): string {
@@ -582,7 +596,8 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     // Generate tracking ID BEFORE send so we can reference it in the pixel.
     const trackingId = crypto.randomUUID();
     const pixel = `<img src="https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-open?id=${trackingId}" width="1" height="1" alt="" style="display:none;border:0" />`;
-    const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}`;
+    const unsubToken = await signToken(lead.id);
+    const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${job.campaign_id}&t=${unsubToken}`;
 
     // Wrap outbound links in the HTML body with click-tracking redirects
     const trackingBase = `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-click?id=${trackingId}&url=`;
@@ -616,7 +631,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     let ids: { id: string | null; threadId: string | null };
     try {
       const htmlBody = buildHtmlBody(bodyText, pixel);
-      const trackedHtml = destLink2 ? wrapUrlsForTracking(htmlBody, trackingBase) : htmlBody;
+      const trackedHtml = destLink2 ? await wrapUrlsForTracking(htmlBody, trackingBase, async (u) => signToken(`${trackingId}|${u}`)) : htmlBody;
       ids = await sendGmailRaw(
         tok.accessToken,
         buildRawEmail(lead.email, gen.subject, bodyText, trackedHtml, String(ctx.profile.gmail_email ?? ""), unsubUrl)
@@ -920,7 +935,8 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
         const originalSubject = (prevEmails ?? []).find((e) => e.sequence === 1)?.subject;
         const followBase = sanitizeSubject(originalSubject || gen.subject, String(profile.offer ?? "our services"), lead.company ?? "your company");
         const subject = followBase.toLowerCase().startsWith("re:") ? followBase : `Re: ${followBase}`;
-        const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${campaign.id}`;
+        const unsubToken = await signToken(lead.id);
+        const unsubUrl = `${SITE}/unsubscribe?l=${lead.id}&c=${campaign.id}&t=${unsubToken}`;
 
         // Tracking pixel + click tracking
         const trackingId = crypto.randomUUID();
@@ -928,7 +944,7 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
         const trackingBase = `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/track-click?id=${trackingId}&url=`;
 
         const htmlBody = buildHtmlBody(bodyText, pixel);
-        const trackedHtml = destLink ? wrapUrlsForTracking(htmlBody, trackingBase) : htmlBody;
+        const trackedHtml = destLink ? await wrapUrlsForTracking(htmlBody, trackingBase, async (u) => signToken(`${trackingId}|${u}`)) : htmlBody;
 
         // ── SEND ──
         const ids = await sendGmailRaw(

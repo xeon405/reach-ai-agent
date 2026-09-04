@@ -4,6 +4,7 @@ import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import { nextLifecycle } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { signToken } from "../_shared/crypto.ts";
 import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
@@ -184,9 +185,9 @@ IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft,
     const origSubject = row.subject ?? "";
     const subject = origSubject.toLowerCase().startsWith("re:") ? origSubject : `Re: ${origSubject}`;
 
-    const SITE = "https://outreach-ochre-sigma.vercel.app";
+    const SITE = "https://reach-ai-agent.vercel.app";
     const leadIdForUnsub = leadRow?.id ?? row.lead_id;
-    const raw = buildRawEmail(toEmail, subject, replyBody, profile.gmail_email ?? "", leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}` : undefined);
+    const raw = buildRawEmail(toEmail, subject, replyBody, profile.gmail_email ?? "", leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}&t=${await signToken(leadIdForUnsub)}` : undefined);
     const ids = await sendGmailRaw(accessToken, raw);
 
     await admin.from("emails_sent").update({ ai_draft: null, gmail_message_id: ids.id, gmail_thread_id: ids.threadId }).eq("id", emailId);

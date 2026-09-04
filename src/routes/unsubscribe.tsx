@@ -13,8 +13,9 @@ function UnsubscribePage() {
     const params = new URLSearchParams(window.location.search);
     const l = params.get("l");
     if (!l) { setState("error"); return; }
+    const t = params.get("t") ?? "";
     fetch(
-      `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/unsubscribe?l=${encodeURIComponent(l)}&c=${encodeURIComponent(params.get("c") ?? "")}`,
+      `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/unsubscribe?l=${encodeURIComponent(l)}&c=${encodeURIComponent(params.get("c") ?? "")}&t=${encodeURIComponent(t)}`,
       { method: "POST", headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string } }
     )
       .then((r) => setState(r.ok ? "done" : "error"))
