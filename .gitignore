@@ -61,4 +61,3 @@ android-app/rebuild*.log
 
 .vercel
 .env*
-.env.outreach

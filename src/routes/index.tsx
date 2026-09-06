@@ -1,12 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useLang, LangToggle } from "@/lib/i18n";
 
@@ -80,73 +78,6 @@ const plans = [
   },
 ];
 
-function HeroBackdrop() {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-    const off = () => {
-      el.style.setProperty("--gx", "-60rem");
-      el.style.setProperty("--gy", "-60rem");
-      el.style.setProperty("--hx", "-60rem");
-      el.style.setProperty("--hy", "-60rem");
-    };
-    const onMove = (e: MouseEvent) => {
-      const r = el.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
-      el.style.setProperty("--gx", `${x}px`);
-      el.style.setProperty("--gy", `${y}px`);
-      el.style.setProperty("--hx", `${x}px`);
-      el.style.setProperty("--hy", `${y}px`);
-    };
-    el.addEventListener("mousemove", onMove, { passive: true });
-    el.addEventListener("mouseleave", off);
-    return () => {
-      el.removeEventListener("mousemove", onMove);
-      el.removeEventListener("mouseleave", off);
-    };
-  }, []);
-
-  return (
-    <div ref={ref} aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      <div className="hero-bubble hero-bubble-a" />
-      <div className="hero-bubble hero-bubble-b" />
-      <div className="hero-bubble hero-bubble-c" />
-      <div className="hero-grid" />
-      <div className="hero-halo" />
-      <div className="hero-glow" />
-    </div>
-  );
-}
-
-function Magnetic({ children, className }: { children: ReactNode; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-    const onMove = (e: MouseEvent) => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty("--mx", `${((e.clientX - r.left - r.width / 2) / r.width) * 18}px`);
-      el.style.setProperty("--my", `${((e.clientY - r.top - r.height / 2) / r.height) * 12}px`);
-    };
-    const onLeave = () => {
-      el.style.setProperty("--mx", "0px");
-      el.style.setProperty("--my", "0px");
-    };
-    el.addEventListener("mousemove", onMove, { passive: true });
-    el.addEventListener("mouseleave", onLeave);
-    return () => {
-      el.removeEventListener("mousemove", onMove);
-      el.removeEventListener("mouseleave", onLeave);
-    };
-  }, []);
-
-  return <div ref={ref} className={cn("magnet", className)}>{children}</div>;
-}
-
 function Landing() {
   const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
@@ -196,8 +127,7 @@ function Landing() {
 
       {/* Hero */}
       <section className="relative overflow-hidden bg-hero">
-        <HeroBackdrop />
-        <div className="relative mx-auto max-w-5xl px-6 pt-24 pb-32 text-center">
+        <div className="mx-auto max-w-5xl px-6 pt-24 pb-32 text-center">
           <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary animate-fade-in">
             <Sparkles className="h-3.5 w-3.5" />
             {t("hero_badge")}
@@ -216,18 +146,14 @@ function Landing() {
             {t("hero_sub")}
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3 animate-fade-up" style={{ animationDelay: "220ms" }}>
-            <Magnetic>
-              <Button asChild size="lg" className="bg-gradient-primary shadow-glow h-12 px-7">
-                <Link to="/auth">
-                  {t("hero_cta")} <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </Magnetic>
-            <Magnetic>
-              <Button asChild variant="outline" size="lg" className="h-12 px-7">
-                <a href="#pricing">{t("nav_pricing")}</a>
-              </Button>
-            </Magnetic>
+            <Button asChild size="lg" className="bg-gradient-primary shadow-glow h-12 px-7">
+              <Link to="/auth">
+                {t("hero_cta")} <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="h-12 px-7">
+              <a href="#pricing">{t("nav_pricing")}</a>
+            </Button>
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground animate-fade-up" style={{ animationDelay: "300ms" }}>
             <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> {t("chip_data")}</span>
@@ -258,17 +184,7 @@ function Landing() {
               key={f.tKey}
               className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card animate-fade-up"
               style={{ animationDelay: `${i * 90}ms` }}
-              onMouseMove={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                e.currentTarget.style.setProperty("--glx", `${((e.clientX - r.left) / r.width) * 100}%`);
-                e.currentTarget.style.setProperty("--gly", `${((e.clientY - r.top) / r.height) * 100}%`);
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.setProperty("--glx", "50%");
-                e.currentTarget.style.setProperty("--gly", "50%");
-              }}
             >
-              <span className="glare" aria-hidden />
               <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow transition-transform duration-300 group-hover:scale-105">
                 <f.icon className="h-6 w-6 text-primary-foreground" />
               </div>
