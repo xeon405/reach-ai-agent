@@ -24,7 +24,7 @@ function RefundsPage() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
           <Undo2 className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight">Return &amp; Refund Policy</h1>
+        <h1 className="font-display text-4xl font-black tracking-tight">Return &amp; Refund Policy</h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
           Short version: if you're not happy, you get your money back. Here are the exact terms.
         </p>

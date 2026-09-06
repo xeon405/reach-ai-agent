@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users, Send, Mail, Reply, MousePointerClick, CalendarCheck, AlertTriangle,
   Bot, Hand, Eye, TrendingUp, ArrowRight, BarChart3, Bell, Clock,
-  Loader2, Filter, ChevronDown, Rocket, Shield, MessageSquare, CheckCircle,
+  Filter, ChevronDown, Rocket, Shield, MessageSquare, CheckCircle,
   XCircle, ShieldAlert, ShieldX, Zap, Pause, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -244,7 +245,30 @@ function Dashboard() {
   const unreadAlerts = useMemo(() => alerts.filter((a) => !a.read).length, [alerts]);
 
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-44" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+        </div>
+        <Skeleton className="h-12 w-full rounded-2xl" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          {[...Array(10)].map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-48" />
+          <div className="mt-4 space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

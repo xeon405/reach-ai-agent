@@ -77,7 +77,7 @@ function StatusPage() {
         >
           <Activity className={`h-8 w-8 ${allUp ? "text-success" : checkedAt ? "text-warning" : "text-primary"}`} />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+        <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           {checkedAt === null ? "Checking systems…" : allUp ? "All systems operational" : "Partial degradation"}
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">Live health checks · auto-refreshes every 60 seconds</p>

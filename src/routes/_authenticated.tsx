@@ -5,13 +5,14 @@ import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu,
   SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, SidebarHeader, SidebarFooter,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
 import { NotificationBell } from "@/components/notification-bell";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -63,8 +64,23 @@ function AuthenticatedLayout() {
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="flex min-h-screen w-full bg-background">
+        <div className="hidden w-64 shrink-0 border-r border-border/50 p-4 lg:block">
+          <Skeleton className="mb-6 h-8 w-32" />
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 p-8">
+          <Skeleton className="mb-8 h-7 w-40" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-36 w-full" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

@@ -34,7 +34,7 @@ function AgencyPage() {
         <div className="mx-auto mb-6 w-fit rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary">
           Done-For-You Service
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+        <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">
           We book sales calls into your calendar.<br />
           <span className="text-gradient">You just show up.</span>
         </h1>
@@ -57,7 +57,7 @@ function AgencyPage() {
 
       <section className="border-t border-border bg-muted/30 py-16">
         <div className="mx-auto max-w-5xl px-4">
-          <h2 className="mb-10 text-center text-3xl font-bold">Everything handled for you</h2>
+          <h2 className="mb-10 font-display text-center text-3xl font-bold tracking-tight">Everything handled for you</h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {INCLUDED.map((f) => (
               <div key={f.title} className="rounded-2xl border border-border bg-card p-6 shadow-card">

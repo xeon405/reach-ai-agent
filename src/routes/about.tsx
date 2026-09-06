@@ -39,7 +39,7 @@ function AboutPage() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
           <Compass className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">About OutshipAi</h1>
+        <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">About OutshipAi</h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
           We build an AI sales agent so small teams can reach the world without hiring a sales department.
         </p>

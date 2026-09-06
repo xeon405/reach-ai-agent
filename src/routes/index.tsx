@@ -81,6 +81,14 @@ const plans = [
 function Landing() {
   const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     supabase.rpc("public_stats").then(({ data }) => {
@@ -90,8 +98,12 @@ function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <header
+        className={`sticky top-0 z-50 border-b bg-background/70 backdrop-blur-xl transition-all duration-300 ${
+          scrolled ? "border-border/50 py-2 shadow-sm" : "border-transparent py-4"
+        }`}
+      >
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
           <Logo />
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a href="#features" className="hover:text-foreground">{t("nav_features")}</a>
@@ -116,25 +128,25 @@ function Landing() {
       {/* Hero */}
       <section className="relative overflow-hidden bg-hero">
         <div className="mx-auto max-w-5xl px-6 pt-24 pb-32 text-center">
-          <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary">
+          <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary animate-fade-in">
             <Sparkles className="h-3.5 w-3.5" />
             {t("hero_badge")}
           </div>
           {stats && stats.emails_sent >= 100 && (
-            <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400">
+            <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400 animate-fade-in">
               <Flame className="h-3.5 w-3.5" />
               {stats.emails_sent.toLocaleString()} cold emails already sent by OutshipAi agents
             </div>
           )}
-          <h1 className="text-balance text-5xl font-bold tracking-tight md:text-7xl">
+          <h1 className="font-display text-balance text-5xl font-black tracking-tight md:text-7xl animate-fade-up" style={{ animationDelay: "60ms" }}>
             {t("hero_title_a")}{" "}
             <span className="text-gradient">{t("hero_title_b")}</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
+          <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground md:text-xl animate-fade-up" style={{ animationDelay: "140ms" }}>
             {t("hero_sub")}
           </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Button asChild size="lg" className="bg-gradient-primary shadow-glow text-base h-12 px-7">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3 animate-fade-up" style={{ animationDelay: "220ms" }}>
+            <Button asChild size="lg" className="bg-gradient-primary shadow-glow h-12 px-7">
               <Link to="/auth">
                 {t("hero_cta")} <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -143,7 +155,7 @@ function Landing() {
               <a href="#pricing">{t("nav_pricing")}</a>
             </Button>
           </div>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground animate-fade-up" style={{ animationDelay: "300ms" }}>
             <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> {t("chip_data")}</span>
             <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> {t("chip_card")}</span>
             <span className="flex items-center gap-1.5"><Trash2 className="h-4 w-4 text-primary" /> {t("chip_delete")}</span>
@@ -156,38 +168,40 @@ function Landing() {
       </section>
 
       {/* Features */}
-      <section id="features" className="mx-auto max-w-6xl px-6 py-24">
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24">
         <div className="mb-16 text-center">
-          <h2 className="text-4xl font-bold tracking-tight md:text-5xl">
+          <p className="kicker mb-3">{t("nav_features")}</p>
+          <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
             Your full outbound team, automated
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
             Three AI workers running 24/7 so you can focus on closing.
           </p>
         </div>
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-3">
           {features.map((f, i) => (
             <div
               key={f.tKey}
-              className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-card transition-transform hover:-translate-y-1"
-              style={{ animation: `fadeUp 0.6s ease ${i * 0.1}s both` }}
+              className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card animate-fade-up"
+              style={{ animationDelay: `${i * 90}ms` }}
             >
-              <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
+              <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow transition-transform duration-300 group-hover:scale-105">
                 <f.icon className="h-6 w-6 text-primary-foreground" />
               </div>
-              <h3 className="text-xl font-semibold">{t(f.tKey)}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t(f.dKey)}</p>
+              <h3 className="font-display text-xl font-semibold tracking-tight">{t(f.tKey)}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t(f.dKey)}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="border-t border-border/50 bg-card/30">
+      <section id="pricing" className="scroll-mt-20 border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <div className="mb-16 text-center">
-            <h2 className="text-4xl font-bold tracking-tight md:text-5xl">{t("sec_pricing_title")}</h2>
-            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+            <p className="kicker mb-3">{t("nav_pricing")}</p>
+            <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">{t("sec_pricing_title")}</h2>
+            <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted-foreground">
             {t("sec_pricing_sub")}
             </p>
           </div>
@@ -270,8 +284,9 @@ function Landing() {
             return (
               <>
                 <div className="mb-10 text-center">
-                  <h2 className="text-3xl font-bold tracking-tight md:text-4xl">🧮 What could this do for YOU?</h2>
-                  <p className="mx-auto mt-3 max-w-xl text-muted-foreground">{t("roi_sub")}</p>
+                  <p className="kicker mb-3">Calculator</p>
+                  <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">What could this do for you?</h2>
+                  <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">{t("roi_sub")}</p>
                 </div>
                 <div className="grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2">
                   <div className="space-y-6">
@@ -301,8 +316,8 @@ function Landing() {
 
       <section className="border-t border-border/50">
         <div className="mx-auto max-w-3xl px-6 py-24 text-center">
-          <p className="text-2xl font-medium leading-relaxed tracking-tight md:text-3xl">
-            {t("founder_quote")}
+          <p className="font-display text-2xl font-medium italic leading-relaxed tracking-tight text-balance md:text-3xl">
+            &ldquo;{t("founder_quote")}&rdquo;
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-primary font-bold text-primary-foreground">O</div>
@@ -332,8 +347,6 @@ function Landing() {
           <p className="text-xs text-muted-foreground">© 2026 OutshipAi</p>
         </div>
       </footer>
-
-      <style>{`@keyframes fadeUp { from { opacity:0; transform: translateY(20px);} to {opacity:1; transform:none;} }`}</style>
 
       <SupportChat />
     </div>
