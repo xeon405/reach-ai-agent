@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Children, useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX, Menu, X, Inbox, Search, Send } from "lucide-react";
+import { Children, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, ShieldCheck, CreditCard, Trash2, MailX, Menu, X, Inbox, Search, Send } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
@@ -184,9 +184,9 @@ const steps = [
   },
 ];
 
-function Step({ n, icon: Icon, title, text }: { n: string; icon: typeof Inbox; title: string; text: string }) {
+function Step({ n, icon: Icon, title, text, style }: { n: string; icon: typeof Inbox; title: string; text: string; style?: CSSProperties }) {
   return (
-    <li data-reveal className="reveal relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card">
+    <li data-reveal style={style} className="reveal relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-lift md:p-10">
       <span className="step-num" aria-hidden>{n}</span>
       <div className="relative">
         <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-sm">
@@ -197,6 +197,45 @@ function Step({ n, icon: Icon, title, text }: { n: string; icon: typeof Inbox; t
       </div>
     </li>
   );
+}
+
+function CountUp({ value }: { value: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const started = useRef(false);
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setDisplay(value);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !started.current) {
+            started.current = true;
+            const duration = 1200;
+            const t0 = performance.now();
+            const tick = (now: number) => {
+              const p = Math.min((now - t0) / duration, 1);
+              const eased = 1 - Math.pow(1 - p, 3);
+              setDisplay(Math.round(value * eased));
+              if (p < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+            io.disconnect();
+          }
+        });
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [value]);
+
+  return <div ref={ref}>{display.toLocaleString()}</div>;
 }
 
 const plans = [
@@ -232,6 +271,27 @@ function Landing() {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const spyEls = Array.from(document.querySelectorAll<HTMLElement>("[data-spy]"));
+    const ids = spyEls
+      .map((a) => a.getAttribute("href")?.slice(1) ?? "")
+      .filter(Boolean);
+    const onSpy = () => {
+      const pos = window.scrollY + 168;
+      let current = "";
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.offsetTop <= pos) current = id;
+      }
+      spyEls.forEach((a) =>
+        a.classList.toggle("is-active", current !== "" && a.getAttribute("href") === `#${current}`),
+      );
+    };
+    onSpy();
+    window.addEventListener("scroll", onSpy, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", onSpy, true);
   }, []);
 
   useEffect(() => {
@@ -271,11 +331,11 @@ function Landing() {
       >
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
           <Logo />
-          <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="nav-link hover:text-foreground">{t("nav_features")}</a>
-            <a href="#pricing" className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
-            <Link to="/tools" className="nav-link hover:text-foreground">{t("nav_tools")}</Link>
-            <Link to="/agency" className="nav-link font-medium text-primary hover:text-foreground">{t("nav_hire")}</Link>
+          <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
+            <a href="#features" data-spy className="nav-link hover:text-foreground">{t("nav_features")}</a>
+            <a href="#pricing" data-spy className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
+            <a href="#how" data-spy className="nav-link hover:text-foreground">How it works</a>
+            <a href="#faq" data-spy className="nav-link hover:text-foreground">FAQ</a>
             <Link to="/stats" className="nav-link hover:text-foreground">{t("nav_stats")}</Link>
           </nav>
           <div className="flex items-center gap-2">
@@ -305,9 +365,8 @@ function Landing() {
             <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-6 py-4 text-sm">
               <a href="#features" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_features")}</a>
               <a href="#pricing" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_pricing")}</a>
+              <a href="#how" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">How it works</a>
               <a href="#faq" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">FAQ</a>
-              <Link to="/tools" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_tools")}</Link>
-              <Link to="/agency" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 font-medium text-primary hover:bg-accent hover:text-accent-foreground">{t("nav_hire")}</Link>
               <Link to="/stats" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_stats")}</Link>
               <div className="mt-3 flex items-center gap-2 border-t border-border/50 px-3 pt-4 pb-1">
                 <LangToggle />
@@ -330,12 +389,7 @@ function Landing() {
             <Sparkles className="h-3.5 w-3.5" />
             Built by a hands-on outbound agency
           </div>
-          {stats && stats.emails_sent >= 100 && (
-            <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-soft px-4 py-1.5 text-xs font-semibold text-brand animate-fade-in">
-              <Flame className="h-3.5 w-3.5" />
-              {stats.emails_sent.toLocaleString()} cold emails already sent by OutshipAi agents
-            </div>
-          )}
+          <div className="hero-grid-decor" aria-hidden />
           <h1 className="font-display text-balance text-5xl font-black tracking-tight md:text-7xl animate-fade-up" style={{ animationDelay: "60ms" }}>
             {t("hero_title_a")}{" "}
             <span className="font-display italic font-semibold">{t("hero_title_b")}</span>
@@ -362,6 +416,7 @@ function Landing() {
           <div className="hero-mock animate-fade-up" style={{ animationDelay: "380ms" }}>
             <span className="mock-accent" aria-hidden />
             <div className="mock-head">
+              <span className="mock-dots" aria-hidden><i /><i /><i /></span>
               <span className="mock-title">OutshipAi console</span>
               <span className="mock-live"><span className="mock-live-dot" />Running</span>
             </div>
@@ -398,7 +453,7 @@ function Landing() {
       </section>
 
       {/* Features */}
-      <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24">
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24 md:px-10">
         <div data-reveal className="reveal mb-16 text-center">
           <div className="mb-5 flex items-center justify-center gap-3">
             <span className="h-px w-8 bg-foreground/20" aria-hidden />
@@ -406,18 +461,19 @@ function Landing() {
             <span className="h-px w-8 bg-foreground/20" aria-hidden />
           </div>
           <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
-            Your full outbound team, automated
+            Your full outbound team, <span className="italic font-semibold">automated</span>
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
             Three AI workers running 24/7 so you can focus on closing.
           </p>
         </div>
         <div className="grid gap-5 md:grid-cols-3">
-          {features.map((f) => (
+          {features.map((f, i) => (
             <div
               key={f.tKey}
               data-reveal
-              className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card reveal"
+              style={{ transitionDelay: `${i * 80}ms` }}
+              className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-lift md:p-10 reveal"
             >
               <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow transition-transform duration-300 group-hover:scale-105">
                 <f.icon className="h-6 w-6 text-primary-foreground" />
@@ -430,32 +486,32 @@ function Landing() {
       </section>
 
       {/* How it works */}
-      <section className="border-t border-border/50 bg-gradient-hero">
-        <div className="mx-auto max-w-6xl px-6 py-24">
-          <div data-reveal className="reveal mb-16 text-center">
-            <div className="mb-5 flex items-center justify-center gap-3">
+      <section id="how" className="scroll-mt-20 border-t border-border/50 bg-gradient-hero">
+        <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
+          <div data-reveal className="reveal mb-12 text-center">
+            <div className="mb-4 flex items-center justify-center gap-3">
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
               <p className="kicker">How it works</p>
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
             </div>
-            <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
-              Outbound on autopilot in three steps
+            <h2 className="font-display text-3xl font-black tracking-tight text-balance md:text-4xl">
+              Outbound on autopilot <span className="italic font-semibold">in three steps</span>
             </h2>
-            <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted-foreground">
+            <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">
               No setup headaches. No template spam. Your agent does the heavy lifting.
             </p>
           </div>
           <ol className="grid gap-5 md:grid-cols-3">
-            {steps.map((s) => <Step key={s.n} n={s.n} icon={s.icon} title={s.title} text={s.text} />)}
+            {steps.map((s, i) => <Step key={s.n} n={s.n} icon={s.icon} title={s.title} text={s.text} style={{ transitionDelay: `${i * 80}ms` }} />)}
           </ol>
         </div>
       </section>
 
       {/* Stats */}
       <div data-reveal className="reveal stats-strip">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 text-center md:grid-cols-4">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 text-center md:grid-cols-4 md:px-10">
           <div>
-            <div className="font-display text-4xl font-bold text-brand">{(stats?.emails_sent ?? 8940).toLocaleString()}</div>
+            <div className="font-display text-4xl font-bold text-brand"><CountUp value={stats?.emails_sent ?? 8940} /></div>
             <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cold emails sent</div>
           </div>
           <div>
@@ -475,7 +531,7 @@ function Landing() {
 
       {/* Pricing */}
       <section id="pricing" className="scroll-mt-20 border-t border-border/50 bg-card/30">
-        <div className="mx-auto max-w-6xl px-6 py-24">
+        <div className="mx-auto max-w-6xl px-6 py-24 md:px-10">
           <div data-reveal className="reveal mb-16 text-center">
             <div className="mb-5 flex items-center justify-center gap-3">
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
@@ -489,11 +545,12 @@ function Landing() {
           </div>
           <p className="mb-10 text-center text-lg font-semibold text-primary">{t("pricing_anchor")}</p>
           <div className="grid gap-6 md:grid-cols-3">
-            {plans.map((p) => (
+            {plans.map((p, i) => (
               <div
                 key={p.nameKey}
                 data-reveal
-                className={`reveal relative rounded-2xl border bg-card p-8 shadow-card ${
+                style={{ transitionDelay: `${i * 80}ms` }}
+                className={`reveal relative rounded-2xl border bg-card p-8 shadow-card md:p-10 ${
                   p.featured
                     ? "border-primary shadow-glow ring-1 ring-primary/40"
                     : "border-border"
@@ -510,9 +567,9 @@ function Landing() {
                   <span className="text-muted-foreground">{t("per_month")}</span>
                 </div>
                 <p className="mt-2 text-sm font-medium text-primary">{t(p.capKey)}</p>
-                <ul className="mt-6 space-y-3 text-sm">
+                <ul className="mt-6 divide-y divide-border/40 text-sm">
                   {(p.perkKeys).map((perkKey) => (
-                    <li key={perkKey} className="flex items-start gap-2">
+                    <li key={perkKey} className="flex items-start gap-2 py-3 first:pt-0 last:pb-0">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
                       <span>{t(perkKey)}</span>
                     </li>
@@ -545,7 +602,7 @@ function Landing() {
       </section>
 
       <section className="border-t border-border/50">
-        <div className="mx-auto max-w-4xl px-6 py-24">
+        <div className="mx-auto max-w-4xl px-6 py-16 md:px-10">
           {(() => {
             const [leads, setLeads] = useState(50);
             const [replyPct, setReplyPct] = useState(5);
@@ -561,21 +618,21 @@ function Landing() {
                 </div>
                 <input type="range" min={min} max={max} value={value}
                   onChange={(e) => set(Number(e.target.value))}
-                  className="w-full accent-brand" />
+                  className="slider-mono w-full" />
               </div>
             );
             return (
               <>
                 <div data-reveal className="reveal mb-10 text-center">
-                  <div className="mb-5 flex items-center justify-center gap-3">
+                  <div className="mb-4 flex items-center justify-center gap-3">
                     <span className="h-px w-8 bg-foreground/20" aria-hidden />
                     <p className="kicker">Calculator</p>
                     <span className="h-px w-8 bg-foreground/20" aria-hidden />
                   </div>
-                  <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">What could this do for you?</h2>
+                  <h2 className="font-display text-2xl font-black tracking-tight md:text-3xl">What could this <span className="italic font-semibold">do for you?</span></h2>
                   <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">{t("roi_sub")}</p>
                 </div>
-                <div data-reveal className="reveal grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2">
+                <div data-reveal className="reveal grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2 md:p-10">
                   <div className="space-y-6">
                     <Slider label="Leads contacted per day" value={leads} set={setLeads} min={10} max={200} suffix="" />
                     <Slider label="Expected reply rate" value={replyPct} set={setReplyPct} min={1} max={15} suffix="%" />
@@ -602,7 +659,7 @@ function Landing() {
       </section>
 
       <section className="border-t border-border/50">
-        <div className="mx-auto max-w-3xl px-6 py-24 text-center">
+        <div className="mx-auto max-w-3xl px-6 py-16 text-center md:px-10">
           <p className="font-display text-2xl font-medium italic leading-relaxed tracking-tight text-balance md:text-3xl">
             &ldquo;{t("founder_quote")}&rdquo;
           </p>
@@ -617,15 +674,15 @@ function Landing() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="scroll-mt-20 border-t border-border/50">
-        <div className="mx-auto max-w-3xl px-6 py-24">
+      <section id="faq" className="scroll-mt-20 border-t border-border/50 bg-card/30">
+        <div className="mx-auto max-w-3xl px-6 py-16 md:px-10">
           <div data-reveal className="reveal mb-12 text-center">
-            <div className="mb-5 flex items-center justify-center gap-3">
+            <div className="mb-4 flex items-center justify-center gap-3">
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
               <p className="kicker">FAQ</p>
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
             </div>
-            <h2 className="font-display text-4xl font-black tracking-tight md:text-5xl">Questions, answered</h2>
+            <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">Questions, <span className="italic font-semibold">answered</span></h2>
           </div>
           <div data-reveal className="reveal space-y-3">
             {faqs.map((f) => (
@@ -656,7 +713,7 @@ function Landing() {
       </section>
 
       <footer className="border-t border-border/50 bg-card/30">
-        <div className="mx-auto max-w-6xl px-6 py-14">
+        <div className="mx-auto max-w-6xl px-6 py-14 md:px-10">
           <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div>
               <Logo />
@@ -667,14 +724,15 @@ function Landing() {
             <FooterCol title="Product">
               <a href="#features" className="nav-link hover:text-foreground">{t("nav_features")}</a>
               <a href="#pricing" className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
+              <a href="#how" className="nav-link hover:text-foreground">How it works</a>
               <a href="#faq" className="nav-link hover:text-foreground">FAQ</a>
-              <Link to="/tools" className="nav-link hover:text-foreground">Free tools</Link>
-              <Link to="/status" className="nav-link hover:text-foreground">{t("footer_status")}</Link>
             </FooterCol>
             <FooterCol title="Company">
               <Link to="/about" className="nav-link hover:text-foreground">About</Link>
               <Link to="/agency" className="nav-link hover:text-foreground">{t("nav_hire")}</Link>
+              <Link to="/tools" className="nav-link hover:text-foreground">Free tools</Link>
               <Link to="/stats" className="nav-link hover:text-foreground">Live stats</Link>
+              <Link to="/status" className="nav-link hover:text-foreground">{t("footer_status")}</Link>
               <Link to="/honesty" className="nav-link hover:text-foreground">Honesty</Link>
             </FooterCol>
             <FooterCol title="Legal">
