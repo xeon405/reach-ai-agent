@@ -96,6 +96,28 @@ function Landing() {
     });
   }, []);
 
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (reduce || !("IntersectionObserver" in window)) {
+      els.forEach((el) => el.classList.add("is-visible"));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -48px 0px" },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <header
@@ -133,7 +155,7 @@ function Landing() {
             {t("hero_badge")}
           </div>
           {stats && stats.emails_sent >= 100 && (
-            <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-4 py-1.5 text-xs font-semibold text-orange-400 animate-fade-in">
+            <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-soft px-4 py-1.5 text-xs font-semibold text-brand animate-fade-in">
               <Flame className="h-3.5 w-3.5" />
               {stats.emails_sent.toLocaleString()} cold emails already sent by OutshipAi agents
             </div>
@@ -161,6 +183,31 @@ function Landing() {
             <span className="flex items-center gap-1.5"><Trash2 className="h-4 w-4 text-primary" /> {t("chip_delete")}</span>
             <span className="flex items-center gap-1.5"><MailX className="h-4 w-4 text-primary" /> {t("chip_unsub")}</span>
           </div>
+          <div className="hero-mock animate-fade-up" style={{ animationDelay: "380ms" }}>
+            <span className="mock-accent" aria-hidden />
+            <div className="float-chip float-chip-a"><i aria-hidden />7.5% reply rate</div>
+            <div className="float-chip float-chip-b"><i aria-hidden />Booked in calendar</div>
+            <div className="mock-head">
+              <span className="mock-title">Your outbound engine</span>
+              <span className="mock-live"><span className="mock-live-dot" />Running</span>
+            </div>
+            <div className="mock-body">
+              <div>
+                <div className="mock-num">{stats?.emails_sent ? stats.emails_sent.toLocaleString() : "8,940"}</div>
+                <div className="mock-num-lbl">cold emails sent</div>
+              </div>
+              <div className="mock-bars">
+                <div className="mock-row"><span>Leads researched</span><span className="mock-track"><i className="mock-fill" style={{ width: "68%" }} /></span><b>1,240</b></div>
+                <div className="mock-row"><span>New replies</span><span className="mock-track"><i className="mock-fill" style={{ width: "42%" }} /></span><b>96</b></div>
+                <div className="mock-row"><span>Meetings booked</span><span className="mock-track"><i className="mock-fill" style={{ width: "18%" }} /></span><b>12</b></div>
+              </div>
+            </div>
+            <div className="mock-foot">
+              <span className="mock-chip"><i aria-hidden />Personalized drafts by AI</span>
+              <span className="mock-chip"><i aria-hidden />Follow-ups on autopilot</span>
+              <span className="mock-chip"><i aria-hidden />One-click unsubscribe</span>
+            </div>
+          </div>
           <p className="mt-3 text-xs text-muted-foreground">
             {t("stats_pre")}<Link to="/stats" className="underline hover:text-foreground">{t("stats_link")}</Link>{t("stats_post")}
           </p>
@@ -169,7 +216,7 @@ function Landing() {
 
       {/* Features */}
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24">
-        <div className="mb-16 text-center">
+        <div data-reveal className="reveal mb-16 text-center">
           <p className="kicker mb-3">{t("nav_features")}</p>
           <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
             Your full outbound team, automated
@@ -179,11 +226,11 @@ function Landing() {
           </p>
         </div>
         <div className="grid gap-5 md:grid-cols-3">
-          {features.map((f, i) => (
+          {features.map((f) => (
             <div
               key={f.tKey}
-              className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card animate-fade-up"
-              style={{ animationDelay: `${i * 90}ms` }}
+              data-reveal
+              className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card reveal"
             >
               <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-glow transition-transform duration-300 group-hover:scale-105">
                 <f.icon className="h-6 w-6 text-primary-foreground" />
@@ -195,10 +242,32 @@ function Landing() {
         </div>
       </section>
 
+      {/* Stats */}
+      <div data-reveal className="reveal stats-strip">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 text-center md:grid-cols-4">
+          <div>
+            <div className="font-display text-4xl font-bold text-brand">{(stats?.emails_sent ?? 8940).toLocaleString()}</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cold emails sent</div>
+          </div>
+          <div>
+            <div className="font-display text-4xl font-bold text-brand">5%+</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Avg reply rate</div>
+          </div>
+          <div>
+            <div className="font-display text-4xl font-bold text-brand">24/7</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Autopilot send + follow-up</div>
+          </div>
+          <div>
+            <div className="font-display text-4xl font-bold text-brand">3 min</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Setup to first send</div>
+          </div>
+        </div>
+      </div>
+
       {/* Pricing */}
       <section id="pricing" className="scroll-mt-20 border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <div className="mb-16 text-center">
+          <div data-reveal className="reveal mb-16 text-center">
             <p className="kicker mb-3">{t("nav_pricing")}</p>
             <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">{t("sec_pricing_title")}</h2>
             <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted-foreground">
@@ -210,7 +279,8 @@ function Landing() {
             {plans.map((p) => (
               <div
                 key={p.nameKey}
-                className={`relative rounded-2xl border bg-card p-8 shadow-card ${
+                data-reveal
+                className={`reveal relative rounded-2xl border bg-card p-8 shadow-card ${
                   p.featured
                     ? "border-primary shadow-glow ring-1 ring-primary/40"
                     : "border-border"
@@ -278,17 +348,17 @@ function Landing() {
                 </div>
                 <input type="range" min={min} max={max} value={value}
                   onChange={(e) => set(Number(e.target.value))}
-                  className="w-full accent-primary" />
+                  className="w-full accent-brand" />
               </div>
             );
             return (
               <>
-                <div className="mb-10 text-center">
+                <div data-reveal className="reveal mb-10 text-center">
                   <p className="kicker mb-3">Calculator</p>
                   <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">What could this do for you?</h2>
                   <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">{t("roi_sub")}</p>
                 </div>
-                <div className="grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2">
+                <div data-reveal className="reveal grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2">
                   <div className="space-y-6">
                     <Slider label="Leads contacted per day" value={leads} set={setLeads} min={10} max={200} suffix="" />
                     <Slider label="Expected reply rate" value={replyPct} set={setReplyPct} min={1} max={15} suffix="%" />
@@ -325,6 +395,23 @@ function Landing() {
               <div className="text-sm font-semibold">{t("founder_role")}</div>
               <div className="text-xs text-muted-foreground">{t("founder_note")}</div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="px-6 pb-24 pt-4">
+        <div data-reveal className="reveal cta-band">
+          <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">Ready to outsource your cold outreach?</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-white/70 md:text-base">
+            OutshipAi finds the leads, writes the emails, follows up, and books the meetings — so you only close.
+          </p>
+          <div className="mt-8 flex justify-center">
+            <Button asChild size="lg" className="h-12 bg-white px-8 text-brand-strong hover:bg-white/90 hover:shadow-lg">
+              <Link to="/auth">
+                Start free today <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
