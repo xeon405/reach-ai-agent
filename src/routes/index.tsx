@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Children, useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
@@ -55,6 +55,15 @@ const features = [
     dKey: "feat3_dd",
   },
 ];
+
+function FooterCol({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-foreground">{title}</h4>
+      <ul className="space-y-2.5 text-sm text-muted-foreground">{Children.map(children, (c) => <li>{c}</li>)}</ul>
+    </div>
+  );
+}
 
 const plans = [
   {
@@ -128,11 +137,11 @@ function Landing() {
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
           <Logo />
           <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-            <a href="#features" className="hover:text-foreground">{t("nav_features")}</a>
-            <a href="#pricing" className="hover:text-foreground">{t("nav_pricing")}</a>
-            <Link to="/tools" className="hover:text-foreground">{t("nav_tools")}</Link>
-            <Link to="/agency" className="font-medium text-primary hover:text-foreground">{t("nav_hire")}</Link>
-            <Link to="/stats" className="hover:text-foreground">{t("nav_stats")}</Link>
+            <a href="#features" className="nav-link hover:text-foreground">{t("nav_features")}</a>
+            <a href="#pricing" className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
+            <Link to="/tools" className="nav-link hover:text-foreground">{t("nav_tools")}</Link>
+            <Link to="/agency" className="nav-link font-medium text-primary hover:text-foreground">{t("nav_hire")}</Link>
+            <Link to="/stats" className="nav-link hover:text-foreground">{t("nav_stats")}</Link>
           </nav>
           <div className="flex items-center gap-2">
             <LangToggle />
@@ -149,7 +158,7 @@ function Landing() {
 
       {/* Hero */}
       <section className="relative overflow-hidden bg-hero">
-        <div className="mx-auto max-w-5xl px-6 pt-24 pb-32 text-center">
+        <div className="mx-auto max-w-5xl px-6 pt-20 pb-24 text-center">
           <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary animate-fade-in">
             <Sparkles className="h-3.5 w-3.5" />
             {t("hero_badge")}
@@ -162,7 +171,7 @@ function Landing() {
           )}
           <h1 className="font-display text-balance text-5xl font-black tracking-tight md:text-7xl animate-fade-up" style={{ animationDelay: "60ms" }}>
             {t("hero_title_a")}{" "}
-            <span className="text-gradient">{t("hero_title_b")}</span>
+            <span className="font-display italic font-semibold">{t("hero_title_b")}</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground md:text-xl animate-fade-up" style={{ animationDelay: "140ms" }}>
             {t("hero_sub")}
@@ -185,21 +194,28 @@ function Landing() {
           </div>
           <div className="hero-mock animate-fade-up" style={{ animationDelay: "380ms" }}>
             <span className="mock-accent" aria-hidden />
-            <div className="float-chip float-chip-a"><i aria-hidden />7.5% reply rate</div>
-            <div className="float-chip float-chip-b"><i aria-hidden />Booked in calendar</div>
             <div className="mock-head">
-              <span className="mock-title">Your outbound engine</span>
+              <span className="mock-title">OutshipAi console</span>
               <span className="mock-live"><span className="mock-live-dot" />Running</span>
             </div>
-            <div className="mock-body">
-              <div>
-                <div className="mock-num">{stats?.emails_sent ? stats.emails_sent.toLocaleString() : "8,940"}</div>
-                <div className="mock-num-lbl">cold emails sent</div>
+            <div className="mock-panels">
+              <div className="mock-panel">
+                <div className="mock-panel-head"><span>Leads this week</span><b>{stats?.emails_sent ? stats.emails_sent.toLocaleString() : "1,240"}</b></div>
+                <ul className="mock-leads">
+                  <li><span className="mock-avatar">R</span><div className="mock-lead-info"><b>Rayan Saeed</b><span>OpsLead · Dubai</span></div><span className="mock-status mock-status-new">New</span></li>
+                  <li><span className="mock-avatar">O</span><div className="mock-lead-info"><b>Omar Khalil</b><span>RetailTech · Cairo</span></div><span className="mock-status">Replied</span></li>
+                  <li><span className="mock-avatar">S</span><div className="mock-lead-info"><b>Sophie Arnaud</b><span>Finly · Paris</span></div><span className="mock-status mock-status-new">New</span></li>
+                  <li><span className="mock-avatar">M</span><div className="mock-lead-info"><b>Marco Reyes</b><span>Shiply · Madrid</span></div><span className="mock-status">Booked</span></li>
+                </ul>
               </div>
-              <div className="mock-bars">
-                <div className="mock-row"><span>Leads researched</span><span className="mock-track"><i className="mock-fill" style={{ width: "68%" }} /></span><b>1,240</b></div>
-                <div className="mock-row"><span>New replies</span><span className="mock-track"><i className="mock-fill" style={{ width: "42%" }} /></span><b>96</b></div>
-                <div className="mock-row"><span>Meetings booked</span><span className="mock-track"><i className="mock-fill" style={{ width: "18%" }} /></span><b>12</b></div>
+              <div className="mock-panel">
+                <div className="mock-panel-head"><span>AI draft</span><b>Just now</b></div>
+                <div className="mock-mail">
+                  <div className="mock-mail-subject">3 meetings booked this month — on autopilot</div>
+                  <p className="mock-mail-body">Hi — our system found 40 ICP-fit leads in your first week, wrote on-brand cold emails, and is following up automatically…</p>
+                  <div className="mock-track"><i className="mock-fill" style={{ width: "64%" }} /></div>
+                  <div className="mock-mail-meta">Personalized · 142 words · Sent in 3 min</div>
+                </div>
               </div>
             </div>
             <div className="mock-foot">
@@ -217,7 +233,11 @@ function Landing() {
       {/* Features */}
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24">
         <div data-reveal className="reveal mb-16 text-center">
-          <p className="kicker mb-3">{t("nav_features")}</p>
+          <div className="mb-5 flex items-center justify-center gap-3">
+            <span className="h-px w-8 bg-foreground/20" aria-hidden />
+            <p className="kicker">{t("nav_features")}</p>
+            <span className="h-px w-8 bg-foreground/20" aria-hidden />
+          </div>
           <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
             Your full outbound team, automated
           </h2>
@@ -268,7 +288,11 @@ function Landing() {
       <section id="pricing" className="scroll-mt-20 border-t border-border/50 bg-card/30">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <div data-reveal className="reveal mb-16 text-center">
-            <p className="kicker mb-3">{t("nav_pricing")}</p>
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+              <p className="kicker">{t("nav_pricing")}</p>
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+            </div>
             <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">{t("sec_pricing_title")}</h2>
             <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted-foreground">
             {t("sec_pricing_sub")}
@@ -354,7 +378,11 @@ function Landing() {
             return (
               <>
                 <div data-reveal className="reveal mb-10 text-center">
-                  <p className="kicker mb-3">Calculator</p>
+                  <div className="mb-5 flex items-center justify-center gap-3">
+                    <span className="h-px w-8 bg-foreground/20" aria-hidden />
+                    <p className="kicker">Calculator</p>
+                    <span className="h-px w-8 bg-foreground/20" aria-hidden />
+                  </div>
                   <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">What could this do for you?</h2>
                   <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">{t("roi_sub")}</p>
                 </div>
@@ -416,22 +444,38 @@ function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-border/50">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 md:flex-row">
-          <Logo />
-          <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-            <a href="#features" className="hover:text-foreground">{t("nav_features")}</a>
-            <a href="#pricing" className="hover:text-foreground">{t("nav_pricing")}</a>
-            <Link to="/security" className="hover:text-foreground">{t("footer_security")}</Link>
-            <Link to="/status" className="hover:text-foreground">{t("footer_status")}</Link>
-            <Link to="/honesty" className="hover:text-foreground">Honesty</Link>
-            <Link to="/refunds" className="hover:text-foreground">Refunds</Link>
-            <Link to="/about" className="hover:text-foreground">About</Link>
-            <Link to="/terms" className="hover:text-foreground">{t("footer_terms")}</Link>
-            <Link to="/privacy" className="hover:text-foreground">{t("footer_privacy")}</Link>
-            <Link to="/auth" className="hover:text-foreground">{t("nav_login")}</Link>
+      <footer className="border-t border-border/50 bg-card/30">
+        <div className="mx-auto max-w-6xl px-6 py-14">
+          <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+            <div>
+              <Logo />
+              <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                Your AI sales agent — finds the leads, writes the cold emails, follows up, and books the meetings. On autopilot.
+              </p>
+            </div>
+            <FooterCol title="Product">
+              <a href="#features" className="nav-link hover:text-foreground">{t("nav_features")}</a>
+              <a href="#pricing" className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
+              <Link to="/tools" className="nav-link hover:text-foreground">Free tools</Link>
+              <Link to="/status" className="nav-link hover:text-foreground">{t("footer_status")}</Link>
+            </FooterCol>
+            <FooterCol title="Company">
+              <Link to="/about" className="nav-link hover:text-foreground">About</Link>
+              <Link to="/agency" className="nav-link hover:text-foreground">{t("nav_hire")}</Link>
+              <Link to="/stats" className="nav-link hover:text-foreground">Live stats</Link>
+              <Link to="/honesty" className="nav-link hover:text-foreground">Honesty</Link>
+            </FooterCol>
+            <FooterCol title="Legal">
+              <Link to="/security" className="nav-link hover:text-foreground">{t("footer_security")}</Link>
+              <Link to="/terms" className="nav-link hover:text-foreground">{t("footer_terms")}</Link>
+              <Link to="/privacy" className="nav-link hover:text-foreground">{t("footer_privacy")}</Link>
+              <Link to="/refunds" className="nav-link hover:text-foreground">Refunds</Link>
+            </FooterCol>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 OutshipAi</p>
+          <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-border/50 pt-6 text-xs text-muted-foreground md:flex-row">
+            <span>© 2026 OutshipAi. All rights reserved.</span>
+            <span className="flex items-center gap-2"><Link to="/status" className="nav-link hover:text-foreground">System status</Link> · <Link to="/auth" className="nav-link hover:text-foreground">{t("nav_login")}</Link></span>
+          </div>
         </div>
       </footer>
 
