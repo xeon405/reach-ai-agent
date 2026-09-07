@@ -300,7 +300,7 @@ function Landing() {
                 <ul className="mt-6 space-y-3 text-sm">
                   {(p.perkKeys).map((perkKey) => (
                     <li key={perkKey} className="flex items-start gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
                       <span>{t(perkKey)}</span>
                     </li>
                   ))}
@@ -407,7 +407,7 @@ function Landing() {
             OutshipAi finds the leads, writes the emails, follows up, and books the meetings — so you only close.
           </p>
           <div className="mt-8 flex justify-center">
-            <Button asChild size="lg" className="h-12 bg-white px-8 text-brand-strong hover:bg-white/90 hover:shadow-lg">
+            <Button asChild size="lg" className="h-12 bg-white px-8 text-black hover:bg-white/90 hover:shadow-lg">
               <Link to="/auth">
                 Start free today <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
