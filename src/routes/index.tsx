@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Children, useEffect, useState, type ReactNode } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX } from "lucide-react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, Flame, ShieldCheck, CreditCard, Trash2, MailX, Menu, X, Inbox, Search, Send } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
@@ -34,6 +34,77 @@ export const Route = createFileRoute("/")({
       },
       { name: "twitter:image", content: "/og.png" },
     ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              name: "OutshipAi",
+              url: "https://outreach-ochre-sigma.vercel.app",
+              email: "outreachai.team@gmail.com",
+              description:
+                "OutshipAi is an AI sales agent that finds ideal customers, writes personalized cold emails, follows up automatically, and books meetings.",
+            },
+            {
+              "@type": "FAQPage",
+              mainEntity: [
+                {
+                  "@type": "Question",
+                  name: "Is this cold email spam?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "No. Every email is personalized for the lead and sent from your own real inbox at safe, low volumes, with strict deliverability checks. Spam hurts senders — our system is built to avoid it.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "What happens when someone unsubscribes?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "Every email carries a one-click unsubscribe that is honored instantly. OutshipAi keeps those addresses permanently excluded from future campaigns.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "Will this work with my existing inbox?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "Yes — you connect your own Gmail or Google Workspace account. Emails are sent from you, in your voice, and replies land directly in your real inbox.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "How fast will I see results?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "Setup takes about three minutes, and your first emails go out almost immediately. Most users see replies within the first week as personalization and follow-ups kick in.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "Can it write in Arabic or other languages?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "Yes. Drafts respond naturally to the lead's context and language — Arabic, English, French, and more are supported.",
+                  },
+                },
+                {
+                  "@type": "Question",
+                  name: "How much does it cost?",
+                  acceptedAnswer: {
+                    "@type": "Answer",
+                    text: "It's free to start. Paid plans are $37, $79, or $149 per month depending on volume, and you can cancel anytime.",
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    ],
   }),
   component: Landing,
 });
@@ -65,6 +136,69 @@ function FooterCol({ title, children }: { title: string; children: ReactNode }) 
   );
 }
 
+const faqs = [
+  {
+    q: "Is this cold email spam?",
+    a: "No. Every email is personalized for the lead and sent from your own real inbox at safe, low volumes, with strict deliverability checks. Spam hurts senders — our system is built to avoid it.",
+  },
+  {
+    q: "What happens when someone unsubscribes?",
+    a: "Every email carries a one-click unsubscribe that is honored instantly. OutshipAi keeps those addresses permanently excluded from future campaigns.",
+  },
+  {
+    q: "Will this work with my existing inbox?",
+    a: "Yes — you connect your own Gmail or Google Workspace account. Emails are sent from you, in your voice, and replies land directly in your real inbox.",
+  },
+  {
+    q: "How fast will I see results?",
+    a: "Setup takes about three minutes, and your first emails go out almost immediately. Most users see replies within the first week as personalization and follow-ups kick in.",
+  },
+  {
+    q: "Can it write in Arabic or other languages?",
+    a: "Yes. Drafts respond naturally to the lead's context and language — Arabic, English, French, and more are supported.",
+  },
+  {
+    q: "How much does it cost?",
+    a: "It's free to start. Paid plans are $37, $79, or $149 per month depending on volume, and you can cancel anytime.",
+  },
+];
+
+const steps = [
+  {
+    n: "01",
+    icon: Inbox,
+    title: "Connect your inbox",
+    text: "Link Gmail or Google Workspace in minutes — no credit card needed.",
+  },
+  {
+    n: "02",
+    icon: Search,
+    title: "We research & write",
+    text: "Your agent finds ideal prospects, validates them, and drafts personalized cold emails in your voice.",
+  },
+  {
+    n: "03",
+    icon: Send,
+    title: "We send, follow up & book",
+    text: "Autopilot sends, re-engages non-replies, and slots meetings straight into your calendar.",
+  },
+];
+
+function Step({ n, icon: Icon, title, text }: { n: string; icon: typeof Inbox; title: string; text: string }) {
+  return (
+    <li data-reveal className="reveal relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-card">
+      <span className="step-num" aria-hidden>{n}</span>
+      <div className="relative">
+        <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-sm">
+          <Icon className="h-5 w-5" />
+        </div>
+        <h3 className="font-display text-xl font-semibold tracking-tight">{title}</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p>
+      </div>
+    </li>
+  );
+}
+
 const plans = [
   {
     nameKey: "plan_starter",
@@ -91,6 +225,7 @@ function Landing() {
   const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -144,16 +279,48 @@ function Landing() {
             <Link to="/stats" className="nav-link hover:text-foreground">{t("nav_stats")}</Link>
           </nav>
           <div className="flex items-center gap-2">
-            <LangToggle />
+            <div className="hidden md:flex">
+              <LangToggle />
+            </div>
             <ThemeToggle />
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
               <Link to="/auth">{t("nav_login")}</Link>
             </Button>
-            <Button asChild size="sm" className="bg-gradient-primary shadow-glow">
+            <Button asChild size="sm" className="hidden bg-gradient-primary shadow-glow md:inline-flex">
               <Link to="/auth">{t("start_free")}</Link>
             </Button>
+            <button
+              type="button"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground md:hidden"
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         </div>
+        {menuOpen && (
+          <div className="border-t border-border/50 bg-background animate-fade-in md:hidden">
+            <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-6 py-4 text-sm">
+              <a href="#features" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_features")}</a>
+              <a href="#pricing" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_pricing")}</a>
+              <a href="#faq" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">FAQ</a>
+              <Link to="/tools" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_tools")}</Link>
+              <Link to="/agency" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 font-medium text-primary hover:bg-accent hover:text-accent-foreground">{t("nav_hire")}</Link>
+              <Link to="/stats" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_stats")}</Link>
+              <div className="mt-3 flex items-center gap-2 border-t border-border/50 px-3 pt-4 pb-1">
+                <LangToggle />
+                <Button asChild variant="ghost" size="sm" className="ml-auto">
+                  <Link to="/auth" onClick={() => setMenuOpen(false)}>{t("nav_login")}</Link>
+                </Button>
+                <Button asChild size="sm" className="bg-gradient-primary shadow-glow">
+                  <Link to="/auth" onClick={() => setMenuOpen(false)}>{t("start_free")}</Link>
+                </Button>
+              </div>
+            </nav>
+          </div>
+        )}
       </header>
 
       {/* Hero */}
@@ -161,7 +328,7 @@ function Landing() {
         <div className="mx-auto max-w-5xl px-6 pt-20 pb-24 text-center">
           <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary animate-fade-in">
             <Sparkles className="h-3.5 w-3.5" />
-            {t("hero_badge")}
+            Built by a hands-on outbound agency
           </div>
           {stats && stats.emails_sent >= 100 && (
             <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand-soft px-4 py-1.5 text-xs font-semibold text-brand animate-fade-in">
@@ -259,6 +426,28 @@ function Landing() {
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t(f.dKey)}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="border-t border-border/50 bg-gradient-hero">
+        <div className="mx-auto max-w-6xl px-6 py-24">
+          <div data-reveal className="reveal mb-16 text-center">
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+              <p className="kicker">How it works</p>
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+            </div>
+            <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
+              Outbound on autopilot in three steps
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted-foreground">
+              No setup headaches. No template spam. Your agent does the heavy lifting.
+            </p>
+          </div>
+          <ol className="grid gap-5 md:grid-cols-3">
+            {steps.map((s) => <Step key={s.n} n={s.n} icon={s.icon} title={s.title} text={s.text} />)}
+          </ol>
         </div>
       </section>
 
@@ -427,6 +616,28 @@ function Landing() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section id="faq" className="scroll-mt-20 border-t border-border/50">
+        <div className="mx-auto max-w-3xl px-6 py-24">
+          <div data-reveal className="reveal mb-12 text-center">
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+              <p className="kicker">FAQ</p>
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+            </div>
+            <h2 className="font-display text-4xl font-black tracking-tight md:text-5xl">Questions, answered</h2>
+          </div>
+          <div data-reveal className="reveal space-y-3">
+            {faqs.map((f) => (
+              <details key={f.q} className="faq">
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="px-6 pb-24 pt-4">
         <div data-reveal className="reveal cta-band">
@@ -456,6 +667,7 @@ function Landing() {
             <FooterCol title="Product">
               <a href="#features" className="nav-link hover:text-foreground">{t("nav_features")}</a>
               <a href="#pricing" className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
+              <a href="#faq" className="nav-link hover:text-foreground">FAQ</a>
               <Link to="/tools" className="nav-link hover:text-foreground">Free tools</Link>
               <Link to="/status" className="nav-link hover:text-foreground">{t("footer_status")}</Link>
             </FooterCol>
