@@ -715,6 +715,47 @@ Content boundary is enforced in two independent layers:
    $/comma figures through the real module with a BAD canned model that echoes them
    verbatim: the persisted memory row carries none of the identifier bytes (parser
    backstop) and the watermark still advances — the generalization instruction is
-   the model-side nudge, the sanitizer is the enforceable layer. Kill-switch proven
-   live with `ai` budget free: conserve reason `kill_switch`, zero rows, watermark
-   AND meter byte-identical before/after (no gate call at all).
+the model-side nudge, the sanitizer is the enforceable layer. Kill-switch proven
+    live with `ai` budget free: conserve reason `kill_switch`, zero rows, watermark
+    AND meter byte-identical before/after (no gate call at all).
+
+## Stage 9 — support-chat cost drain (2026-09-10)
+
+**Finding (gap proof, live pre-fix):** support-chat bundled a pre-meter `_shared`
+and wrote ZERO `ai_spend_ledger` rows — not "under-capped", never metered at all.
+Its per-identity limits never bind either: the chat REUSES one thread per visitor,
+so "60 msgs/thread + 3 threads/day" resets with a self-issued UUID (60 answers per
+rotation). 5 real LLM answers left counters/ledger untouched; cleanup verified.
+
+**Fix (migration `20260910000010` + `_shared` + wiring):** the per-user gate cannot
+represent anonymous visitors (`ai_cost_state.profile_id` FKs `profiles`, so a
+sentinel UUID is impossible) → new single-row global bucket `ai_cost_guest_state`
+with `ai_cost_guest_debit`/`ai_cost_guest_settle`, an atomic mirror of the proven
+pattern (row-lock, rollover-aware, ceiling, SECURITY DEFINER, service_role only).
+`groq.ts` meter settles the guest bucket through the same closure (`context.guest`).
+Guest chat → `openGuestAiCall`; signed-in chat → `consume_ai_quota`
+(`AI_CHAT_DAILY_CAP`, default 100) THEN the per-user USD pools. Exhaustion is a
+graceful canned reply, never an error. Sequencing: sim `30/30` (caught + fixed a
+real `hard_stop`→template routing bug), live `19/19` (guest ledger row + bucket
+moved $0.0049; ceiling→busy line with zero spend + instant recovery; signed-in
+count=1 + user pool moved + count-ceiling→daily line; cascade cleanup).
+
+**Sibling audit (same failure shape: an LLM path leaving the meter entirely):**
+source scan is clean — every caller crosses `groqChat`, no direct provider
+fetches. BUT the meter lives in the BUNDLE: any function last deployed before the
+meter landed (commit `904924e`, 2026-09-10) carried a pre-meter copy.
+Deployment-age cross-reference found **four more stale bundles**: `generate-email`
+(Aug 29), `suggest-areas` (Aug 30), `tools` (Sep 5), `send-reply` (Sep 9).
+Redeployed all four preserving `verify_jwt` flags (gen-email/tools/send-reply
+`--no-verify-jwt`; suggest-areas default-on). Post-redeploy: no caller bypasses the
+meter; live-confirmed via public `tools`/subjects (a ledger row now lands per AI
+call). Residual attribution gap: those four callers pass no `MeterContext`, so the
+rows read `fn=unknown kind=generic` (spend VISIBLE but unattributed; their
+budget posture is the quota-only one the Stage-0 five-function audit accepted).
+
+**Accepted residual + REVISIT ITEM:** the guest wall is a single SHARED bucket —
+one bad actor can exhaust it and degrade the widget for every simultaneous visitor
+that day, not just themselves. Bounded to `$0.10`/day (env `AI_GUEST_POOL_DAILY`,
+tuneable) and irrelevant at today's zero-traffic, but MUST be revisited with
+**per-IP (or per-session) buckets as soon as real guest volume exists** — before
+launch marketing.

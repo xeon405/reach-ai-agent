@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { buildSupportUserContext, containsArabic } from "../_shared/ai-lib.ts";
 import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
+import { openAiCall, openGuestAiCall } from "../_shared/ai-cost-gate.ts";
 
 function json(body: unknown, status = 200, req?: Request) {
   return jsonCors(body, status, req);
@@ -345,6 +346,7 @@ Deno.serve(async (req) => {
     // ── Account context: real numbers so answers are specific, not generic.
 //    Guests have no account → stay product-level. ──
     let accountCtx = "";
+    let userPlan: string | null = null;
     if (!isGuest) {
     const { data: profile } = await admin.from("profiles")
       .select("name, plan, referral_reward_plan, referral_reward_until, gmail_connected, gmail_state, gmail_email")
@@ -379,6 +381,7 @@ Deno.serve(async (req) => {
     if (rewardPlan && ORDER.indexOf(rewardPlan) > -1 && rewardUntil > Date.now() && ORDER.indexOf(rewardPlan) > ORDER.indexOf(plan)) {
       plan = rewardPlan;
     }
+    userPlan = plan;
 
     accountCtx = buildSupportUserContext({
       name: profile?.name ?? null,
@@ -408,10 +411,36 @@ Deno.serve(async (req) => {
 ${accountCtx}
 ${arabic ? "\n\nLANGUAGE REQUIREMENT — the user writes in Arabic. Reply ONLY in Arabic (modern standard Arabic, friendly and clear). Product terms may stay in English where natural." : ""}${guestNote}`;
 
-    const answer = await groqChat(
-      [{ role: "system", content: system }, ...history],
-      { maxTokens: 900, temperature: 0.3 }
-    );
+    // ── Generate the reply through the AI-cost gate (§6.3). Guests get the
+    //    shared visitor bucket (openGuestAiCall); signed-in users first consume
+    //    the daily chat allowance (M2-style count cap, distinct AI_CHAT_DAILY_CAP
+    //    knob), then run inside their normal per-user USD pools (openAiCall).
+    //    A refused or degraded mode NEVER surfaces as an error to the visitor:
+    //    the reply degrades to a calm static line, zero LLM, zero spend. ──
+    const promptText = `SYSTEM:\n${system}\n${history
+      .map((m: any) => `\n---\n${m.role === "assistant" ? "ASSISTANT" : "USER"}:\n${m.content}`)
+      .join("")}`;
+
+    const BUSY_LINE = "I'm catching my breath after a busy stretch — give me a minute and send that again. If it's urgent, email outreachai.team@gmail.com.";
+    const DAILY_LIMIT_LINE = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outreachai.team@gmail.com.";
+
+    let answer: string | null = null;
+    if (isGuest) {
+      const handle = await openGuestAiCall(admin, { kind: "chat", fn: "support-chat", groqChat }, 900);
+      if (handle.mode === "ai") answer = await handle.run(promptText, { maxTokens: 900, temperature: 0.3 });
+      answer = answer ?? BUSY_LINE;
+    } else {
+      const chatCap = Number(Deno.env.get("AI_CHAT_DAILY_CAP") ?? 100);
+      const { data: allowed, error: quotaError } = await admin.rpc("consume_ai_quota", { uid: userId, cap: chatCap });
+      if (quotaError) throw new Error(quotaError.message);
+      if (!allowed) {
+        answer = DAILY_LIMIT_LINE;
+      } else {
+        const handle = await openAiCall(admin, { userId, kind: "chat", fn: "support-chat", plan: userPlan, groqChat }, 900);
+        if (handle.mode === "ai") answer = await handle.run(promptText, { maxTokens: 900, temperature: 0.3 });
+        answer = answer ?? BUSY_LINE;
+      }
+    }
 
     await admin.from("support_chat_messages").insert({
       thread_id: threadId, role: "assistant", content: answer.slice(0, 3000),

@@ -147,5 +147,21 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ ok: true, scanned, degraded, at: new Date().toISOString() });
+  // Guest wall (support-chat visitor bucket): no profile row exists to carry the
+  // per-user markers, so this sweep's only job here is keeping the bucket's
+  // heartbeat fresh — a spent-unknown guest bucket conserves inside
+  // openGuestAiCall exactly like a user's stale counter (§6.6 stale-unknown).
+  let guestScanned = 0;
+  try {
+    const { data: guest } = await supabase
+      .from("ai_cost_guest_state").select("id, used_daily_usd").eq("id", true).maybeSingle();
+    if (guest) {
+      await supabase.from("ai_cost_guest_state")
+        .update({ last_reported_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", true).then(() => {}, () => {});
+      guestScanned = 1;
+    }
+  } catch { /* tolerate */ }
+
+  return json({ ok: true, scanned, degraded, guest_scanned: guestScanned, at: new Date().toISOString() });
 });

@@ -18,6 +18,9 @@ export interface MeterContext {
   campaign_id?: string;
   lead_id?: string;
   decision_id?: string;
+  /** Anonymous-visitor call (support-chat guest bucket): settle ai_cost_guest_state
+   *  instead of a per-user ai_cost_state row (guests have no profile id). */
+  guest?: boolean;
 }
 
 interface LedgerRow {
@@ -60,7 +63,7 @@ function meterDb() {
 // When `settle` is set (a gated call that reserved up front), the counter is
 // settled to ACTUAL (reserved + settleDelta) so the durable ceiling converges to
 // true spend each call — abandoned reserves only decay by window rollover.
-async function recordMeter(row: LedgerRow, settle?: { userId: string; delta: number }): Promise<void> {
+async function recordMeter(row: LedgerRow, settle?: { userId?: string; delta: number; guest?: boolean }): Promise<void> {
   const db = meterDb();
   if (!db) {
     if (meterPending.length < METER_BUFFER_MAX) meterPending.push(row);
@@ -70,10 +73,14 @@ async function recordMeter(row: LedgerRow, settle?: { userId: string; delta: num
   try {
     await db.from("ai_spend_ledger").insert(row);
     if (settle) {
-      db.rpc("ai_cost_settle", {
-        p_profile_id: settle.userId,
-        p_delta: settle.delta,
-      }).then(() => {}, () => {});
+      if (settle.guest) {
+        db.rpc("ai_cost_guest_settle", { p_delta: settle.delta }).then(() => {}, () => {});
+      } else {
+        db.rpc("ai_cost_settle", {
+          p_profile_id: settle.userId,
+          p_delta: settle.delta,
+        }).then(() => {}, () => {});
+      }
     }
     const buffered = meterPending;
     if (buffered.length > 0 || meterDropped > 0) {
@@ -174,8 +181,8 @@ export async function groqChat(
         lead_id: ctx.lead_id ?? null,
         decision_id: ctx.decision_id ?? null,
         model_version: null,
-      }, ctx.reserve != null && ctx.user_id
-        ? { userId: ctx.user_id, delta: estimateCost(inTokens, outTokens) - Number(ctx.reserve) }
+      }, ctx.reserve != null && (ctx.user_id || ctx.guest)
+        ? { userId: String(ctx.user_id ?? ""), delta: estimateCost(inTokens, outTokens) - Number(ctx.reserve), guest: ctx.guest }
         : undefined).catch(() => {});
       return text;
     } catch (e) {

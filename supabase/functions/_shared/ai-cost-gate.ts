@@ -44,6 +44,14 @@ export const PLAN_EMAIL_CAPS: Record<string, number> = {
   agency: 500,
 };
 
+/** Visitor wall of the public support-chat widget (no real traffic yet — keep it
+ *  tight; raise with real usage data). The guest bucket is a single-row global
+ *  counter (ai_cost_guest_state) because guests have no profile row and
+ *  ai_cost_state.profile_id FKs to profiles. Default pool $0.10/day (~50 short
+ *  chats at the 0.0025 reserve guard), ~30x daily for the month. */
+export const AI_GUEST_POOL_DAILY = Number(Deno.env.get("AI_GUEST_POOL_DAILY") ?? "0.10");
+export const AI_GUEST_POOL_MONTHLY = Number(Deno.env.get("AI_GUEST_POOL_MONTHLY") ?? String(round6(AI_GUEST_POOL_DAILY * 30)));
+
 export type AiMode = "ai" | "template" | "hard_stop";
 
 export interface AiQuality {
@@ -295,6 +303,112 @@ export async function openAiCall(
         return text;
       } catch {
         return null; // LLM failure => caller's template path (abandoned reserve decays, safe)
+      }
+    },
+  };
+}
+
+// ------------------------------------------------------------------
+// The ANONYMOUS equivalent of openAiCall for the public support-chat widget.
+// Guests have no profile → no ai_cost_state row, and no user/campaign scope for
+// markers — only the glob markers apply, and the spend ceiling is the single-row
+// global guest bucket (ai_cost_guest_debit, atomic, rollover-aware). Staleness
+// comes from the bucket's OWN heartbeat (kept fresh by the cost-sweep) so a
+// spent-unknown bucket conserves exactly like a user's column. The reserve is
+// settled to ACTUAL by the meter (context.guest => ai_cost_guest_settle).
+// mode !== 'ai' (or run() null) => the caller replies with a canned line — the
+// visitor never sees an error, only a graceful pause.
+// ------------------------------------------------------------------
+export async function openGuestAiCall(
+  db: Db,
+  ctx: { kind: string; fn?: string; groqChat: (m: Array<{ role: string; content: string }>, o?: any) => Promise<string> },
+  maxTokens = 1024,
+): Promise<AiCallHandle> {
+  const bypass = await readConfig(db, ["ai_quality.gate_enabled"], {});
+  const gateOn = bypass["ai_quality.gate_enabled"] ?? true;
+  if (gateOn === false || gateOn === "false") {
+    return {
+      mode: "ai",
+      metering_degraded: false,
+      reason: "gate_disabled",
+      async run(promptText, opts) {
+        return ctx.groqChat(
+          [{ role: "user", content: promptText }],
+          {
+            maxTokens: opts?.maxTokens ?? maxTokens,
+            temperature: opts?.temperature,
+            context: { fn: ctx.fn ?? "openGuestAiCall", kind: ctx.kind },
+          },
+        );
+      },
+    };
+  }
+
+  const cfg = await readConfig(db, ["ai_quality.mode", "ai_quality.metering_degraded"], {});
+  const rawMode = String(cfg["ai_quality.mode"] ?? "").trim();
+  if (rawMode === "hard_stop") return { mode: "hard_stop", metering_degraded: false, reason: "admin:hard_stop", run: async () => null };
+  if (rawMode === "template") return { ...concede("admin:template"), run: async () => null };
+  const metaDegraded = cfg["ai_quality.metering_degraded"] === true || cfg["ai_quality.metering_degraded"] === "true";
+
+  let state: { used_daily: number; last_reported_at: string | null } | null = null;
+  let stateReadFailed = false;
+  try {
+    const { data } = await db
+      .from("ai_cost_guest_state")
+      .select("used_daily_usd, last_reported_at")
+      .eq("id", true)
+      .maybeSingle();
+    if (data) {
+      state = {
+        used_daily: Number(data.used_daily_usd ?? 0) || 0,
+        last_reported_at: data.last_reported_at ? String(data.last_reported_at) : null,
+      };
+    }
+  } catch {
+    stateReadFailed = true;
+  }
+
+  if (stateReadFailed) return { ...concede("unreadable_state"), run: async () => null };
+  if (metaDegraded || driftedFresh(state)) return { ...concede("metering_degraded"), run: async () => null };
+  // No row yet (nothing spent) => allowed, mirroring the user-side no_state path.
+  if (state && state.used_daily >= AI_GUEST_POOL_DAILY) return { ...concede("guest_daily_pool"), run: async () => null };
+
+  return {
+    mode: "ai",
+    metering_degraded: metaDegraded,
+    reason: null,
+    async run(promptText, opts) {
+      const reserve = reserveEstimate(promptText.length, opts?.maxTokens ?? maxTokens);
+      if (reserve > AI_PER_CALL_GUARD) return null;
+      let debit: any = null;
+      try {
+        const res = await db.rpc("ai_cost_guest_debit", {
+          p_debit: reserve,
+          p_pool_daily: AI_GUEST_POOL_DAILY,
+          p_pool_monthly: AI_GUEST_POOL_MONTHLY,
+        });
+        debit = res.data;
+      } catch {
+        return null;
+      }
+      if (!debit?.ok) return null;
+      try {
+        const text = await ctx.groqChat(
+          [{ role: "user", content: promptText }],
+          {
+            maxTokens: opts?.maxTokens ?? maxTokens,
+            temperature: opts?.temperature,
+            context: {
+              fn: ctx.fn ?? "openGuestAiCall",
+              kind: ctx.kind,
+              reserve,
+              guest: true,
+            },
+          },
+        );
+        return text;
+      } catch {
+        return null;
       }
     },
   };
