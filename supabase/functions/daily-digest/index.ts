@@ -19,6 +19,16 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+    // Run-marker: unconditional proof this invocation EXECUTED (health-check's
+    // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
+    try {
+      await insertAudit(supabase, {
+        user_id: null,
+        event: "digest.run",
+        payload: { at: new Date().toISOString() },
+      });
+    } catch { /* marker is best-effort; the digest is authoritative */ }
+
     const today = new Date().toISOString().split("T")[0];
     const since = new Date(Date.now() - 86400000).toISOString();
     const { data: digestProfiles } = await supabase

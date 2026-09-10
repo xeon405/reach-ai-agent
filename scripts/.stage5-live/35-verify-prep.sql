@@ -1,0 +1,2 @@
+SELECT (SELECT count(*) FROM ai_classifications WHERE message_id = '1a047343d0ab9c1f') AS cls_rows,
+       (SELECT last_lead_msg_at::text FROM emails_sent WHERE id = '98b8ff86-471c-4195-9eaf-6559b36cddf9') AS last_lead;

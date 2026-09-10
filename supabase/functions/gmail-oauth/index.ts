@@ -90,10 +90,15 @@ serve(async (req) => {
     // Store OAuth credentials in the service-role-only vault, encrypted at rest
     // (AES-GCM via GOOGLE_TOKEN_ENC_KEY). Plaintext fallback only if key absent.
     const storedRefresh = await encryptSecret(tokens.refresh_token);
+    // connected_at is the warm-up anchor and must reflect the FIRST connect:
+    // on reconnect, preserve it (undefined keys are dropped by supabase-js).
+    const { data: existingToken } = await supabase.from("gmail_tokens")
+      .select("profile_id").eq("profile_id", userId).maybeSingle();
     const { error: tokenError } = await supabase.from("gmail_tokens").upsert({
       profile_id: userId,
       refresh_token: storedRefresh,
       updated_at: new Date().toISOString(),
+      connected_at: existingToken ? undefined : new Date().toISOString(),
     }, { onConflict: "profile_id" });
     if (tokenError) throw new Error(`Failed to store Gmail token: ${tokenError.message}`);
 

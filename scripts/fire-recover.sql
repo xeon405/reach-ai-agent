@@ -1,0 +1,2 @@
+-- RECOVER phase: push sends to 170 so 5/170 = 2.94% (<3%) — clean from here on.
+insert into emails_sent (user_id, sent_at) select 'a3f0c001-0000-4000-8000-000000000001', now() - (i * interval '5 minutes') from generate_series(1, 70) i;

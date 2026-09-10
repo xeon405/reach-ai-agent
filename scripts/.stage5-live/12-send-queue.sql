@@ -1,0 +1,1 @@
+SELECT status, count(*) FROM send_queue GROUP BY status ORDER BY status;

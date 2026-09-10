@@ -1,0 +1,13 @@
+-- ROLLBACK for migration 20260908000002_agent_config.sql
+-- Stage 2 (0b): agent_config table + seeded glob rows.
+--
+-- Single destructive statement. Table + seed rows go together; re-running the
+-- forward migration rebuilds both. There are no FK references to this table
+-- and no other objects created by the migration.
+--
+-- Deployed-code note: before this change deploys, inbox-agent uses only local
+-- constants, so dropping the table has zero runtime impact. After the deployed
+-- inbox-agent reads agent_config (0b deploy), remove the table only AFTER
+-- redeploying the pre-0b inbox-agent, otherwise reads return defaults (safe,
+-- but the table is the intent of the feature).
+drop table if exists public.agent_config;

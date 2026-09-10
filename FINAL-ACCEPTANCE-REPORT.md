@@ -218,7 +218,7 @@ All 3 turns persisted in `emails_sent.ai_turns = 3`. Thread `93e6c4b6` tracked w
 ### DIGEST
 ✅ **PASS**  
 - Cron: `0 4 * * *` UTC → `daily-digest` function
-- Cron secret: `REDACTED_CRON_SECRET`
+- Cron secret: (redacted in VCS; see `supabase secrets list`)
 - Function exists, version 5, ACTIVE
 
 ### CRON

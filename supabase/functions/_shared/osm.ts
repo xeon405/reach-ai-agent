@@ -13,6 +13,22 @@ export const COUNTRY_ISO: Record<string, string> = {
   belgium: "BE", turkey: "TR", egypt: "EG", bangladesh: "BD", "sri lanka": "LK",
 };
 
+// GDPR/UK-GDPR country set for OUTCOME EXCLUSION from global learning
+// (strategy_state). EEA = EU-27 + Iceland + Liechtenstein + Norway (30),
+// plus the United Kingdom (GB) which applies UK-GDPR (31 total).
+// Never filter on this instead of COUNTRY_ISO for lead sourcing — this set is
+// ONLY for deciding which outcomes must not feed global anonymized aggregates.
+export const GDPR_COUNTRY_ISOS: ReadonlySet<string> = new Set([
+  // EU-27
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
+  "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
+  "SI", "ES", "SE",
+  // EEA add-ons
+  "IS", "LI", "NO",
+  // UK (UK-GDPR)
+  "GB",
+]);
+
 // ---- Niche keyword -> OpenStreetMap tag selectors + name regex ----
 interface Niche { tags: string[]; regex?: string }
 export function nicheFor(jobTitleRaw: string): Niche {

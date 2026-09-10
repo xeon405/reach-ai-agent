@@ -7,6 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import webPush from "npm:web-push@3.6.7";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { insertAudit } from "../_shared/audit.ts";
 
 const MAX_PER_RUN = 200;
 
@@ -44,6 +45,16 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Run-marker: unconditional proof this invocation EXECUTED (health-check's
+    // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
+    try {
+      await insertAudit(supabase as any, {
+        user_id: null,
+        event: "push.drain.run",
+        payload: { at: new Date().toISOString() },
+      });
+    } catch { /* marker is best-effort; the drain is authoritative */ }
 
     const pubKey = Deno.env.get("VAPID_PUBLIC_KEY")!;
     const privKey = Deno.env.get("VAPID_PRIVATE_KEY")!;

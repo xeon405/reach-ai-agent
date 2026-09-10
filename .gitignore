@@ -42,6 +42,8 @@ supabase.tar.gz
 
 # Local secrets & CLI temp
 .cron-secret.txt
+.cron_secret
+scripts/.stage6/.cron_secret
 supabase/.temp/
 
 .new-token.txt
@@ -61,3 +63,4 @@ android-app/rebuild*.log
 
 .vercel
 .env*
+!.env.example

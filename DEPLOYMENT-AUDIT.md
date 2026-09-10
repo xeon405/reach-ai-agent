@@ -56,7 +56,7 @@ Should be deleted from Supabase to avoid confusion.
 | `outreachai_inbox_agent_hourly` | `20 * * * *` | inbox-agent | ✅ Match | ✅ ACTIVE |
 | `outreachai_daily_digest` | `0 4 * * *` | daily-digest | ✅ Match | ✅ ACTIVE |
 
-All 3 cron jobs use the correct `CRON_SECRET` (`REDACTED_CRON_SECRET`).
+All 3 cron jobs use the correct `CRON_SECRET` (value redacted in VCS).
 All 3 target the correct function URLs at `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/`.
 
 ---

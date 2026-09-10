@@ -1,0 +1,1 @@
+UPDATE cron.job SET active = false WHERE jobid = 9;

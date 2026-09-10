@@ -6,6 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { insertAudit } from "../_shared/audit.ts";
 import { isGoogleMapsAvailable, searchGoogleMaps } from "../_shared/google-maps.ts";
 import { metrosFor } from "../_shared/areas.ts";
 import { saveBusinesses, markCoverageRefreshed, grantRefresh } from "../_shared/saved-businesses.ts";
@@ -44,6 +45,17 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+  // Run-marker: unconditional proof this invocation EXECUTED (health-check's
+  // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
+  // Emitted before the no-key skip so "ran but skipped" is still observable.
+  try {
+    await insertAudit(supabase as any, {
+      user_id: null,
+      event: "warm.run",
+      payload: { at: new Date().toISOString() },
+    });
+  } catch { /* marker is best-effort; the run is authoritative */ }
+
   if (!isGoogleMapsAvailable()) {
     return new Response(JSON.stringify({ status: "skipped: no google key" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }

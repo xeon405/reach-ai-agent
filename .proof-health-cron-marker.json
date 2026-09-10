@@ -1,0 +1,91 @@
+{
+  "ok": false,
+  "checks": [
+    {
+      "name": "RPC shape: last_run_event is a name + last_run_event_at is an ISO timestamp",
+      "ok": false,
+      "detail": "event=undefined at=2026-09-10 02:29:00.504288+00"
+    },
+    {
+      "name": "dispatch records fresh 'succeeded' runs while execution is broken",
+      "ok": true,
+      "detail": "last_start=2026-09-10 02:30:00.048967+00"
+    },
+    {
+      "name": "run marker frozen after break (no execution)",
+      "ok": true,
+      "detail": "marker=2026-09-10 02:29:00.504288+00"
+    },
+    {
+      "name": "cron probe RED on stale marker via `cron:outreachai_push_drainer_minutely`",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "owner alert created for the broken-execution episode",
+      "ok": true,
+      "detail": "alerts=1"
+    },
+    {
+      "name": "dedup: second health-check silent (no new alert)",
+      "ok": true,
+      "detail": "{}"
+    },
+    {
+      "name": "health_state: episode active, alert_count=1, not escalated (24h)",
+      "ok": true,
+      "detail": "{\"check_key\":\"cron:outreachai_push_drainer_minutely\",\"alert_count\":1,\"escalated_at\":null}"
+    },
+    {
+      "name": "execution restored: fresh run marker appears",
+      "ok": true,
+      "detail": "2026-09-10 03:01:01.023532+00"
+    },
+    {
+      "name": "episode resolves after restored execution",
+      "ok": true,
+      "detail": "[\"cron:outreachai_push_drainer_minutely\"]"
+    },
+    {
+      "name": "health_state episode marked resolved",
+      "ok": true,
+      "detail": "2026-09-10 03:01:09.404+00"
+    },
+    {
+      "name": "cron job restored byte-for-byte",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "failures": [
+    "RPC shape: last_run_event is a name + last_run_event_at is an ISO timestamp event=undefined at=2026-09-10 02:29:00.504288+00"
+  ],
+  "frozen_marker": "2026-09-10 02:29:00.504288+00",
+  "first_hc": {
+    "ok": true,
+    "problems": [
+      "cron:outreachai_push_drainer_minutely"
+    ],
+    "alerts": {
+      "cron:outreachai_push_drainer_minutely": 1
+    },
+    "resolved": []
+  },
+  "second_hc": {
+    "problems": [
+      "cron:outreachai_push_drainer_minutely"
+    ],
+    "alerts": {},
+    "resolved": []
+  },
+  "restore_hc": {
+    "ok": true,
+    "problems": [],
+    "alerts": {},
+    "resolved": [
+      "cron:outreachai_push_drainer_minutely"
+    ]
+  },
+  "restored_schedule": "* * * * *",
+  "t_seconds": "1911.8"
+}

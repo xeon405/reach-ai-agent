@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
+import { getKillSwitch } from "../_shared/intelligence-reads.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -168,19 +169,43 @@ Deno.serve(async (req) => {
     const waiting = deliverable.length - eligible.length;
 
     // Idempotency: uniq_queue_job blocks duplicate live jobs per (campaign, lead)
+    // Advisory queue priority (Stage 6): a fresh lead_score reorders jobs within
+    // the day's send band. Gated on lead_score.enabled kill-switch — when OFF no
+    // score is even read and every job takes the 0.5 default => pure FIFO, exactly
+    // today's behavior. Stale/missing rows => 0.5 too. Limit + volume stay owned
+    // by sender_health.
+    const scoreToggle = await getKillSwitch(supabase, "lead_score.enabled", { userId, campaignId });
+    const scoreByLead = new Map<string, number>();
+    if (scoreToggle) {
+      const { data: scoreRows } = eligible.length
+        ? await supabase.from("lead_score").select("lead_id, score, expires_at").in("lead_id", eligible.map((e) => e.id))
+        : { data: [] };
+      const nowMs = Date.now();
+      for (const s of scoreRows ?? []) {
+        try {
+          const exp = s.expires_at ? new Date(s.expires_at).getTime() : 0;
+          const fresh = (exp === 0 || exp > nowMs) && (s.score != null && Number.isFinite(Number(s.score)));
+          if (fresh) scoreByLead.set(s.lead_id, Math.min(1, Math.max(0, Number(s.score))));
+        } catch { /* skip */ }
+      }
+    }
     const rows = eligible.map((l: { id: string }, i: number) => ({
       user_id: userId,
       campaign_id: campaignId,
       lead_id: l.id,
       variant: campaign.ab_test ? (i % 2 === 0 ? "A" : "B") : null,
+      priority: scoreByLead.get(l.id) ?? 0.5,
     }));
     let inserted = rows.length;
     if (rows.length > 0) {
-      const { data: insertedRows, error: qErr } = await supabase.from("send_queue").insert(rows).select("id");
+      const { data: insertedRows, error: qErr } = await supabase.from("send_queue").insert(rows).select("id, priority");
       if (qErr) throw new Error(`Queue error: ${qErr.message}`);
       inserted = insertedRows?.length ?? 0;
       for (const r of insertedRows ?? []) {
-        await insertAudit(supabase, { user_id: userId, campaign_id: campaignId, event: "email.queued", payload: { job_id: r.id } });
+        await insertAudit(supabase, {
+          user_id: userId, campaign_id: campaignId, event: "email.queued",
+          payload: { job_id: r.id, priority: r.priority, score_advised: r.priority !== 0.5 },
+        });
       }
     }
 

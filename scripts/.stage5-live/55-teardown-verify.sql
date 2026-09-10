@@ -1,0 +1,5 @@
+SELECT 'killrow' AS k, count(*)::text AS v FROM agent_config WHERE key='campaign_learning.enabled' AND scope='campaign' AND scope_id='c3772e1f-c028-48e4-8f8c-abcf73240f28'
+UNION ALL SELECT 'hint', COALESCE(state->>'reply_style_hint','(null)') FROM campaign_learning WHERE campaign_id='c3772e1f-c028-48e4-8f8c-abcf73240f28'
+UNION ALL SELECT 'row', ai_turns::text || '/' || ai_paused::text || '/' || last_lead_msg_at::text || '/' || last_ai_msg_at::text || '/' || left(ai_draft,20) FROM emails_sent WHERE id='98b8ff86-471c-4195-9eaf-6559b36cddf9'
+UNION ALL SELECT 'seedLS', count(*)::text FROM lead_score WHERE lead_id='396a562c-e8a8-4f2a-a94a-d47531e4fd64' AND computed_at > now() - interval '1 hour'
+UNION ALL SELECT 'queued', (SELECT count(*)::text FROM send_queue WHERE id IN ('2e0a955b-166c-421a-9a79-89ad7b99dffd','30efe256-2180-4f8f-a360-0cb584fe2a84'));

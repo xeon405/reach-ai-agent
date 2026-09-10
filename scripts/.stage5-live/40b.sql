@@ -1,0 +1,1 @@
+SELECT id, conv_mode, lifecycle, status FROM leads WHERE id = '3b69cda9-76b2-4022-a3ac-398c09a1c436';

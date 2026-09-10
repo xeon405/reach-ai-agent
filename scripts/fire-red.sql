@@ -1,0 +1,3 @@
+-- RED phase: 100 sends in the 7d window, 5 hard bounces = 5.00% (>3% red).
+insert into emails_sent (user_id, sent_at) select 'a3f0c001-0000-4000-8000-000000000001', now() - (i * interval '5 minutes') from generate_series(1, 100) i;
+insert into audit_events (user_id, event, created_at) select 'a3f0c001-0000-4000-8000-000000000001', 'email.bounced', now() - (i * interval '5 minutes') from generate_series(1, 5) i;

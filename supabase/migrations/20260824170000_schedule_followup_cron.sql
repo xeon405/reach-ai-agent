@@ -1,4 +1,6 @@
 -- Schedule the follow-up agent (reply detection, follow-ups, autopilot, digests)
+-- NOTE: x-cron-secret below is redacted to <CRON_SECRET>; substitute the project's
+-- CRON_SECRET (`supabase secrets list`) before applying on a fresh project.
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
@@ -15,7 +17,7 @@ SELECT cron.schedule(
     url := 'https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/follow-up',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'x-cron-secret', 'REDACTED_CRON_SECRET'
+      'x-cron-secret', '<CRON_SECRET>'
     ),
     body := jsonb_build_object('trigger', 'pg_cron')
   ) AS request_id;

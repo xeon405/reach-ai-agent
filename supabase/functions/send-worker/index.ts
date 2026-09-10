@@ -6,10 +6,13 @@
 // ============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
+import { openAiCall, type AiCallHandle } from "../_shared/ai-cost-gate.ts";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
+import { resolveDailyCap } from "../_shared/sender-health.ts";
+import { getLeadScore, getNextSequenceHint, sequenceHintSuffix, strategyRef, type CampaignHint } from "../_shared/intelligence-reads.ts";
 import { signToken } from "../_shared/crypto.ts";
 import {
   buildLeadFacts,
@@ -39,6 +42,50 @@ const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
 };
 
 const SITE = "https://outreach-ochre-sigma.vercel.app";
+
+/** Deterministic cold-email template (Stage 7 conserve path: metering degraded /
+ *  ceiling tripped / per-call guard). No LLM, no ledger, no debit. Mirrors the
+ *  AI output's structure so downstream (spam check, tracking, footer) is
+ *  untouched. Never contains banned words, URLs, caps, or placeholders. */
+function templateEmail(
+  senderName: string,
+  lead: Record<string, any>,
+  userOffer: string,
+  arabic: boolean,
+  _sequenceSuffix = "",
+): { subject: string; body: string } {
+  const leadName = sanitizeForPrompt(lead.name, 80);
+  const leadCompany = sanitizeForPrompt(lead.company ?? lead.category ?? "your company", 120);
+  const offer = sanitizeForPrompt(userOffer, 200);
+  const sign = sanitizeForPrompt(senderName, 60) || "Best regards";
+  const subject = arabic ? arabicFallbackSubject(leadCompany) : pickFallbackSubject(userOffer, leadCompany);
+  const body = arabic
+    ? `السلام عليكم ${leadName}،\n\nأكتب إليك لأن ${offer} قد تكون مفيدة لشركة ${leadCompany}.\n\nهل لديك بضع دقائق لقراءة رسالة سريعة؟\n\nمع التحية،\n${sign}`
+    : `Hi ${leadName},\n\nI'm reaching out because ${offer} may be a good fit for ${leadCompany}.\n\nWould you be open to a quick look?\n\nBest regards,\n${sign}`;
+  return { subject, body };
+}
+
+/** Deterministic follow-up template (Stage 7 conserve path). Same shape as the
+ *  AI follow-up: acknowledges the earlier email, no URLs, no banned words. */
+function templateFollowUp(
+  senderName: string,
+  leadName: string,
+  leadCompany: string,
+  userOffer: string,
+  currentStep: number,
+  totalSteps: number,
+  arabic: boolean,
+): { subject: string; body: string } {
+  const offer = sanitizeForPrompt(userOffer, 200);
+  const name = sanitizeForPrompt(leadName, 80);
+  const company = sanitizeForPrompt(leadCompany, 120);
+  const sign = sanitizeForPrompt(senderName, 60) || "Best regards";
+  const hint = currentStep >= totalSteps ? "one last" : "quick";
+  const body = arabic
+    ? `السلام عليكم ${name}،\n\nتواصلت معك مسبقًا بخصوص ${offer} لشركة ${company}. أردت فقط أن أُذكّرك بأهميتها إن كان ذلك مفيدًا لك.\n\nمع التحية،\n${sign}`
+    : `Hi ${name},\n\nFollowing up on my earlier message about ${offer} for ${company}.\n\nThis ${hint} note is just to keep it on your radar — happy to share more if useful.\n\nBest regards,\n${sign}`;
+  return { subject: "Re: Quick question", body };
+}
 
 /** Build structured business intelligence context for AI prompts. */
 function buildBIContext(profile: Record<string, unknown>): string {
@@ -238,8 +285,11 @@ async function generateEmail(
   bookingLink = "",
   biContext = "",
   arabic = false,
-  avoidHint = ""
+  avoidHint = "",
+  sequenceSuffix = "",
+  gate?: AiCallHandle
 ): Promise<{ subject: string; body: string }> {
+  if (gate && gate.mode !== "ai") return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix);
   const leadName = sanitizeForPrompt(lead.name, 80);
   const leadCompany = sanitizeForPrompt(lead.company ?? lead.category ?? "your company", 120);
   const leadJobTitle = sanitizeForPrompt(lead.job_title, 80);
@@ -250,12 +300,11 @@ LANGUAGE REQUIREMENT — WRITE IN ARABIC:
 - Keep company names and technical terms in Latin script where natural.
 - The JSON keys stay "subject" and "body"; values are Arabic.` : "";
   const openerDirective = pickOpenerDirective(`${leadName}-${leadCompany}-${leadJobTitle}`);
-  const text = await groqChat([{
-    role: "user",
-    content: `${biContext}${buildLeadFacts(lead)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
+  const promptContent = `${biContext}${buildLeadFacts(lead)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 A booking link is added automatically AFTER your text — do NOT type any URL yourself.
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
+${sequenceSuffix}
 ${openerDirective}
 
 ${COLD_EMAIL_FEWSHOTS}
@@ -275,8 +324,11 @@ Rules for body:
 
 Return ONLY a JSON object with this exact format:
 {"subject":"...","body":"line1\\nline2\\nline3"}
-The body must use \\n between paragraphs.${lang}`,
-  }], { maxTokens: 700, temperature: 0.8 });
+The body must use \\n between paragraphs.${lang}`;
+  const text = gate
+    ? (await gate.run(promptContent, { maxTokens: 700, temperature: 0.8 })) ?? ""
+    : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 700, temperature: 0.8 });
+  if (gate && !text.trim()) return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix); // conserve on empty AI
 
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -318,21 +370,39 @@ function localSpamScore(subject: string, body: string): { score: number; hint: s
 }
 
 const abCache = new Map<string, { subs: string[]; at: number }>();
-async function getAltSubjects(campaignId: string, offer: string, biContext = ""): Promise<string[]> {
+async function getAltSubjects(campaignId: string, offer: string, biContext = "", gate?: AiCallHandle): Promise<string[]> {
   const hit = abCache.get(campaignId);
   if (hit && Date.now() - hit.at < 600_000) return hit.subs;
   let subs: string[] = [];
-  try {
-    const altText = await groqChat([{
-      role: "user",
-      content: `${biContext}Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
-Write 5 alternative email subject lines for this offer. Rules: max 8 words each, CLEAR and concrete about what we deliver — a busy person should understand the offer from the subject alone. No riddles, no vague curiosity hooks. Never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`,
-    }], { maxTokens: 200, temperature: 0.9 });
-    subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5)
-      .map((l: string) => sanitizeSubject(l, offer));
-  } catch (_e) { /* variant B falls back to A */ }
+  if (!gate || gate.mode === "ai") {
+    const promptContent = `${biContext}Our cold outreach offer: ${sanitizeForPrompt(offer, 300)}
+Write 5 alternative email subject lines for this offer. Rules: max 8 words each, CLEAR and concrete about what we deliver — a busy person should understand the offer from the subject alone. No riddles, no vague curiosity hooks. Never spammy, no ALL CAPS, no emojis. Return one per line, no numbering.`;
+    try {
+      const altText = gate
+        ? (await gate.run(promptContent, { maxTokens: 200, temperature: 0.9 })) ?? ""
+        : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 200, temperature: 0.9 });
+      subs = altText.split("\n").map((l: string) => l.replace(/^[\d.\-\s"']+/, "").trim()).filter(Boolean).slice(0, 5)
+        .map((l: string) => sanitizeSubject(l, offer));
+    } catch (_e) { /* variant B falls back to A */ }
+  }
   abCache.set(campaignId, { subs, at: Date.now() });
   return subs;
+}
+
+// Per-invocation next_sequence_hint cache (mirrors styleCache in inbox-agent:
+// read once per campaign per invocation, never across invocations). Missing/
+// stale/kill-switched => null => prompts stay byte-identical to today.
+const sequenceHintCache = new Map<string, CampaignHint | null>();
+async function sequenceHintFor(db: ReturnType<typeof createClient>, campaignId: string): Promise<CampaignHint | null> {
+  if (!campaignId) return null;
+  if (!sequenceHintCache.has(campaignId)) {
+    try {
+      sequenceHintCache.set(campaignId, await getNextSequenceHint(db, campaignId));
+    } catch {
+      sequenceHintCache.set(campaignId, null);
+    }
+  }
+  return sequenceHintCache.get(campaignId)!;
 }
 
 type QueueJob = {
@@ -366,6 +436,17 @@ Deno.serve(async (req) => {
   if (!isCron && !isService) return json({ error: "Unauthorized" }, 401);
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey!);
+
+  // Run-marker: unconditional proof this invocation EXECUTED (health-check's
+  // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
+  try {
+    await insertAudit(supabase as any, {
+      user_id: null,
+      event: "send.worker.run",
+      payload: { at: new Date().toISOString() },
+    });
+  } catch { /* marker is best-effort; the send pipeline is authoritative */ }
+
   const startedAt = Date.now();
 
   // FOLLOW-UP AI CONTEXT (must be before try block to avoid TDZ)
@@ -394,7 +475,12 @@ Deno.serve(async (req) => {
 
       for (const job of jobs as QueueJob[]) {
         try {
-          await insertAudit(supabase, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: job.lead_id, event: "email.claimed", payload: { job_id: job.id, attempt: job.attempts } });
+          // Advisory lead-score read (Stage 5): behind the agent_config kill-switch,
+          // stale/missing => null => logged as such. Purely observational here —
+          // priority shaping of the queue ORDER happens at enqueue (send-campaign)
+          // and at claim (claim_queue_jobs_v2); volume stays owned by sender_health.
+          const leadScore = await getLeadScore(supabase, { userId: job.user_id, campaignId: job.campaign_id, leadId: job.lead_id });
+          await insertAudit(supabase, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: job.lead_id, event: "email.claimed", payload: { job_id: job.id, attempt: job.attempts, ...(leadScore ? { lead_score: leadScore.score, lead_tier: leadScore.tier, lead_score_version: leadScore.score_version, lead_score_at: leadScore.computed_at } : { lead_score: null }) } });
           let slotHeld = false;
 
           let ctx = ctxs.get(job.user_id);
@@ -468,11 +554,12 @@ Deno.serve(async (req) => {
     const tok = await getAccessToken(db, uid).catch(() => null);
     if (!tok) return null;
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
-    const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
+    const ceil = profile.gmail_account_type === "workspace" ? 2000 : 500;
+    const dailyCap = await resolveDailyCap(db, profile, limits.dailyEmails, ceil);
     const today = new Date().toISOString().split("T")[0];
     return {
       profile,
-      dailyCap: Math.min(limits.dailyEmails, 5 + daysWarm * 5, profile.gmail_account_type === "workspace" ? 2000 : 500),
+      dailyCap,
       today,
       sentToday: profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0,
       exhausted: false,
@@ -511,8 +598,7 @@ Deno.serve(async (req) => {
     if (sup) return "lead_suppressed_db";                                                  // 5/7 (DB truth)
     if (!profile.gmail_connected) return "gmail_disconnected";                             // 1/2
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
-    const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
-    const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);
+    const cap = await resolveDailyCap(db, profile, limits.dailyEmails, profile.gmail_account_type === "workspace" ? 2000 : 500);
     const today = new Date().toISOString().split("T")[0];
     const used = profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0;
     if (used >= cap) return "daily_limit";                                                 // 9/10
@@ -559,30 +645,51 @@ Deno.serve(async (req) => {
 
     const biCtx = buildBIContext(ctx.profile);
 
+    // Stage 6: campaign-tracked next-step advice (36h fresh, kill-switch gated).
+    // Advisory-only: null => prompts byte-identical to today. Applied => the
+    // email.sent audit carries the campaign_learning strategy_ref + model_version.
+    const seqHint = await sequenceHintFor(db, job.campaign_id);
+    const seqSuffix = seqHint ? sequenceHintSuffix(seqHint.hint) : "";
+
     let variant = job.variant;
+
+    // Stage 7: AI-cost gate. mode !== 'ai' => the whole send degenerates to the
+    // deterministic template (no LLM, no ledger, no debit). mode === 'ai' => the
+    // gate reserves the durable counter; the meter settles actual-after.
+    const aiGate = await openAiCall(supabase, {
+      userId: job.user_id, campaignId: job.campaign_id, leadId: lead.id,
+      kind: "gen_email", plan: effectivePlan(ctx.profile), fn: "send-worker", groqChat,
+    }, 700);
     if (variant === "B") {
-      const subs = await getAltSubjects(job.campaign_id, String(ctx.profile.offer ?? "our services"), biCtx);
+      const subs = aiGate.mode === "ai"
+        ? await getAltSubjects(job.campaign_id, String(ctx.profile.offer ?? "our services"), biCtx, aiGate)
+        : [];
       if (subs.length === 0) variant = null;
     }
 
     const destLink = String(ctx.profile.website_url || ctx.profile.booking_link || "");
     const leadLang = detectLeadLanguage(lead, ctx.profile);
-    let gen = await generateEmail(
-      String(ctx.profile.name ?? "Best regards"),
-      lead,
-      String(ctx.profile.offer ?? "our service"),
-      destLink,
-      biCtx,
-      leadLang === "ar"
-    );
+    let gen = aiGate.mode === "ai"
+      ? await generateEmail(
+          String(ctx.profile.name ?? "Best regards"),
+          lead,
+          String(ctx.profile.offer ?? "our service"),
+          destLink,
+          biCtx,
+          leadLang === "ar",
+          "",
+          seqSuffix,
+          aiGate
+        )
+      : templateEmail(String(ctx.profile.name ?? "Best regards"), lead, String(ctx.profile.offer ?? "our service"), leadLang === "ar", seqSuffix);
     if (variant === "B") {
-      const subs = abCache.get(job.campaign_id)?.subs ?? [];
+      const subs = aiGate.mode === "ai" ? (abCache.get(job.campaign_id)?.subs ?? []) : [];
       if (subs.length > 0) gen.subject = subs[Math.floor(Math.random() * subs.length)];
     }
     let check = localSpamScore(gen.subject, gen.body);
-    if (check.score < 60 && check.hint) {
+    if (check.score < 60 && check.hint && aiGate.mode === "ai") {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint);
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint, seqSuffix, aiGate);
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
@@ -670,7 +777,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     }
 
     ctx.sentToday++;
-    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), followup_initialized: campCheck?.followups_enabled !== false } });
+    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), followup_initialized: campCheck?.followups_enabled !== false }, ...(seqHint ? { model_version: "campaign_learning/v1", strategy_ref: strategyRef(job.campaign_id, seqHint.version) } : {}) });
     return true;
   }
 
@@ -694,12 +801,13 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     arabic = false,
     openerDirective = "",
     leadFacts = "",
+    sequenceSuffix = "",
+    gate?: AiCallHandle
   ): Promise<{ subject: string; body: string }> {
+    if (gate && gate.mode !== "ai") return templateFollowUp(senderName, leadName, leadCompany, userOffer, currentStep, totalSteps, arabic);
     const history = previousEmails.map((e, i) => `Email ${i + 1}:\n${e}`).join("\n\n");
     const arc = followUpArc(currentStep, totalSteps);
-    const text = await groqChat([{
-      role: "user",
-      content: `${biContext}${leadFacts}${FOLLOWUP_COPY_CONTEXT}
+    const promptContent = `${biContext}${leadFacts}${FOLLOWUP_COPY_CONTEXT}
 
 Write follow-up email #${currentStep} of ${totalSteps} to ${sanitizeForPrompt(leadName, 80)}, ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
 Our offer: ${sanitizeForPrompt(userOffer, 300)}
@@ -710,6 +818,8 @@ ${history || "(no previous emails available)"}
 
 ${arc}
 
+${sequenceSuffix}
+
 ${openerDirective ? `\n${openerDirective}\n` : ""}
 ${bookingLink ? `A booking link exists: ${sanitizeForPrompt(bookingLink, 200)}. Mention it at most ONCE total across the whole thread — if a previous email already shared it, do NOT paste it again.` : "No booking link is configured. Do NOT invent one."}
 
@@ -718,8 +828,11 @@ Rules:
 - Body: 30-80 words. Natural, conversational. Acknowledge you've reached out before.
 - Follow the ARC PHASE above exactly — every step must feel like a different, thoughtful touch, never a re-send dressed up.
 - Return ONLY a JSON object: {"subject":"...","body":"line1\\nline2"}
-The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT — WRITE IN ARABIC with professional Gulf business tone. Keep company names in Latin script." : ""}`,
-    }], { maxTokens: 500, temperature: 0.85 });
+The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT — WRITE IN ARABIC with professional Gulf business tone. Keep company names in Latin script." : ""}`;
+    const text = gate
+      ? (await gate.run(promptContent, { maxTokens: 500, temperature: 0.85 })) ?? ""
+      : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 500, temperature: 0.85 });
+    if (gate && !text.trim()) return templateFollowUp(senderName, leadName, leadCompany, userOffer, currentStep, totalSteps, arabic); // conserve on empty AI
 
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
@@ -844,9 +957,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
 
         // ── DAILY CAP CHECK ──
         const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
-        const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
         const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
-        const cap = Math.min(limits.dailyEmails, 5 + daysWarm * 5, baseCap);
+        const cap = await resolveDailyCap(db, profile, limits.dailyEmails, baseCap);
         const { data: reserved } = await db.rpc("reserve_send_slot", { p_user: campaign.user_id, p_cap: cap });
         if (!reserved) {
           // Defer 1 hour — restore to 'active' so next worker picks it up
@@ -882,25 +994,43 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         const destLink = String(profile.website_url || profile.booking_link || "");
         const leadLang = detectLeadLanguage(lead, profile);
         const fuOpener = pickOpenerDirective(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`);
-        const gen = await generateFollowUp(
-          String(profile.name ?? "Best regards"),
-          lead.name ?? "there",
-          lead.company ?? "your company",
-          lead.job_title ?? "professional",
-          String(profile.offer ?? "our service"),
-          previousBodies,
-          nextStep,
-          14,
-          destLink,
-          biCtx,
-          leadLang === "ar",
-          fuOpener,
-          buildLeadFacts(lead),
-        );
+        const fuSeqHint = await sequenceHintFor(db, campaign.id);
+        const fuSeqSuffix = fuSeqHint ? sequenceHintSuffix(fuSeqHint.hint) : "";
+        const fuGate = await openAiCall(db, {
+          userId: campaign.user_id, campaignId: campaign.id, leadId: lead.id,
+          kind: "gen_followup", plan: effectivePlan(profile), fn: "send-worker", groqChat,
+        }, 500);
+        const gen = fuGate.mode === "ai"
+          ? await generateFollowUp(
+              String(profile.name ?? "Best regards"),
+              lead.name ?? "there",
+              lead.company ?? "your company",
+              lead.job_title ?? "professional",
+              String(profile.offer ?? "our service"),
+              previousBodies,
+              nextStep,
+              14,
+              destLink,
+              biCtx,
+              leadLang === "ar",
+              fuOpener,
+              buildLeadFacts(lead),
+              fuSeqSuffix,
+              fuGate,
+            )
+          : templateFollowUp(
+              String(profile.name ?? "Best regards"),
+              lead.name ?? "there",
+              lead.company ?? "your company",
+              String(profile.offer ?? "our service"),
+              nextStep,
+              14,
+              leadLang === "ar",
+            );
 
         // Spam check
         let check = localSpamScore(gen.subject, gen.body);
-        if (check.score < 60 && check.hint) {
+        if (check.score < 60 && check.hint && fuGate.mode === "ai") {
           try {
             const retry = await generateFollowUp(
               String(profile.name ?? "Best regards"),
@@ -916,6 +1046,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
               leadLang === "ar",
               fuOpener,
               buildLeadFacts(lead),
+              fuSeqSuffix,
+              fuGate,
             );
             if (localSpamScore(retry.subject, retry.body).score > check.score) {
               Object.assign(gen, retry);
@@ -974,6 +1106,7 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
             gmail_message_id: ids.id,
             next_delay_days: nextSeqDelay,
           },
+          ...(fuSeqHint ? { model_version: "campaign_learning/v1", strategy_ref: strategyRef(campaign.id, fuSeqHint.version) } : {}),
         });
 
         followupsSent++;

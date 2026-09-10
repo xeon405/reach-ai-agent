@@ -34,12 +34,14 @@ Deno.serve(async (req) => {
 
     // 2. Delete all owned rows (order matters: children before parents)
     const tables = [
+      { name: "ai_spend_ledger", column: "user_id" },
       { name: "audit_events", column: "user_id" },
       { name: "owner_alerts", column: "user_id" },
       { name: "ai_classifications", column: "user_id" },
       { name: "email_threads", column: "user_id" },
       { name: "tracking_events", column: "user_id" },
       { name: "suppressions", column: "user_id" },
+      { name: "push_queue", column: "user_id" },
       { name: "send_queue", column: "user_id" },
       { name: "usage_limits", column: "user_id" },
       { name: "referrals", column: "referrer_id" },
@@ -50,12 +52,34 @@ Deno.serve(async (req) => {
       { name: "profiles", column: "id" },
     ];
 
+    const failures: string[] = [];
     for (const { name, column } of tables) {
       try {
-        await supabase.from(name).delete().eq(column, userId);
-      } catch (_e) {
-        // Continue deleting remaining tables even if one fails
+        const r = await supabase.from(name).delete().eq(column, userId);
+        if (r.error) {
+          failures.push(`${name}: ${r.error.message}`);
+          break;
+        }
+      } catch (e) {
+        failures.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+        break;
       }
+    }
+
+    // agent_config has no FK (scope_id is polymorphic). Erase user-scoped rows
+    // explicitly; glob/campaign-scoped rows are not per-user.
+    try {
+      const r = await supabase.from("agent_config").delete().eq("scope", "user").eq("scope_id", userId);
+      if (r.error) failures.push(`agent_config: ${r.error.message}`);
+    } catch (e) {
+      failures.push(`agent_config: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // Erasure must not proceed if any table failed — no silent partial deletion.
+    // The auth user is kept so the account owner can retry (deletes are idempotent).
+    if (failures.length > 0) {
+      console.error("[delete-account] partial erasure", failures);
+      return json({ error: "Partial account deletion — some tables failed", failed: failures }, 400);
     }
 
     // 3. Delete the auth user

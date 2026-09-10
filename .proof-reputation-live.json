@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "pg_cron actually fired reputation-nightly after reschedule",
+      "ok": true,
+      "detail": "run#36440 succeeded @2026-09-10 01:24:00.049153+00"
+    },
+    {
+      "name": "canonical schedule restored (normalized compare)",
+      "ok": true,
+      "detail": "now=15 1 * * * (was 15 1 * * *) target/secret intact=true"
+    },
+    {
+      "name": "ledger refreshed (all mailboxes strictly newer), via a real cron-dispatched run",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mailbox 39b65a0f... last_measured_at advances",
+      "ok": true,
+      "detail": "2026-09-10 01:21:07.181+00 -> 2026-09-10 01:24:02.314+00"
+    },
+    {
+      "name": "mailbox b0191c66... last_measured_at advances",
+      "ok": true,
+      "detail": "2026-09-10 01:21:06.911+00 -> 2026-09-10 01:24:01.912+00"
+    },
+    {
+      "name": "mailbox e0582be3... last_measured_at advances",
+      "ok": true,
+      "detail": "2026-09-10 01:21:07.419+00 -> 2026-09-10 01:24:02.614+00"
+    },
+    {
+      "name": "self-verifying audit health.report.run landed with mailboxes_measured>=3",
+      "ok": true,
+      "detail": "rows=1"
+    },
+    {
+      "name": "no per-mailbox errors recorded",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "failures": [],
+  "sender_health_after": [
+    {
+      "profile_id": "39b65a0f-2c1d-48e2-9ee7-a358ba8d0570",
+      "last_measured_at": "2026-09-10 01:24:02.314+00"
+    },
+    {
+      "profile_id": "b0191c66-09bc-4978-974c-77044446452e",
+      "last_measured_at": "2026-09-10 01:24:01.912+00"
+    },
+    {
+      "profile_id": "e0582be3-4a99-4c6d-8ed3-b51af86df725",
+      "last_measured_at": "2026-09-10 01:24:02.614+00"
+    }
+  ],
+  "audit_rows": [
+    {
+      "id": 850,
+      "payload": {
+        "at": "2026-09-10T01:24:02.656Z",
+        "errors": [],
+        "mailboxes_measured": 3
+      }
+    }
+  ],
+  "t_seconds": "112.2",
+  "job_restored": "15 1 * * *"
+}

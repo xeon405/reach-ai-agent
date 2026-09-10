@@ -19,6 +19,20 @@ import {
 import { insertAudit } from "../_shared/audit.ts";
 import { signToken } from "../_shared/crypto.ts";
 import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
+import { resolveAgentConfig, replyPolicySuffix, type AgentConfig } from "../_shared/agent-config.ts";
+import { openAiCall, type AiCallHandle } from "../_shared/ai-cost-gate.ts";
+import {
+  summarizeThreadMemory,
+  memoryContextFor,
+  formatFactsForPrompt,
+  type MemoryMessage,
+} from "../_shared/thread-memory.ts";
+import {
+  getReplyStyleHint,
+  replyStyleSuffix,
+  strategyRef,
+  type CampaignHint,
+} from "../_shared/intelligence-reads.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,8 +52,82 @@ function buildBIContext(profile: Record<string, unknown>): string {
   if (parts.length === 0) return "";
   return `BUSINESS CONTEXT:\n${parts.join("\n")}\n\n`;
 }
-const CONFIDENCE_FLOOR = 0.55;
-const MAX_AI_REPLIES_PER_LEAD_24H = 5;
+const MAX_TURN_BUDGET_CEILING = 10; // hard SQL scan bound; the real budget is config-driven (agent_config)
+
+// Per-invocation config cache. Judgment knobs are read once per (user, campaign).
+const cfgCache = new Map<string, AgentConfig>();
+async function configFor(
+  db: ReturnType<typeof createClient>,
+  userId: string,
+  campaignId: string | null,
+): Promise<AgentConfig> {
+  const k = `${userId}|${campaignId ?? ""}`;
+  if (!cfgCache.has(k)) cfgCache.set(k, await resolveAgentConfig(db, { userId, campaignId }));
+  return cfgCache.get(k)!;
+}
+
+// Traceability: the effective config under which a decision was made travels with
+// the audit payload so a tuned decision can be reconstructed later (formal
+// decision_id/model_version columns arrive with the Stage 3 audit_events migration).
+function cfgAudit(cfg: AgentConfig) {
+  return {
+    confidence_floor: cfg.confidence_floor,
+    turn_budget: cfg.turn_budget,
+    reply_policy: cfg.reply_policy,
+    max_ai_replies_per_lead_24h: cfg.max_ai_replies_per_lead_24h,
+  };
+}
+
+// Per-invocation reply-style-hint cache (mirrors cfgCache: read once per
+// decision, never across invocations). Null campaign or any failure => null =>
+// the drafting prompts stay byte-identical to today.
+const styleCache = new Map<string, CampaignHint | null>();
+async function styleHintFor(
+  db: ReturnType<typeof createClient>,
+  userId: string,
+  campaignId: string | null,
+): Promise<CampaignHint | null> {
+  if (!campaignId) return null;
+  const k = `${userId}|${campaignId}`;
+  if (!styleCache.has(k)) styleCache.set(k, await getReplyStyleHint(db, campaignId));
+  return styleCache.get(k)!;
+}
+
+// Per-invocation cache of each lead's own outbound Gmail ids (ai.reply_sent +
+// followup.sent). The takeover guard must never treat OUR sends as an owner
+// reply — Gmail stamps our drafts with to:<lead> in Sent, so a date-only match
+// silently parks every thread we respond to (probe audits #408/#413). Cache
+// (incl. empty) never crosses invocations. Read failure => empty set => the
+// internalDate gate below still has to clear before a takeover fires.
+const ownSentIdsCache = new Map<string, { ids: Set<string>; unavailable: boolean }>();
+async function ownOutboundMessageIds(
+  db: ReturnType<typeof createClient>,
+  userId: string,
+  leadId: string,
+): Promise<{ ids: Set<string>; unavailable: boolean }> {
+  const k = `${userId}|${leadId}`;
+  if (!ownSentIdsCache.has(k)) {
+    const ids = new Set<string>();
+    let unavailable = false;
+    try {
+      const { data } = await db
+        .from("audit_events")
+        .select("payload")
+        .eq("user_id", userId)
+        .eq("lead_id", leadId)
+        .in("event", ["ai.reply_sent", "followup.sent"])
+        .gte("created_at", new Date(Date.now() - 48 * 3600 * 1000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(20);
+      for (const a of data ?? []) {
+        const gid = String((a as { payload: { gmail_message_id?: unknown } }).payload?.gmail_message_id ?? "");
+        if (gid) ids.add(gid);
+      }
+    } catch { unavailable = true; }
+    ownSentIdsCache.set(k, { ids, unavailable });
+  }
+  return ownSentIdsCache.get(k)!;
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -293,6 +381,57 @@ async function fetchTokenMap(db: ReturnType<typeof createClient>, ids: string[])
   return Object.fromEntries((data ?? []).map((r) => [r.profile_id, r.refresh_token]));
 }
 
+/** Full Gmail thread -> MemoryMessage[] for the memory builder. Only facts are
+ *  persisted upstream; the transcript itself never leaves Gmail. */
+async function gmailThreadMessages(
+  threadId: string,
+  accessToken: string,
+  senderEmail: string,
+): Promise<MemoryMessage[]> {
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const out: MemoryMessage[] = [];
+    for (const m of (data.messages ?? []) as Array<{ id?: string; internalDate?: string; payload?: unknown }>) {
+      const body = stripQuoted(extractGmailBody((m.payload as { payload?: unknown }) ?? m.payload)).slice(0, 700);
+      if (!body) continue;
+      const from = (m.payload as { headers?: Array<{ name: string; value: string }> })?.headers
+        ?.find((h) => h.name === "From")?.value ?? "";
+      const fromEmail = (from.match(/<([^>]+)>/) ?? ["", from])[1].toLowerCase();
+      out.push({
+        id: m.id ?? "",
+        internalDateMs: Number(m.internalDate ?? 0),
+        fromEmail,
+        senderEmail: String(senderEmail || "").toLowerCase(),
+        body,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+// Stage 7 gate helper: opens the AI-cost gate for a call site. Returns null when
+// the gate refuses (mode !== 'ai') — the call site then skips the LLM entirely
+// (deterministic path: no LLM, no ledger, no debit). Content keeps the same
+// message shape so prompt text (and behavior) is identical under 'ai'.
+async function gatedChat(
+  db: { from: (t: string) => any; rpc: (f: string, a: any) => Promise<any> },
+  ctx: Parameters<typeof openAiCall>[1],
+  messages: Array<{ role: string; content: string }>,
+  opts: { maxTokens?: number; temperature?: number } = {},
+): Promise<string | null> {
+  const gate = await openAiCall(db, { ...ctx, groqChat });
+  if (gate.mode !== "ai") return null;
+  const promptText = messages.map((m) => (m.role === "system" ? "SYSTEM:\n" : "") + m.content).join("\n---\n");
+  return gate.run(promptText, opts);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET" && new URL(req.url).searchParams.has("health")) {
@@ -307,6 +446,16 @@ Deno.serve(async (req) => {
   if (!isCron && !isService) return json({ error: "Unauthorized" }, 401);
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey!);
+
+  // Run-marker: unconditional proof this invocation EXECUTED (health-check's
+  // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
+  try {
+    await insertAudit(supabase as any, {
+      user_id: null,
+      event: "inbox.run",
+      payload: { at: new Date().toISOString() },
+    });
+  } catch { /* marker is best-effort; the inbox scan is authoritative */ }
 
   let repliesFound = 0;
   let unsubscribes = 0;
@@ -392,6 +541,8 @@ Deno.serve(async (req) => {
 
           const tok = await getAccessToken(supabase, email.user_id);
           if (!tok) continue;
+          const cfg = await configFor(supabase, email.user_id, email.campaign_id);
+          const styleHint = await styleHintFor(supabase, email.user_id, email.campaign_id);
           const afterEpoch = Math.floor(new Date(email.sent_at).getTime() / 1000);
           const q = `from:${lead.email} in:anywhere -category:promotions after:${afterEpoch}`;
           const searchRes = await fetch(
@@ -435,17 +586,22 @@ Deno.serve(async (req) => {
               const threadCtx = threadWindow
                 ? `\n\nEarlier in this thread (read this before classifying — a short reply like "yes" or "no" usually answers a question asked earlier):\n${sanitizeForPrompt(threadWindow, 1300)}`
                 : "";
-              const raw = await groqChat([
+              const memCtx = await memoryContextFor(supabase, lead.id);
+              const memCtxBlock = memCtx ? `\n\nKnown facts about this lead (from memory):\n${memCtx}` : "";
+              const raw = await gatedChat(supabase, {
+                userId: email.user_id, campaignId: email.campaign_id, leadId: lead.id,
+                kind: "classify", plan: profile?.plan ?? null, fn: "inbox-agent",
+              }, [
                 { role: "system", content: classificationSystemPrompt() },
-                { role: "user", content: `Subject: ${sanitizeForPrompt(replySubject, 150)}\nMessage: ${sanitizeForPrompt(fullReplyText || snippet, 800)}${threadCtx}` },
+                { role: "user", content: `Subject: ${sanitizeForPrompt(replySubject, 150)}\nMessage: ${sanitizeForPrompt(fullReplyText || snippet, 800)}${threadCtx}${memCtxBlock}` },
               ], { maxTokens: 320, temperature: 0 });
-              cls = parseClassification(raw, `${replySubject}\n${fullReplyText || snippet}`);
+              if (raw) cls = parseClassification(raw, `${replySubject}\n${fullReplyText || snippet}`);
             } catch (ce) {
               groqFail = String(ce).slice(0, 160);
             }
           }
           // CONFIDENCE FLOOR: heuristic fallback scores 0.3 → auto-routes to human review.
-          if (!cls.confidence || cls.confidence < CONFIDENCE_FLOOR) {
+          if (!cls.confidence || cls.confidence < cfg.confidence_floor) {
             cls.requires_human = true;
           }
           const { error: clsErr } = await supabase.from("ai_classifications").insert({
@@ -456,8 +612,20 @@ Deno.serve(async (req) => {
             suggested_action: cls.suggested_action, reason: cls.reason, raw: { subject: replySubject.slice(0, 150) },
           });
           if (clsErr && String(clsErr.message ?? "").includes("duplicate key")) continue;
-          await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, confidence: cls.confidence, source: "first_reply" } });
+          await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, confidence: cls.confidence, source: "first_reply", cfg: cfgAudit(cfg) } });
           await supabase.from("emails_sent").update({ reply_sentiment: cls.sentiment }).eq("id", email.id);
+
+          // ---- DURABLE MEMORY: summarize this reply into thread_memory ----
+          // Runs before the policy engine so downstream prompt reads of memory
+          // (and any later scan) see the fresh facts. Conserve = no-op.
+          if (threadId && groqKeys().length > 0) {
+            await summarizeThreadMemory(
+              supabase,
+              { userId: email.user_id, campaignId: email.campaign_id, leadId: lead.id, plan: profile?.plan ?? null },
+              (tid, tk) => gmailThreadMessages(tid, tk, profile.gmail_email || profile.email),
+              { token: tok.accessToken, threadId, senderEmail: profile.gmail_email || profile.email, groqChat },
+            ).catch(() => null);
+          }
 
           // ---- POLICY ENGINE DECIDES ------------------------------------
           const { data: camp } = await supabase.from("campaigns").select("autopilot,status").eq("id", email.campaign_id).maybeSingle();
@@ -465,7 +633,7 @@ Deno.serve(async (req) => {
             conv_mode: lead.conv_mode ?? "AI_AUTOPILOT",
             campaign_autopilot: !!camp?.autopilot && camp?.status === "active",
             ai_turns: 0,
-            max_turns: 3,
+            max_turns: cfg.turn_budget,
             lead_status: lead.status ?? "",
             unsubscribed: !!lead.unsubscribed,
           });
@@ -500,7 +668,10 @@ Deno.serve(async (req) => {
               try {
                 const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
                 const histB = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
-                const bDraft = await groqChat([{
+                const bDraft = await gatedChat(supabase, {
+                  userId: email.user_id, campaignId: email.campaign_id, leadId: lead.id,
+                  kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
+                }, [{
                   role: "user",
                   content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
@@ -530,11 +701,11 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                       last_ai_msg_at: new Date().toISOString(),
                       last_lead_msg_at: new Date().toISOString(),
                       ai_turns: newTurns,
-                      ...(newTurns >= 3 ? { ai_paused: true } : {}),
+                      ...(newTurns >= cfg.turn_budget ? { ai_paused: true } : {}),
                     }).eq("id", email.id);
-                    if (newTurns >= 3) {
+                    if (newTurns >= cfg.turn_budget) {
                       await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
-                      await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "handoff", title: "AI turn budget reached", body: "3 AI turns used — thread paused for human review.", priority: "high" });
+                      await supabase.from("owner_alerts").insert({ user_id: email.user_id, lead_id: lead.id, kind: "handoff", title: "AI turn budget reached", body: `${cfg.turn_budget} AI turns used — thread paused for human review.`, priority: "high" });
                     }
                     await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurns } });
                   }
@@ -558,7 +729,10 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
               : `Answer their question from the business context above (what the owner told us). Never invent facts you weren't given. Do NOT push a booking link.`;
             try {
               const threadHistory = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
-              draft = await groqChat([{
+              const rawDraft = await gatedChat(supabase, {
+                userId: email.user_id, campaignId: email.campaign_id, leadId: lead.id,
+                kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
+              }, [{
                 role: "user",
                 content: `${buildBIContext(profile)}A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
@@ -570,9 +744,10 @@ COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factu
 "${sanitizeForPrompt(siteKnowledge, 1800)}"` : ""}${profile.booking_link ? `
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
-Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff. ${intentGuide}
+Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${replyPolicySuffix(cfg.reply_policy)}${replyStyleSuffix(styleHint?.hint ?? "")} ${intentGuide}
 Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST: answer with the amount when the knowledge base contains one; if none${hasSite ? ", say the price is on the site / happy to confirm" : ", say you're happy to confirm it with them directly"} — never invent an amount and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there — but only once, and never repeat a link you already put in your original email above. ${hasSite ? "Do NOT ask them to book a call or meeting — answer fully and stop; if you ask anything, make it a genuine information question, not about booking." : "Politely leave the door open — you may invite one quick call to discuss further only if it's genuinely useful, and never mention booking links."} Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
-              }], { maxTokens: 600, temperature: 0.9 });
+}], { maxTokens: 600, temperature: 0.9 });
+              draft = rawDraft ?? "";
               await supabase.from("emails_sent").update({ ai_draft: draft }).eq("id", email.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_generated", payload: { kind: "first_reply_draft" } });
             } catch (de) {
@@ -592,7 +767,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               aiRepliesSent++;
               await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: draft, gmail_thread_id: ids.threadId }).eq("id", email.id);
               await supabase.from("leads").update({ lifecycle: nextLifecycle(newLifecycle, "classified.interested") }).eq("id", lead.id);
-              await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { gmail_message_id: ids.id } });
+              await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { gmail_message_id: ids.id, ...(styleHint ? { style_hint: styleHint.hint.slice(0, 180) } : {}) }, ...(styleHint ? { decision_id: crypto.randomUUID(), model_version: `campaign_learning/v${styleHint.version}`, strategy_ref: strategyRef(email.campaign_id, styleHint.version) } : {}) });
             }
           }
 
@@ -681,7 +856,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
         .from("emails_sent")
         .select("id, user_id, campaign_id, subject, sent_at, ai_turns, last_lead_msg_at, last_ai_msg_at, ai_paused, replied, reply_sentiment, lead:leads(id, email, name, company, job_title, country, unsubscribed, status, conv_mode, lifecycle)")
         .eq("ai_paused", false)
-        .lt("ai_turns", 3)
+        .lt("ai_turns", MAX_TURN_BUDGET_CEILING)
         .order("sent_at", { ascending: false })
         .limit(40);
 
@@ -706,6 +881,12 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           if (!lead?.email || lead.unsubscribed || !profile || !rt) continue;
           if (["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED", "HUMAN_TAKEOVER"].includes(lead.lifecycle ?? "") || lead.status === "unsubscribed") continue;
 
+          const cfg = await configFor(supabase, t.user_id, t.campaign_id ?? null);
+          // Turn budget already spent → this thread is deliberately left untouched
+          // (matches pre-0b behavior where over-budget threads were never scanned).
+          if ((t.ai_turns ?? 0) >= cfg.turn_budget) continue;
+          const styleHint = await styleHintFor(supabase, t.user_id, t.campaign_id ?? null);
+
           const tok = await getAccessToken(supabase, t.user_id);
           if (!tok) continue;
           const sRes = await fetch(
@@ -717,17 +898,42 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           if (hits.length === 0) continue;
 
           // Owner manually answered after our last AI turn? Human takes over for good.
+          // A takeover may only be triggered by a sent message that is TRULY the
+          // owner's: our own AI reply/follow-up shares the same to:<lead> in Sent,
+          // so a date-only match silently parks every thread we reply to (probe
+          // audits #408/#413). We therefore confirm the newest hit (a) is not one
+          // of our own outbound ids AND (b) was stamped strictly after our last AI
+          // send — a human cannot reply within 1s of our own draft landing.
           if (t.last_ai_msg_at) {
+            const lastAiMs = new Date(t.last_ai_msg_at).getTime();
             const oRes = await fetch(
-              `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(`to:${lead.email} is:sent after:${Math.floor(new Date(t.last_ai_msg_at).getTime() / 1000) + 1}`)}&maxResults=1`,
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(`to:${lead.email} is:sent after:${Math.floor(lastAiMs / 1000) + 1}`)}&maxResults=1`,
               { headers: { Authorization: `Bearer ${tok.accessToken}` } }
             );
-            if (oRes.ok && (((await oRes.json()).messages ?? []).length > 0)) {
-              await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
-              await supabase.from("leads").update({ conv_mode: "HUMAN", lifecycle: nextLifecycle(lead.lifecycle ?? "", "human.takeover") }).eq("id", lead.id);
-              await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "takeover", title: `🤝 You took over: ${lead.name ?? lead.email}`, body: "AI stood down — the thread is yours.", priority: "normal" });
-              await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "human.takeover", payload: { trigger: "owner_replied_manually" } });
-              continue;
+            if (oRes.ok) {
+              const candidate = ((await oRes.json()).messages ?? [])[0] as { id?: string } | undefined;
+              if (candidate?.id) {
+                const { ids: ownIds, unavailable: ownIdsUnavailable } = await ownOutboundMessageIds(supabase, t.user_id, lead.id);
+                if (!ownIds.has(candidate.id)) {
+                  try {
+                    const gRes = await fetch(
+                      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${candidate.id}?format=metadata`,
+                      { headers: { Authorization: `Bearer ${tok.accessToken}` } }
+                    );
+                    if (gRes.ok) {
+                      const meta = (await gRes.json()) as { internalDate?: string };
+                      const sentAtMs = Number(meta.internalDate ?? 0);
+                      if (sentAtMs > lastAiMs) {
+                        await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
+                        await supabase.from("leads").update({ conv_mode: "HUMAN", lifecycle: nextLifecycle(lead.lifecycle ?? "", "human.takeover") }).eq("id", lead.id);
+                        await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "takeover", title: `🤝 You took over: ${lead.name ?? lead.email}`, body: "AI stood down — the thread is yours.", priority: "normal" });
+                        await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "human.takeover", payload: { trigger: "owner_replied_manually", gmail_message_id: candidate.id, ...(ownIdsUnavailable ? { own_ids_unavailable: true } : {}) } });
+                        continue;
+                      }
+                    }
+                  } catch { /* metadata read failed => skip takeover this scan */ }
+                }
+              }
             }
           }
 
@@ -773,7 +979,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           const { count: aiLast24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
             .eq("user_id", t.user_id).eq("lead_id", lead.id).eq("event", "ai.reply_sent")
             .gte("created_at", new Date(Date.now() - 86400000).toISOString());
-          if ((aiLast24 ?? 0) >= MAX_AI_REPLIES_PER_LEAD_24H) {
+          if ((aiLast24 ?? 0) >= cfg.max_ai_replies_per_lead_24h) {
             await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
             await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
             await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "review", title: `🔁 Reply loop stopped: ${lead.name ?? lead.email}`, body: `AI already replied ${aiLast24}× in 24h — thread paused for review.`, priority: "high" });
@@ -788,6 +994,16 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             continue;
           }
 
+          // ---- DURABLE MEMORY (Stage 8): summarize the new window ----
+          if ((hits[0].threadId ?? msg.threadId) && groqKeys().length > 0) {
+            await summarizeThreadMemory(
+              supabase,
+              { userId: t.user_id, campaignId: t.campaign_id, leadId: lead.id, plan: profile?.plan ?? null },
+              (tid, tk) => gmailThreadMessages(tid, tk, profile.gmail_email || profile.email),
+              { token: tok.accessToken, threadId: hits[0].threadId ?? msg.threadId ?? null, senderEmail: profile.gmail_email || profile.email, groqChat },
+            ).catch(() => null);
+          }
+
           // Structured classification of THIS turn
           let cls: Classification = parseClassification("", `${subj}\n${theirWords}`);
           if (groqKeys().length > 0) {
@@ -796,15 +1012,20 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               const threadCtx = threadWindow
                 ? `\n\nEarlier in this thread (read this before classifying — a short reply like "yes" or "no" usually answers a question asked earlier):\n${sanitizeForPrompt(threadWindow, 1300)}`
                 : "";
-              const raw = await groqChat([
-                { role: "system", content: classificationSystemPrompt() },
-                { role: "user", content: `Subject: ${sanitizeForPrompt(subj, 150)}\nMessage: ${sanitizeForPrompt(theirWords, 800)}${threadCtx}` },
-              ], { maxTokens: 320, temperature: 0 });
-              cls = parseClassification(raw, `${subj}\n${theirWords}`);
+              const memCtx = await memoryContextFor(supabase, lead.id);
+              const memCtxBlock = memCtx ? `\n\nKnown facts about this lead (from memory):\n${memCtx}` : "";
+              const raw = await gatedChat(supabase, {
+                  userId: t.user_id, campaignId: t.campaign_id, leadId: lead.id,
+                  kind: "classify", plan: profile?.plan ?? null, fn: "inbox-agent",
+                }, [
+                  { role: "system", content: classificationSystemPrompt() },
+                  { role: "user", content: `Subject: ${sanitizeForPrompt(subj, 150)}\nMessage: ${sanitizeForPrompt(theirWords, 800)}${threadCtx}${memCtxBlock}` },
+                ], { maxTokens: 320, temperature: 0 });
+              if (raw) cls = parseClassification(raw, `${subj}\n${theirWords}`);
             } catch (ce) { groqFail = groqFail || String(ce).slice(0, 160); }
           }
           // CONFIDENCE FLOOR: low-confidence or heuristic-fallback verdicts route to a human, never to an AI send.
-          if (!cls.confidence || cls.confidence < CONFIDENCE_FLOOR) {
+          if (!cls.confidence || cls.confidence < cfg.confidence_floor) {
             cls.requires_human = true;
           }
           const { error: clsErr } = await supabase.from("ai_classifications").insert({
@@ -819,14 +1040,14 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
             await supabase.from("emails_sent").update({ last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
             continue;
           }
-          await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, source: "conversation_turn" } });
+          await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.classified", payload: { intent: cls.intent, sentiment: cls.sentiment, source: "conversation_turn", cfg: cfgAudit(cfg) } });
 
           const campInfo = convCampMap[t.campaign_id];
           const decision = decide(cls, {
             conv_mode: lead.conv_mode ?? "AI_AUTOPILOT",
             campaign_autopilot: !!campInfo?.autopilot && campInfo?.status === "active",
             ai_turns: t.ai_turns ?? 0,
-            max_turns: 3,
+            max_turns: cfg.turn_budget,
             lead_status: lead.status ?? "",
             unsubscribed: !!lead.unsubscribed,
           });
@@ -856,7 +1077,10 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                 try {
 const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
                   const convHistoryB = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
-                   const bReply = await groqChat([{
+                   const bReply = await gatedChat(supabase, {
+                    userId: t.user_id, campaignId: t.campaign_id, leadId: lead.id,
+                    kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
+                  }, [{
                     role: "user",
                     content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
@@ -872,10 +1096,10 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                   if (bReply?.trim()) {
                     const newTurnsB = (t.ai_turns ?? 0) + 1;
                     // Enforce turn limit — don't send if budget exhausted
-                    if (newTurnsB > 3) {
+                    if (newTurnsB > cfg.turn_budget) {
                       await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
                       await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
-                      await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: "3 AI turns used.", priority: "high" });
+                      await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: `${cfg.turn_budget} AI turns used.`, priority: "high" });
                     } else {
                       const ids = await sendGmailRaw(tok.accessToken, buildRawEmail(
                         lead.email,
@@ -888,10 +1112,10 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                         aiRepliesSent++;
                         await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: bReply.trim(), gmail_thread_id: ids.threadId, ai_turns: newTurnsB, last_ai_msg_at: new Date().toISOString() }).eq("id", t.id);
                         await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "booking_self_serve", turn: newTurnsB } });
-                        if (newTurnsB >= 3) {
+                        if (newTurnsB >= cfg.turn_budget) {
                           await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
                           await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
-                          await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: "3 AI turns used.", priority: "high" });
+                          await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: `${cfg.turn_budget} AI turns used.`, priority: "high" });
                         }
                       }
                     }
@@ -909,10 +1133,13 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                 // Escalation with the owner's direct number: reply NOW so the
                 // lead isn't left hanging, then stop. No owner alert here — the
                 // lead now calls/messages the number directly (avoids alert spam).
-                let esc = "";
+                let esc: string | null = "";
                 try {
                   const convHist = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
-                  esc = await groqChat([{
+                  esc = (await gatedChat(supabase, {
+                    userId: t.user_id, campaignId: t.campaign_id, leadId: lead.id,
+                    kind: "escalate", plan: profile?.plan ?? null, fn: "inbox-agent",
+                  }, [{
                     role: "user",
                     content: `${buildBIContext(profile)}A lead in an ongoing email conversation has asked something that needs the owner (${sanitizeForPrompt(profile.name ?? "the owner", 40)}) to answer personally — it should not be answered by automation.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}.
@@ -921,7 +1148,7 @@ Conversation so far (do not repeat anything already shared):
 "${sanitizeForPrompt(convHist, 2000)}"
 The owner's direct phone number (share it exactly once, as a real number): ${sanitizeForPrompt(phone, 40)}
 Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2) honestly say you'll get them the exact details personally, (3) give the phone number once and suggest they call or send a quick text. Never mention an AI assistant, never invent facts, never repeat links. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
-                  }], { maxTokens: 400, temperature: 0.7 });
+                  }], { maxTokens: 400, temperature: 0.7 }));
                 } catch (ee) {
                   groqFail = groqFail || String(ee).slice(0, 160);
                 }
@@ -942,20 +1169,20 @@ Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2
                     }).eq("id", t.id);
                     await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
                     await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { kind: "phone_handoff", turn: newTurns + 1 } });
-                    await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: "requires_human", escalated_with_phone: true } });
+                    await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: "requires_human", escalated_with_phone: true, cfg: cfgAudit(cfg) } });
                     break;
                   }
                 }
                 // Generation or send failed — park quietly; the owner dashboard still shows the thread.
                 await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
                 await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
-                await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: "requires_human", escalated_with_phone: false } });
+                await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: "requires_human", escalated_with_phone: false, cfg: cfgAudit(cfg) } });
                 break;
               }
               await supabase.from("emails_sent").update({ ai_paused: true, last_lead_msg_at: new Date(msgDateMs).toISOString() }).eq("id", t.id);
               await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
               await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: decision.action === "HANDOFF_TO_HUMAN" && cls.requires_human ? "They need a human answer." : "Turn budget used.", priority: "high" });
-              await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: cls.requires_human ? "requires_human" : "turn_budget" } });
+              await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "agent.handoff", payload: { reason: cls.requires_human ? "requires_human" : "turn_budget", cfg: cfgAudit(cfg) } });
               break;
             }
             case "AUTO_REPLY": {
@@ -968,7 +1195,10 @@ Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2
                   ? "Their message was UNCLEAR. Ask a gentle clarifying question to understand what they need."
                   : t.ai_turns > 0 ? "You have already exchanged messages — keep full continuity with the transcript below; do not reintroduce yourself, restate the offer, or repeat any link/CTA already shared." : "";
                 const threadHistory = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
-                aiReply = await groqChat([{
+                aiReply = await gatedChat(supabase, {
+                  userId: t.user_id, campaignId: t.campaign_id, leadId: lead.id,
+                  kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
+                }, [{
                   role: "user",
                   content: `${buildBIContext(profile)}Ongoing email conversation with a lead.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
@@ -982,7 +1212,7 @@ COMPANY KNOWLEDGE BASE (from your website — answer questions factually from th
 Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}
 ${convIntentGuide}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length. Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", keep it honest and brief — never guess"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, ${profile.website_url ? "say the price is on the site" : "explain you'd rather get them the exact details on a quick call"} — never invent an amount. Do NOT push a call or booking${profile.website_url ? " — answer fully from the knowledge base and stop" : " unless they explicitly ask to talk"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length.${replyPolicySuffix(cfg.reply_policy)}${replyStyleSuffix(styleHint?.hint ?? "")} Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", keep it honest and brief — never guess"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, ${profile.website_url ? "say the price is on the site" : "explain you'd rather get them the exact details on a quick call"} — never invent an amount. Do NOT push a call or booking${profile.website_url ? " — answer fully from the knowledge base and stop" : " unless they explicitly ask to talk"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);
@@ -1010,11 +1240,11 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
                     user_id: t.user_id, lead_id: lead.id, gmail_thread_id: ids.threadId ?? null,
                     last_message_id: hits[0].id, turn_count: newTurns, high_priority: false, updated_at: new Date().toISOString(),
                   }, { onConflict: "user_id,lead_id" });
-                  await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { gmail_message_id: ids.id, turn: newTurns } });
-                  if (newTurns >= 3) {
+                  await insertAudit(supabase, { user_id: t.user_id, campaign_id: t.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { gmail_message_id: ids.id, turn: newTurns, ...(styleHint ? { style_hint: styleHint.hint.slice(0, 180) } : {}) }, ...(styleHint ? { decision_id: crypto.randomUUID(), model_version: `campaign_learning/v${styleHint.version}`, strategy_ref: strategyRef(String(t.campaign_id), styleHint.version) } : {}) });
+                  if (newTurns >= cfg.turn_budget) {
                     await supabase.from("emails_sent").update({ ai_paused: true }).eq("id", t.id);
                     await supabase.from("leads").update({ conv_mode: "PAUSED" }).eq("id", lead.id);
-                    await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: "3 AI turns used.", priority: "high" });
+                    await supabase.from("owner_alerts").insert({ user_id: t.user_id, lead_id: lead.id, kind: "handoff", title: `🤝 Handoff: ${lead.name ?? lead.email}`, body: `${cfg.turn_budget} AI turns used.`, priority: "high" });
                   }
                 }
               } else {
