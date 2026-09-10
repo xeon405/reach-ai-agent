@@ -1,9 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Children, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Sparkles, ShieldCheck, CreditCard, Trash2, MailX, Menu, X, Inbox, Search, Send } from "lucide-react";
+import { Children, lazy, Suspense, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Menu, X, Inbox, Search, Send, Target, Calendar } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
+
+// three.js is big (~560 kB minified); load the orb only after first paint/idle
+// so the page's copy, CTAs and CSS render instantly. Vite splits it into its own chunk.
+const HeroOrb = lazy(() => import("@/components/hero-orb").then((m) => ({ default: m.HeroOrb })));
+
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useLang, LangToggle } from "@/lib/i18n";
@@ -265,6 +270,43 @@ function Landing() {
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [orbReady, setOrbReady] = useState(false);
+
+  useEffect(() => {
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let timer: number | undefined;
+    let cancelled = false;
+
+    const boot = () => {
+      if (cancelled) return;
+      if (w.requestIdleCallback) {
+        const id = w.requestIdleCallback(() => setOrbReady(true), { timeout: 2500 });
+        timer = id;
+      } else {
+        timer = window.setTimeout(() => setOrbReady(true), 900);
+      }
+    };
+
+    if (document.readyState === "complete") {
+      boot();
+    } else {
+      window.addEventListener("load", boot, { once: true });
+    }
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", boot);
+      if (timer !== undefined) {
+        if (w.cancelIdleCallback) w.cancelIdleCallback(timer);
+        else window.clearTimeout(timer);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -383,61 +425,68 @@ function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-hero">
-        <div className="mx-auto max-w-5xl px-6 pt-20 pb-24 text-center">
-          <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary animate-fade-in">
-            <Sparkles className="h-3.5 w-3.5" />
-            Built by a hands-on outbound agency
+      <section className="relative w-full min-h-screen bg-[#F7F6F3] dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 pt-24 pb-14 px-6 md:px-12 overflow-hidden flex flex-col justify-between">
+        <div className="mx-auto w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-16">
+          <div className="flex flex-col items-start space-y-6 text-left max-w-xl z-10">
+            <div className="inline-flex items-center gap-2 bg-white/70 border border-[#E0DED9] dark:border-neutral-800 px-3.5 py-1.5 rounded-full text-xs text-neutral-500 dark:text-neutral-400 font-normal">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 dark:bg-neutral-100" />
+              Built by a hands-on outbound agency
+            </div>
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tighter leading-[1.08] text-neutral-950 dark:text-neutral-50">
+              Your AI sales agent <br /> finds, writes &amp; sends.
+            </h1>
+            <p className="text-base md:text-lg text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed max-w-[420px]">
+              OutshipAI builds your lead list, writes personalized cold emails with AI, and sends them on autopilot — while you focus on closing.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-1">
+              <a
+                href="/auth"
+                className="bg-neutral-950 hover:bg-neutral-800 dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 text-white font-medium px-6 py-3.5 rounded-full transition duration-200 flex items-center gap-2 text-sm shadow-md shadow-neutral-950/10 cursor-pointer"
+              >
+                <span>Start free — no card needed</span>
+                <span>→</span>
+              </a>
+              <a
+                href="#pricing"
+                className="bg-transparent hover:border-neutral-400 text-neutral-900 dark:text-neutral-100 border-[1.5px] border-[#E0DED9] dark:border-neutral-700 font-medium px-6 py-3.5 rounded-full transition duration-200 text-sm cursor-pointer"
+              >
+                Pricing
+              </a>
+            </div>
           </div>
-          <div className="hero-grid-decor" aria-hidden />
-          <h1 className="font-display text-balance text-5xl font-black tracking-tight md:text-7xl animate-fade-up" style={{ animationDelay: "60ms" }}>
-            {t("hero_title_a")}{" "}
-            <span className="font-display italic font-semibold">{t("hero_title_b")}</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground md:text-xl animate-fade-up" style={{ animationDelay: "140ms" }}>
-            {t("hero_sub")}
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3 animate-fade-up" style={{ animationDelay: "220ms" }}>
-            <Button asChild size="lg" className="bg-gradient-primary shadow-glow h-12 px-7">
-              <Link to="/auth">
-                {t("hero_cta")} <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="h-12 px-7">
-              <a href="#pricing">{t("nav_pricing")}</a>
-            </Button>
+
+          <div className="relative w-full h-[450px] md:h-[520px]">
+            {orbReady ? (
+              <Suspense fallback={<div className="hero-orb" aria-hidden />}>
+                <HeroOrb />
+              </Suspense>
+            ) : (
+              <div className="hero-orb" aria-hidden />
+            )}
+            <div className="float-email float1"><Mail className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> New lead found · Chicago</div>
+            <div className="float-email float2"><Target className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Reply detected · Interested</div>
+            <div className="float-email float3"><Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Meeting booked · Tomorrow 2pm</div>
           </div>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground animate-fade-up" style={{ animationDelay: "300ms" }}>
-            <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-primary" /> {t("chip_data")}</span>
-            <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4 text-primary" /> {t("chip_card")}</span>
-            <span className="flex items-center gap-1.5"><Trash2 className="h-4 w-4 text-primary" /> {t("chip_delete")}</span>
-            <span className="flex items-center gap-1.5"><MailX className="h-4 w-4 text-primary" /> {t("chip_unsub")}</span>
-          </div>
-          <div className="hero-mock animate-fade-up" style={{ animationDelay: "380ms" }}>
+        </div>
+
+        <div className="mx-auto w-full max-w-5xl relative z-10">
+          <div className="hero-mock">
             <span className="mock-accent" aria-hidden />
+            <div className="float-chip float-chip-a"><i aria-hidden />7.5% reply rate</div>
+            <div className="float-chip float-chip-b"><i aria-hidden />Booked in calendar</div>
             <div className="mock-head">
-              <span className="mock-dots" aria-hidden><i /><i /><i /></span>
-              <span className="mock-title">OutshipAi console</span>
+              <span className="mock-title">Your outbound engine</span>
               <span className="mock-live"><span className="mock-live-dot" />Running</span>
             </div>
-            <div className="mock-panels">
-              <div className="mock-panel">
-                <div className="mock-panel-head"><span>Leads this week</span><b>{stats?.emails_sent ? stats.emails_sent.toLocaleString() : "1,240"}</b></div>
-                <ul className="mock-leads">
-                  <li><span className="mock-avatar">R</span><div className="mock-lead-info"><b>Rayan Saeed</b><span>OpsLead · Dubai</span></div><span className="mock-status mock-status-new">New</span></li>
-                  <li><span className="mock-avatar">O</span><div className="mock-lead-info"><b>Omar Khalil</b><span>RetailTech · Cairo</span></div><span className="mock-status">Replied</span></li>
-                  <li><span className="mock-avatar">S</span><div className="mock-lead-info"><b>Sophie Arnaud</b><span>Finly · Paris</span></div><span className="mock-status mock-status-new">New</span></li>
-                  <li><span className="mock-avatar">M</span><div className="mock-lead-info"><b>Marco Reyes</b><span>Shiply · Madrid</span></div><span className="mock-status">Booked</span></li>
-                </ul>
+            <div className="mock-body">
+              <div>
+                <div className="mock-num">{stats?.emails_sent ? stats.emails_sent.toLocaleString() : "8,940"}</div>
+                <div className="mock-num-lbl">cold emails sent</div>
               </div>
-              <div className="mock-panel">
-                <div className="mock-panel-head"><span>AI draft</span><b>Just now</b></div>
-                <div className="mock-mail">
-                  <div className="mock-mail-subject">3 meetings booked this month — on autopilot</div>
-                  <p className="mock-mail-body">Hi — our system found 40 ICP-fit leads in your first week, wrote on-brand cold emails, and is following up automatically…</p>
-                  <div className="mock-track"><i className="mock-fill" style={{ width: "64%" }} /></div>
-                  <div className="mock-mail-meta">Personalized · 142 words · Sent in 3 min</div>
-                </div>
+              <div className="mock-bars">
+                <div className="mock-row"><span>Leads researched</span><span className="mock-track"><i className="mock-fill" style={{ width: "68%" }} /></span><b>1,240</b></div>
+                <div className="mock-row"><span>New replies</span><span className="mock-track"><i className="mock-fill" style={{ width: "42%" }} /></span><b>96</b></div>
+                <div className="mock-row"><span>Meetings booked</span><span className="mock-track"><i className="mock-fill" style={{ width: "18%" }} /></span><b>12</b></div>
               </div>
             </div>
             <div className="mock-foot">
@@ -446,9 +495,21 @@ function Landing() {
               <span className="mock-chip"><i aria-hidden />One-click unsubscribe</span>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {t("stats_pre")}<Link to="/stats" className="underline hover:text-foreground">{t("stats_link")}</Link>{t("stats_post")}
-          </p>
+        </div>
+
+        <div className="mx-auto w-full max-w-5xl flex flex-wrap items-center justify-center gap-12 md:gap-20 pt-14 z-10">
+          <div className="text-center">
+            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50"><CountUp value={stats?.emails_sent ?? 8940} /></div>
+            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">Cold emails sent</div>
+          </div>
+          <div className="text-center">
+            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">5%+</div>
+            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">Avg reply rate</div>
+          </div>
+          <div className="text-center">
+            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">3 min</div>
+            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">Setup to first send</div>
+          </div>
         </div>
       </section>
 
