@@ -18,6 +18,16 @@
   shared module it imports. Exit 1 = stale bundles are listed. Run it as part of
   every `_shared`-touching change; it is the check that makes this rule verifiable.
 
+### Standing edge-function deploy routine (mandatory, every time)
+- Never call `supabase functions deploy` directly. Use
+  `bash scripts/.ops/deploy-fn.sh <fn-slug> [...]` — it (1) runs the staleness
+  sweep FIRST and BLOCKS the deploy on any stale bundle, (2) reads each
+  function's `verify_jwt` flag from the Management API and preserves it (--no-
+  verify-jwt only where the platform already has it off), and (3) re-runs the
+  sweep after the deploy to prove 0 stale. The sweep is therefore a standing
+  pre-deploy gate, not a reactive tool — the thing that prevents a fourth
+  occurrence of the shared-module freeze bite.
+
 ## SQL validation vs apply (hard rule)
 - **Validate first, always, with `scripts/dryrun-sql.mjs`** — it wraps the input in
   `BEGIN...ROLLBACK`, refuses input that manages its own transaction, and (optionally)
