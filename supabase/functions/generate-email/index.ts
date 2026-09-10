@@ -88,7 +88,7 @@ ${senderName || `${sanitizeForPrompt(yourCompany ?? "the team", 120)} team`}
 - NEVER use placeholders like [Your Name] or [Company] — use only real details given above${senderSig ? `
 - Append this signature block verbatim at the end:\n${senderSig}` : ""}${arabic ? `
 - WRITE IN ARABIC with a professional Gulf business tone. Keep company names in Latin script.` : ""}`,
-    }], { maxTokens: 800 });
+    }], { maxTokens: 800, context: { fn: "generate-email", kind: "gen_email", user_id: userId } });
 
     return json({ content });
   } catch (err) {

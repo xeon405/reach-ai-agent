@@ -752,6 +752,28 @@ meter; live-confirmed via public `tools`/subjects (a ledger row now lands per AI
 call). Residual attribution gap: those four callers pass no `MeterContext`, so the
 rows read `fn=unknown kind=generic` (spend VISIBLE but unattributed; their
 budget posture is the quota-only one the Stage-0 five-function audit accepted).
+**Attribution resolved 2026-09-10:** all four now pass a `MeterContext` —
+generate-email `{fn, kind:gen_email, user_id}`, tools `{fn, kind:subjects}`,
+suggest-areas `{fn, kind:areas, user_id}`, send-reply `{fn, kind:regen, user_id,
+lead_id}`. No reserve/settle (unchanged budget posture) but the spend is
+attributed and reconcilable: generate-email/send-reply rows are user-attributed,
+so the sweep's ledger-side sum now counts them against the durable USD pool
+(pool-ceiling down-step becomes active for them; `consume_ai_quota` remains the
+primary count cap). Live proof `11/11`: tools (public), generate-email +
+suggest-areas under an ephemeral user (suggest-areas needs a cache MISS —
+never-asked niche — to fire the LLM; cached responses legitimately skip both
+LLM and meter), user deleted with profile/cost-state/ledger-cleanup verified.
+send-reply intentionally NOT live-fired (regeneration sends a real email); it
+shares generate-email's exact mechanism (user_id + groqChat context).
+
+**Shared-module staleness sweep (same root cause, 2026-09-10):** every deployed
+function's bundle age checked against the last-write of every `_shared` module
+it transitively imports (script `scripts/.ops/sweep-shared-staleness.mjs`).
+Found 8 stale bundles besides the four: inbox-agent + send-worker (missing the
+guest-bucket additions in ai-cost-gate/groq) and an `audit.ts` cohort
+(track-open/network-intros/referral-claim/unsubscribe/track-click/gmail-oauth).
+All eight redeployed preserving `verify_jwt`; sweep now reports 0 stale across
+all 24 functions. Codified in AGENTS.md (shared-module bundling hard rule).
 
 **Accepted residual + REVISIT ITEM:** the guest wall is a single SHARED bucket —
 one bad actor can exhaust it and degrade the widget for every simultaneous visitor

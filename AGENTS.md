@@ -1,5 +1,23 @@
 # Outreach — developer discipline notes
 
+## Shared-module bundling (hard rule)
+- Edge-function bundles **freeze at deploy time**: editing any
+  `supabase/functions/_shared/*.ts` does NOT propagate to already-deployed
+  functions until their consumers are redeployed. This exact root cause shipped
+  the support-chat zero-meter gap (bundle predated the meter) and a 4-function
+  sibling class (generate-email/tools/suggest-areas/send-reply, all pre-meter),
+  then an `audit.ts` cohort (track-open/network-intros/referral-claim/
+  unsubscribe/track-click/gmail-oauth). Also the same shape as the CRON_SECRET
+  rotation issue: a change in one place silently doesn't reach running code.
+- After every change that touches `_shared/*.ts`, redeploy **every** function
+  that (transitively) imports it, preserving each function's `verify_jwt` flag —
+  read the flags from the Management API first; deploy `verify_jwt:true`
+  functions WITHOUT `--no-verify-jwt`.
+- Prove freshness with `node scripts/.ops/sweep-shared-staleness.mjs` — it
+  compares each deployed function's bundle age against the last-write of every
+  shared module it imports. Exit 1 = stale bundles are listed. Run it as part of
+  every `_shared`-touching change; it is the check that makes this rule verifiable.
+
 ## SQL validation vs apply (hard rule)
 - **Validate first, always, with `scripts/dryrun-sql.mjs`** — it wraps the input in
   `BEGIN...ROLLBACK`, refuses input that manages its own transaction, and (optionally)

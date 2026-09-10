@@ -173,7 +173,7 @@ ${threadHistory ? `\nConversation so far (lines marked "You:" are the sender's O
 Write a 3-4 sentence human reply on behalf of ${prof?.name || "the sender"}. Warm, confident, zero fluff.
 Rules: respond to something SPECIFIC they said. Answer the question they actually asked first. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Never invent prices or facts. Sign off as "Best regards". Return only the reply text.${row.ai_draft ? `
 IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft, 300)}" — write COMPLETELY different wording, structure and opening line.` : ""}${REPLY_CONTINUITY_RULES}`,
-      }], { maxTokens: 600, temperature: 0.9 });
+      }], { maxTokens: 600, temperature: 0.9, context: { fn: "send-reply", kind: "regen", user_id: userId, lead_id: row.lead_id ?? null } });
       if (fresh?.trim()) {
         replyBody = fresh.trim();
         await admin.from("emails_sent").update({ ai_draft: replyBody }).eq("id", emailId);

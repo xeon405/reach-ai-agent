@@ -44,7 +44,7 @@ serve(async (req) => {
   try {
     const cronSecret = Deno.env.get("CRON_SECRET");
     const body = await req.json().catch(() => ({}));
-    await getAuthedUserId(req); // require a valid user session to suggest areas
+    const authedUserId = await getAuthedUserId(req); // require a valid user session to suggest areas
     const { jobTitle, country = "United States" } = body;
     if (!jobTitle) throw new Error("jobTitle is required");
     if (!isGoogleMapsAvailable()) throw new Error("Google Maps integration is not configured");
@@ -115,7 +115,7 @@ Respond ONLY valid JSON:
 {"ranked": ["City, Region", ... in priority order, include ALL listed], "note": "one short sentence explaining the top pick")}`,
             },
           ],
-          { maxTokens: 700, temperature: 0.3 },
+          { maxTokens: 700, temperature: 0.3, context: { fn: "suggest-areas", kind: "areas", user_id: authedUserId } },
         );
         const parsed = extractJson<{ ranked: string[]; note: string }>(out);
         if (parsed && Array.isArray(parsed.ranked) && parsed.ranked.length > 0) {

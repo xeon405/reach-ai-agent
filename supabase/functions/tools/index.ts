@@ -123,7 +123,7 @@ serve(async (req) => {
           content: `Generate 5 cold-email subject lines offering "${sanitizeForPrompt(offer)}" to ${sanitizeForPrompt(audience, 100)}.
 Rules: max 7 words each, personal, curiosity-driven, lowercase style ok. NEVER use the words opportunity, proposal, or "quick question".
 Return ONLY a JSON array of strings.`,
-        }], { maxTokens: 500, temperature: 0.9 });
+        }], { maxTokens: 500, temperature: 0.9, context: { fn: "tools", kind: "subjects" } });
         const parsed = extractJson<string[]>(text);
         const subjects = Array.isArray(parsed) ? parsed : text.split("\n").map((l) => l.trim()).filter(Boolean);
         return json({ subjects: subjects.slice(0, 5) });
