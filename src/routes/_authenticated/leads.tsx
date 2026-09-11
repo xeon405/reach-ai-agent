@@ -51,18 +51,38 @@ function burstConfetti() {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+async function invokeError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: { json?: () => Promise<{ error?: string }> } })?.context;
+  if (typeof ctx?.json === "function") {
+    const payload = await ctx.json().catch(() => null);
+    if (payload?.error) return payload.error;
+  }
+  return (error as { message?: string })?.message ?? "Request failed";
+}
+
 function LeadsPage() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [q, setQ] = useState("");
+  const [deleting, setDeleting] = useState<Set<string>>(new Set());
 
   async function deleteLead(id: string) {
-    if (!window.confirm("Delete this lead? This cannot be undone.")) return;
+    if (!window.confirm("Delete this lead? This permanently removes it AND all its history (memory, emails, meetings, tracking, scores). This cannot be undone.")) return;
+    setDeleting((s) => new Set(s).add(id));
+    const { data, error } = await supabase.functions.invoke("lead-erasure", {
+      body: { action: "delete", leadId: id },
+    });
+    setDeleting((s) => { const n = new Set(s); n.delete(id); return n; });
+    if (error) {
+      toast.error(await invokeError(error));
+      void load();
+      return;
+    }
     setLeads((prev) => prev.filter((l) => l.id !== id));
-    const { error } = await supabase.from("leads").delete().eq("id", id);
-    if (error) { toast.error("Could not delete lead"); void load(); }
-    else toast.success("Lead deleted");
+    const counts = (data as { row_counts?: Record<string, number> } | null)?.row_counts ?? {};
+    const total = Object.values(counts).reduce((a, b) => a + (Number(b) || 0), 0);
+    toast.success(`Lead deleted — ${total} history rows erased`);
   }
 
   async function setLeadStatus(id: string, next: string) {
@@ -439,10 +459,15 @@ function LeadsPage() {
                     </button>
                     <button
                       onClick={() => void deleteLead(l.id)}
-                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      disabled={deleting.has(l.id)}
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                       aria-label="Delete lead"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      {deleting.has(l.id) ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
                 </td>

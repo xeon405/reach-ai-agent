@@ -28,7 +28,7 @@ function collectShared(entry) {
 
 const fns = await fetch(
   `https://api.supabase.com/v1/projects/${getEnv("SUPABASE_PROJECT_REF")}/functions`,
-  { headers: { Authorization: `Bearer ${getEnv("SUPABASE_ACCESS_TOKEN")}` } },
+  { headers: { Authorization: `Bearer ${getEnv("SUPABASE_ACCESS_TOKEN")}`, "Connection": "close" } },
 ).then((r) => r.json());
 
 const rows = fns
@@ -50,6 +50,13 @@ const rows = fns
     };
   });
 
+// Local functions that are NOT yet deployed are a first-deploy state, not a
+// staleness state: there is no bundle to compare against, so they are reported
+// as NEW and never count toward the abort condition (staleCount == 0 stays 0).
+const localSlugs = readdirSync(FUNCS)
+  .filter((s) => !s.startsWith("_") && existsSync(join(FUNCS, s, "index.ts")));
+const localOnly = localSlugs.filter((s) => !fns.some((f) => f.slug === s)).sort();
+
 let staleCount = 0;
 for (const r of rows) {
   const depl = new Date(r.deployed).toISOString().slice(0, 16);
@@ -63,5 +70,16 @@ for (const r of rows) {
     console.log(`ok    ${r.slug.padEnd(18)} v${r.version}  last dup ${depl}  deps: ${depTxt}`);
   }
 }
+for (const s of localOnly) {
+  const deps = collectShared(join(FUNCS, s, "index.ts"));
+  const depTxt = deps.length
+    ? "imports: " + deps.map((d) => d.replace(SHARED + "\\", "").replace(SHARED + "/", "")).join(", ")
+    : "no _shared imports";
+  console.log(`NEW   ${s.padEnd(18)}  not deployed yet (first deploy)  ${depTxt}`);
+}
 console.log(`\n${staleCount} function(s) running a stale shared-module bundle.`);
-process.exit(staleCount ? 1 : 0);
+// Do NOT process.exit(): forcing an immediate exit while the Management-API
+// socket is still held on win32 can crash libuv and corrupt the exit code the
+// deploy gate depends on. Closing via "Connection: close" + a natural exit with
+// process.exitCode keeps 0/1 deterministic.
+process.exitCode = staleCount ? 1 : 0;

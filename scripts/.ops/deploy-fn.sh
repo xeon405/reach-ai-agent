@@ -31,10 +31,25 @@ for FN in "$@"; do
       const f=j.find(x=>x.slug==='$FN');
       process.stdout.write(String(f?.verify_jwt ?? 'missing'));
     })")
-  if [ "$JWT" = "missing" ]; then echo "ABORT: function '$FN' not found." >&2; exit 1; fi
+  # Two explicit pre-deploy states:
+  #   deployed earlier   -> preserve that function's verify_jwt flag verbatim.
+  #   local-only (never deployed) -> FIRST deploy, SUPABASE default posture
+  #                                   (verify_jwt ON). There is no prior flag to
+  #                                   preserve; default-on is the secure choice.
+  #   neither (typo/unknown)      -> abort.
+  if [ ! -d "supabase/functions/$FN" ] && [ "$JWT" = "missing" ]; then
+    echo "ABORT: '$FN' has no local function dir and is not deployed (unknown slug?)." >&2
+    exit 1
+  fi
   FLAGS=(--project-ref "$REF")
-  if [ "$JWT" = "false" ]; then FLAGS+=(--no-verify-jwt); fi
-  echo "== deploying $FN (verify_jwt=$JWT) =="
+  if [ "$JWT" = "missing" ]; then
+    echo "== deploying $FN (FIRST deploy; new function, verify_jwt default ON) =="
+  elif [ "$JWT" = "false" ]; then
+    FLAGS+=(--no-verify-jwt)
+    echo "== deploying $FN (verify_jwt=$JWT preserved) =="
+  else
+    echo "== deploying $FN (verify_jwt=$JWT preserved) =="
+  fi
   supabase functions deploy "$FN" "${FLAGS[@]}" | grep -v "update regularly"
 done
 
