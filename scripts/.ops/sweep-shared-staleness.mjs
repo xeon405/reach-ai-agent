@@ -57,13 +57,26 @@ const localSlugs = readdirSync(FUNCS)
   .filter((s) => !s.startsWith("_") && existsSync(join(FUNCS, s, "index.ts")));
 const localOnly = localSlugs.filter((s) => !fns.some((f) => f.slug === s)).sort();
 
+// Scoped mode: `--exempt <slug>...` removes deployed-and-stale targets from the
+// abort condition only. deploy-fn.sh passes the functions it is about to deploy,
+// because deploying them IS the fix for their own staleness (pre-2026-09-12 the
+// gate aborted even when every stale function was named as a target, forcing a
+// one-off direct `supabase functions deploy` bypass). Non-targeted stale
+// bundles still abort. Exit code reflects NON-exempt staleness; the printed
+// count remains the full, truthful fleet-wide tally either way.
+const argv = process.argv.slice(2);
+const exempt = new Set(argv[0] === "--exempt" ? argv.slice(1) : []);
+const wasScoped = argv[0] === "--exempt";
+
 let staleCount = 0;
+const staleSlugs = [];
 for (const r of rows) {
   const depl = new Date(r.deployed).toISOString().slice(0, 16);
   if (!r.deps?.length) { console.log(`SKIP  ${r.slug.padEnd(18)} v${r.version}  no _shared imports  (deployed ${depl})`); continue; }
   const depTxt = r.deps.map((d) => `${d.file}@${new Date(d.changedAt).toISOString().slice(0, 16)}`).join(", ");
   if (r.stale?.length) {
     staleCount++;
+    staleSlugs.push(r.slug);
     const off = r.stale.map((s) => `${s.file} (wrote ${new Date(s.changedAt).toISOString().slice(0,16)}, deployed ${depl})`).join("; ");
     console.log(`STALE ${r.slug.padEnd(18)} v${r.version}  last dup ${depl}  -> ${off}`);
   } else {
@@ -78,8 +91,19 @@ for (const s of localOnly) {
   console.log(`NEW   ${s.padEnd(18)}  not deployed yet (first deploy)  ${depTxt}`);
 }
 console.log(`\n${staleCount} function(s) running a stale shared-module bundle.`);
+const targeted = staleSlugs.filter((s) => exempt.has(s));
+const blocking = staleSlugs.filter((s) => !exempt.has(s));
+if (wasScoped) {
+  console.log(`(scoped pre-deploy run: exempting deploy targets ${[...exempt].join(", ") || "(none)"}; post-deploy sweep runs UNSCOPED)`);
+}
+if (targeted.length) {
+  console.log(`note: ${targeted.length} stale function(s) are the target(s) of this deploy and are exempt from this pre-deploy abort: ${targeted.join(", ")}`);
+}
+if (blocking.length) {
+  console.log(`ABORT check: stale function(s) OUTSIDE this deploy's targets: ${blocking.join(", ")}`);
+}
 // Do NOT process.exit(): forcing an immediate exit while the Management-API
 // socket is still held on win32 can crash libuv and corrupt the exit code the
 // deploy gate depends on. Closing via "Connection: close" + a natural exit with
 // process.exitCode keeps 0/1 deterministic.
-process.exitCode = staleCount ? 1 : 0;
+process.exitCode = blocking.length ? 1 : 0;

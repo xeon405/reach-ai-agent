@@ -3,10 +3,16 @@
 # Usage:  bash scripts/.ops/deploy-fn.sh <fn-slug> [more-slugs...]
 # Guarantees, in order:
 #   1. The shared-module staleness sweep runs FIRST and BLOCKS the deploy if any
-#      function is running a bundle older than an imported _shared module.
+#      NON-targeted function is running a bundle older than an imported _shared
+#      module. The functions named in THIS invocation are exempt pre-deploy,
+#      because deploying them IS the fix for their own staleness (previously the
+#      gate aborted even when every stale function was named, forcing a one-off
+#      direct `supabase functions deploy` bypass).
 #   2. Every function's verify_jwt flag is read from the Management API and
 #      preserved on the deploy (a mismatch silently changes the auth posture).
-#   3. A final sweep after deploying confirms 0 stale.
+#   3. A final, UNSCOPED sweep after deploying confirms the WHOLE fleet is at 0
+#      stale -- a partial fix (target deployed but still stale, or another fn
+#      stale) must fail loudly, never look clean.
 # This exists because edited _shared/*.ts never reaches running functions until
 # redeploy (see AGENTS.md "Shared-module bundling") -- the sweep is the check
 # that makes that rule checkable on demand.
@@ -18,9 +24,10 @@ if [ "$#" -lt 1 ]; then echo "usage: bash scripts/.ops/deploy-fn.sh <fn-slug> [.
 set -a; . ./.env; set +a   # SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF
 REF="${SUPABASE_PROJECT_REF}"
 
-echo "== pre-deploy staleness sweep =="
-node scripts/.ops/sweep-shared-staleness.mjs || {
-  echo "ABORT: a shared-module bundle is stale. Redeploy that function (or nothing changed on disk?) before proceeding." >&2
+echo "== pre-deploy staleness sweep (scoped: deploy targets exempt -> $*) =="
+node scripts/.ops/sweep-shared-staleness.mjs --exempt "$@" || {
+  echo "ABORT: a stale shared-module bundle exists OUTSIDE this deploy's targets ($*)." >&2
+  echo "       Deploying $* would not fix it -- redeploy the stale function(s) or include them here." >&2
   exit 1
 }
 
@@ -53,5 +60,8 @@ for FN in "$@"; do
   supabase functions deploy "$FN" "${FLAGS[@]}" | grep -v "update regularly"
 done
 
-echo "== post-deploy staleness sweep =="
-node scripts/.ops/sweep-shared-staleness.mjs
+echo "== post-deploy staleness sweep (UNSCOPED: whole fleet must be clean) =="
+node scripts/.ops/sweep-shared-staleness.mjs || {
+  echo "ABORT: the post-deploy sweep is STILL stale -- this deploy did not fully fix staleness. Inspect the sweep output above." >&2
+  exit 1
+}
