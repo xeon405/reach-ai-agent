@@ -232,19 +232,19 @@ function LeadsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} leads</p>
+          <h1 className="text-lg font-semibold tracking-tight">Leads</h1>
+          <p className="text-xs text-muted-foreground">{filtered.length} leads</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={exportCsv}>
-            <Download className="mr-2 h-4 w-4" /> Export CSV
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export CSV
           </Button>
           <label>
             <Button variant="outline" disabled={importing} asChild>
-              <span><Upload className="mr-2 h-4 w-4" /> {importing ? "Importing..." : "Import CSV"}</span>
+              <span><Upload className="mr-1.5 h-3.5 w-3.5" /> {importing ? "Importing..." : "Import CSV"}</span>
             </Button>
             <input type="file" accept=".csv" className="hidden" onChange={importCsv} />
           </label>
@@ -252,16 +252,15 @@ function LeadsPage() {
           {/* AI Find Leads */}
           <Button
             variant="outline"
-            className="border-primary text-primary"
             onClick={() => navigate({ to: "/lead-finder" })}
           >
-            <Sparkles className="mr-2 h-4 w-4" /> Find Leads with AI
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Find Leads with AI
           </Button>
 
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary shadow-glow">
-                <Plus className="mr-2 h-4 w-4" /> Add Lead
+              <Button>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Lead
               </Button>
             </DialogTrigger>
             <DialogContent className="w-full max-w-lg">
@@ -326,7 +325,7 @@ function LeadsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={addLead} className="bg-gradient-primary">Add Lead</Button>
+                <Button onClick={addLead}>Add Lead</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -366,7 +365,7 @@ function LeadsPage() {
         </Select>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-card">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>

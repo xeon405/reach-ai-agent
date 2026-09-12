@@ -230,10 +230,10 @@ function SettingsPage() {
   }
 
   return (
-    <div className="w-full space-y-8">
+    <div className="w-full space-y-4">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your profile and integrations.</p>
+        <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+        <p className="text-xs text-muted-foreground">Manage your profile and integrations.</p>
       </div>
 
       <Section title="Profile">
@@ -428,7 +428,7 @@ function SettingsPage() {
       </Section>
 
       <div className="flex gap-2">
-        <Button onClick={save} disabled={saving} className="bg-gradient-primary shadow-glow">
+        <Button onClick={save} disabled={saving} className="bg-gradient-primary">
           Save changes
         </Button>
       </div>
@@ -580,9 +580,9 @@ function SettingsPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-      <h2 className="mb-4 text-lg font-semibold">{title}</h2>
-      <div className="space-y-4">{children}</div>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-3 text-base font-semibold">{title}</h2>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }

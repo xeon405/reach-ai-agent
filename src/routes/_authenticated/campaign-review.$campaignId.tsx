@@ -200,7 +200,7 @@ function CampaignReviewPage() {
         <Button variant="ghost" onClick={() => navigate({ to: "/campaigns" })}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Campaigns
         </Button>
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
           Campaign not found.
         </div>
       </div>
@@ -247,7 +247,7 @@ function CampaignReviewPage() {
       </div>
 
       {/* Campaign Settings */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+      <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-semibold uppercase text-muted-foreground mb-4">Campaign Settings</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1">
@@ -335,7 +335,7 @@ function CampaignReviewPage() {
       )}
 
       {/* Lead List */}
-      <div className="rounded-2xl border border-border bg-card shadow-card">
+      <div className="rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-sm font-semibold uppercase text-muted-foreground">
             Leads ({stats.eligible} eligible of {stats.total})
@@ -464,7 +464,7 @@ function CampaignReviewPage() {
 
       {/* Launch Button */}
       {!launchResult && (
-        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-primary/20 bg-card p-4 shadow-glow">
+        <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-primary/20 bg-card p-4">
           <div className="text-sm">
             <p className="font-medium">{stats.eligible} lead{stats.eligible !== 1 ? "s" : ""} will be queued for sending</p>
             <p className="text-muted-foreground text-xs">

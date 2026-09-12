@@ -165,7 +165,7 @@ function LeadEditPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card space-y-4">
+      <div className="rounded-lg border border-border bg-card p-4 space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-sm font-medium">Name</label>

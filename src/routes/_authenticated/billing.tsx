@@ -80,14 +80,14 @@ function BillingPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Billing</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Billing</h1>
         <p className="text-sm text-muted-foreground">
           Simple pricing. No hidden fees. Cancel anytime.
         </p>
       </div>
 
       {/* Current Plan */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+      <div className="rounded-lg border border-border bg-card p-4">
         <div className="text-sm text-muted-foreground">Current plan</div>
         <div className="mt-1 flex items-center gap-3">
           <h2 className="text-2xl font-bold capitalize">{plan}</h2>
@@ -130,7 +130,7 @@ function BillingPage() {
           return (
             <div
               key={p.id}
-              className={`rounded-2xl border bg-card p-6 shadow-card relative flex flex-col ${
+              className={`rounded-lg border bg-card p-4 relative flex flex-col ${
                 p.popular ? "border-primary ring-1 ring-primary/40" : "border-border"
               }`}
             >
@@ -158,7 +158,7 @@ function BillingPage() {
               </ul>
 
               <Button
-                className={`mt-6 w-full ${!isCurrent ? "bg-gradient-primary shadow-glow" : ""}`}
+                className={`mt-6 w-full ${!isCurrent ? "bg-gradient-primary" : ""}`}
                 variant={isCurrent ? "outline" : "default"}
                 disabled={isCurrent}
                 onClick={() => window.open(p.checkoutUrl, "_blank")}
@@ -175,14 +175,14 @@ function BillingPage() {
       </div>
 
       {/* Guarantee */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card text-center">
+      <div className="rounded-lg border border-border bg-card p-4 text-center">
         <p className="text-sm text-muted-foreground">
           🔒 <strong>14-day money back guarantee.</strong> No questions asked. Cancel anytime from your dashboard.
         </p>
       </div>
 
       {/* Invoice History */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+      <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="mb-4 text-lg font-semibold">Invoice history</h2>
         <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">

@@ -126,7 +126,7 @@ function CampaignEditPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card space-y-4">
+      <div className="rounded-lg border border-border bg-card p-4 space-y-4">
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium">Campaign Name *</label>

@@ -184,28 +184,28 @@ function EmailsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Conversations</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-lg font-semibold tracking-tight">Conversations</h1>
+          <p className="text-xs text-muted-foreground">
             {emails.length} threads · {emails.filter((e) => e.replied).length} replied · {emails.filter((e) => e.ai_draft).length} drafts ready · {emails.filter((e) => e.ai_paused).length} paused
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setShowAlerts(!showAlerts)}>
-            <Bell className="mr-2 h-4 w-4" />
+            <Bell className="mr-1.5 h-3.5 w-3.5" />
             Alerts
-            {unreadAlerts > 0 && <Badge className="ml-2 bg-destructive text-white">{unreadAlerts}</Badge>}
+            {unreadAlerts > 0 && <Badge variant="secondary" className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium">{unreadAlerts}</Badge>}
           </Button>
-          <Button variant="ghost" size="sm" onClick={loadAll}><RefreshCw className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={loadAll}><RefreshCw className="h-3.5 w-3.5" /></Button>
         </div>
       </div>
 
       {/* Alerts Panel */}
       {showAlerts && (
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card space-y-3">
+        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
           <h2 className="text-sm font-semibold uppercase text-muted-foreground">Owner Alerts</h2>
           {alerts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No alerts yet.</p>
@@ -234,11 +234,11 @@ function EmailsPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
         {/* Email list */}
         <div className="space-y-2">
           {emails.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
               No emails sent yet.
             </div>
           ) : emails.map((e) => {
@@ -250,8 +250,8 @@ function EmailsPage() {
               <button
                 key={e.id}
                 onClick={() => { setSelected(e.id); setShowAlerts(false); }}
-                className={`w-full text-left rounded-2xl border p-4 transition-all hover:border-primary/40 ${
-                  selected === e.id ? "border-primary bg-primary/5 shadow-glow" : "border-border bg-card shadow-card"
+                className={`w-full text-left rounded-lg border p-4 transition-all hover:border-primary/40 ${
+                  selected === e.id ? "border-primary bg-primary/5" : "border-border bg-card"
                 } ${hasDraft ? "ring-2 ring-emerald-500/30" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -297,7 +297,7 @@ function EmailsPage() {
           {selectedEmail ? (
             <>
               {/* Lead info */}
-              <div className="rounded-2xl border border-border bg-card p-4 shadow-card space-y-3">
+              <div className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-semibold uppercase text-muted-foreground">Lead</h2>
                   {selectedEmail.lead?.conv_mode && (
@@ -331,7 +331,7 @@ function EmailsPage() {
               </div>
 
               {/* Conversation timeline */}
-              <div className="rounded-2xl border border-border bg-card p-4 shadow-card space-y-3">
+              <div className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <h2 className="text-sm font-semibold uppercase text-muted-foreground">Conversation</h2>
                 <div className="space-y-3">
                   {/* Original email */}
@@ -412,7 +412,7 @@ function EmailsPage() {
 
               {/* Send reply */}
               {selectedEmail.replied && !selectedEmail.ai_paused && selectedEmail.lead?.conv_mode !== "HUMAN" && (
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 shadow-card space-y-3">
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
                   <h2 className="text-sm font-semibold text-emerald-600">Send Reply</h2>
                   <textarea
                     value={editing[selectedEmail.id] ?? selectedEmail.ai_draft ?? ""}
@@ -450,7 +450,7 @@ function EmailsPage() {
               )}
             </>
           ) : (
-            <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
               <MessageSquare className="h-8 w-8 mx-auto mb-3 opacity-30" />
               <p>Select a conversation to view details</p>
             </div>

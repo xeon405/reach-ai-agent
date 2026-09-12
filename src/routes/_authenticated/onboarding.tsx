@@ -148,7 +148,7 @@ function Onboarding() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-8 shadow-card">
+      <div className="rounded-lg border border-border bg-card p-6">
 
         {/* STEP 1: Your Business */}
         {step === 1 && (
@@ -174,7 +174,7 @@ function Onboarding() {
               <p className="text-xs text-muted-foreground">Why should anyone care? What pain do you take away?</p>
             </div>
             <div className="flex gap-2">
-              <Button className="flex-1 bg-gradient-primary shadow-glow" onClick={() => setStep(2)} disabled={!canNext()}>
+              <Button className="flex-1 bg-gradient-primary" onClick={() => setStep(2)} disabled={!canNext()}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -237,7 +237,7 @@ function Onboarding() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-              <Button className="flex-1 bg-gradient-primary shadow-glow" onClick={() => setStep(3)} disabled={!canNext()}>
+              <Button className="flex-1 bg-gradient-primary" onClick={() => setStep(3)} disabled={!canNext()}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -284,7 +284,7 @@ function Onboarding() {
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-              <Button className="flex-1 bg-gradient-primary shadow-glow" onClick={() => setStep(4)}>
+              <Button className="flex-1 bg-gradient-primary" onClick={() => setStep(4)}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -316,7 +316,7 @@ function Onboarding() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(3)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-              <Button className="flex-1 bg-gradient-primary shadow-glow" onClick={() => setStep(5)}>
+              <Button className="flex-1 bg-gradient-primary" onClick={() => setStep(5)}>
                 Review &amp; Launch <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -358,7 +358,7 @@ function Onboarding() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(4)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-              <Button className="flex-1 bg-gradient-primary shadow-glow" onClick={launch} disabled={saving}>
+              <Button className="flex-1 bg-gradient-primary" onClick={launch} disabled={saving}>
                 <Rocket className="mr-2 h-4 w-4" /> Launch My AI Agent
               </Button>
             </div>

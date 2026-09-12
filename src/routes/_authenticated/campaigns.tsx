@@ -192,17 +192,17 @@ function CampaignsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
-          <p className="text-sm text-muted-foreground">Manage your outbound campaigns.</p>
+          <h1 className="text-lg font-semibold tracking-tight">Campaigns</h1>
+          <p className="text-xs text-muted-foreground">Manage your outbound campaigns.</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={aiOpen} onOpenChange={setAiOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="border-primary text-primary">
-                <Sparkles className="mr-2 h-4 w-4" /> Generate AI Email
+              <Button variant="outline">
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate AI Email
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
@@ -309,8 +309,8 @@ function CampaignsPage() {
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-primary shadow-glow">
-                <Plus className="mr-2 h-4 w-4" /> New Campaign
+              <Button>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> New Campaign
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -326,7 +326,7 @@ function CampaignsPage() {
 
       <div className="grid gap-4">
         {items.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
             No campaigns yet. Click "New Campaign" to get started.
           </div>
         )}
@@ -335,7 +335,7 @@ function CampaignsPage() {
           const ab = abStats?.[c.id];
           const replyRate = s.emails ? Math.round((s.replies / s.emails) * 100) : 0;
           return (
-            <div key={c.id} className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <div key={c.id} className="rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -353,7 +353,7 @@ function CampaignsPage() {
                       />
                     ) : (
                       <h3
-                        className="cursor-pointer rounded-md px-2 py-1 text-lg font-semibold transition-colors hover:bg-muted/50"
+                        className="cursor-pointer rounded-md px-2 py-1 text-base font-semibold transition-colors hover:bg-muted/50"
                         onClick={() => { setEditingId(c.id); setEditingName(c.name); }}
                         title="Click to rename"
                       >
@@ -442,8 +442,8 @@ function CampaignsPage() {
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-0.5 text-xl font-semibold">{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-base font-semibold tabular-nums">{value}</div>
     </div>
   );
 }

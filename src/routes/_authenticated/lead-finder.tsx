@@ -354,7 +354,7 @@ function LeadFinderPage() {
       </div>
 
       {/* Search Form */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+      <div className="rounded-lg border border-border bg-card p-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Business Type *</label>
@@ -782,7 +782,7 @@ function LeadFinderPage() {
 
           {/* Save Bar */}
           {selected.size > 0 && !saved && (
-            <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-primary/20 bg-card p-4 shadow-glow">
+            <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-primary/20 bg-card p-4">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium">
                   {selected.size} lead{selected.size !== 1 ? "s" : ""} selected
@@ -907,7 +907,7 @@ function LeadFinderPage() {
 
       {/* Empty state */}
       {!finding && results.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center">
+        <div className="rounded-lg border border-dashed border-border p-10 text-center">
           <Sparkles className="mx-auto h-10 w-10 text-muted-foreground/40" />
           <p className="mt-3 text-sm text-muted-foreground">
             Select a business type above and click <strong>Find Leads</strong> to discover businesses with public emails.
