@@ -154,9 +154,15 @@ Holds scope overrides + the kill-switch:
   version bumps are monotonic.
 - **Consumers (read):**
   - `send-worker` reads `sender_health.current_cap` (0a), `lead_score`
-    (max-age 24h), `campaign_learning.next_sequence_hint` (max-age 36h).
+    (max-age 24h).
   - `inbox-agent` reads `agent_config` (0b) + `campaign_learning.reply_style_hint`
     (max-age 36h).
+- **`campaign_learning.next_sequence_hint` — CONSUMER BUILT, PRODUCER DEFERRED.**
+  `send-worker`'s follow-up path is fully wired to consume it (kill-switch +
+  staleness bound + `strategy_ref` attribution), but nothing in `learning-loop` folds
+  it: the key is reserved and always `null` today, so follow-up prompts are
+  byte-identical to the unlearned baseline. Deliberately descoped — re-enable by
+  populating the key when a real producer ships (see AUDIT-FOLLOWUP.md).
 - **Staleness = "no opinion":** consumers treat stale/missing reads as today's default
   behavior. Never block a send or a handoff on learning availability. A stale read can
   only hold a value below the current default cap — never raise it.

@@ -181,7 +181,11 @@ export function foldCampaigns(campaigns: Map<string, any>, meetings: Map<string,
       min_sample: { required: MIN_SAMPLE, note: "A/B winner declared only when every variant has >= required sent outcomes and the reply-rate lead is >= min_delta ahead." },
       min_delta: MIN_DELTA,
       last_folded_at: now(),
-      // Stage 5 wires consumer hints behind agent_config toggles.
+      // Producer DEFERRED (audit-2026-09-12): next_sequence_hint / reply_style_hint
+      // are reserved keys. Consumers (send-worker follow-ups, inbox-agent replies)
+      // are built and gated behind agent_config toggles, but the fold intentionally
+      // does NOT populate them — so all production prompts are the unlearned baseline
+      // today. Re-enable here when a real producer ships (see AUDIT-FOLLOWUP.md).
       next_sequence_hint: null,
       reply_style_hint: null,
     });

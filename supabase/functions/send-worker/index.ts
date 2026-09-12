@@ -392,6 +392,8 @@ Write 5 alternative email subject lines for this offer. Rules: max 8 words each,
 // Per-invocation next_sequence_hint cache (mirrors styleCache in inbox-agent:
 // read once per campaign per invocation, never across invocations). Missing/
 // stale/kill-switched => null => prompts stay byte-identical to today.
+// note: CONSUMER BUILT, PRODUCER DEFERRED — learning-loop never populates the
+// key, so this is always null in production (see AUDIT-FOLLOWUP.md).
 const sequenceHintCache = new Map<string, CampaignHint | null>();
 async function sequenceHintFor(db: ReturnType<typeof createClient>, campaignId: string): Promise<CampaignHint | null> {
   if (!campaignId) return null;
@@ -437,15 +439,29 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey!);
 
+  // Dry-run (service-role OR cron-secret only — this project deploys with
+  // verify_jwt=false and the service key is not recoverable, so the cron secret
+  // is the only injected credential): PASS 1 executes the full decision pipeline
+  // but performs NO sends and NO writes — evaluation without touching the wire or
+  // production rows. `x-followup-only` additionally scopes it to specific leads
+  // (also credential-gated; ignored unless dry).
+  const dry = (isService || isCron) &&
+    (req.headers.get("x-followup-dry-run") === "1" || new URL(req.url).searchParams.get("dry") === "1");
+  const onlyIds = dry
+    ? (req.headers.get("x-followup-only") ?? "").split(",").map((s) => s.trim()).filter(Boolean)
+    : null;
+
   // Run-marker: unconditional proof this invocation EXECUTED (health-check's
   // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
-  try {
-    await insertAudit(supabase as any, {
-      user_id: null,
-      event: "send.worker.run",
-      payload: { at: new Date().toISOString() },
-    });
-  } catch { /* marker is best-effort; the send pipeline is authoritative */ }
+  if (!dry) {
+    try {
+      await insertAudit(supabase as any, {
+        user_id: null,
+        event: "send.worker.run",
+        payload: { at: new Date().toISOString() },
+      });
+    } catch { /* marker is best-effort; the send pipeline is authoritative */ }
+  }
 
   const startedAt = Date.now();
 
@@ -463,7 +479,10 @@ Deno.serve(async (req) => {
 
   try {
     // ---------------- PASS 1: due FOLLOW-UPS (re-checked, never blind) ----------
-    const fuStats = await processDueFollowUps(supabase);
+    const fuStats = await processDueFollowUps(supabase, dry, onlyIds);
+    if (dry) {
+      return json({ dry: true, at: new Date().toISOString(), ...fuStats, dryDecisions: fuStats.dryDecisions ?? [] });
+    }
 
     // ---------------- PASS 2: claimed queue jobs --------------------------------
     let sent = 0, failed = 0, retried = 0, dead = 0;
@@ -848,26 +867,37 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
     return { subject: sanitizeSubject(lines[0] ?? "Follow-up", userOffer, leadCompany), body: lines.slice(1).join("\n") || text };
   }
 
-  async function processDueFollowUps(db: ReturnType<typeof createClient>): Promise<{ followupsSent: number; followupsCancelled: number }> {
+  async function processDueFollowUps(
+    db: ReturnType<typeof createClient>,
+    dry = false,
+    onlyIds: string[] | null = null,
+  ): Promise<{ followupsSent: number; followupsCancelled: number; dryDecisions?: Array<Record<string, unknown>> }> {
     let followupsSent = 0, followupsCancelled = 0;
+    const dryDecisions: Array<Record<string, unknown>> = [];
     const now = new Date().toISOString();
 
     // Reclaim stranded 'sending' leads (worker crashed mid-flight after the CAS claim).
     // A healthy send completes in seconds, so anything stuck >30 min is abandoned.
-    try { await db.from("leads").update({ followup_status: "active" })
-      .eq("followup_status", "sending")
-      .lt("next_followup_at", new Date(Date.now() - 30 * 60_000).toISOString())
-      .select("id"); } catch (_e) { /* best effort */ }
+    // (Dry-run performs no writes.)
+    if (!dry) {
+      try { await db.from("leads").update({ followup_status: "active" })
+        .eq("followup_status", "sending")
+        .lt("next_followup_at", new Date(Date.now() - 30 * 60_000).toISOString())
+        .select("id"); } catch (_e) { /* best effort */ }
+    }
 
     // Query leads directly — much simpler and more efficient than scanning emails_sent sentinels
-    const { data: dueLeads } = await db
+    let q = db
       .from("leads")
       .select("*, campaign:campaigns(id, name, status, followups_enabled, user_id)")
       .eq("followup_status", "active")
       .not("next_followup_at", "is", null)
-      .lte("next_followup_at", now)
-      .limit(30);
-    if (!dueLeads || dueLeads.length === 0) return { followupsSent, followupsCancelled };
+      .lte("next_followup_at", now);
+    if (onlyIds && onlyIds.length) q = q.in("id", onlyIds);
+    const { data: dueLeads } = await q.limit(30);
+    if (!dueLeads || dueLeads.length === 0) {
+      return dry ? { followupsSent, followupsCancelled, dryDecisions } : { followupsSent, followupsCancelled };
+    }
 
     // Batch-fetch profiles
     const userIds = [...new Set(dueLeads.map((l) => l.campaign?.user_id).filter(Boolean))];
@@ -889,6 +919,10 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
     }
 
     for (const lead of dueLeads) {
+      // Runtime ceiling (PASS 2 parity): stop once the shared invocation budget is
+      // spent. Unprocessed leads stay 'active' with a past next_followup_at and
+      // roll to the next worker run.
+      if (Date.now() - startedAt >= RUNTIME_MS) break;
       try {
         const campaign = Array.isArray(lead.campaign) ? lead.campaign[0] : lead.campaign;
         if (!campaign) { followupsCancelled++; continue; }
@@ -914,9 +948,13 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         if (repliedCheck) reasons.push("already_replied");
 
         if (reasons.length > 0) {
-          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
+          if (dry) {
+            dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", step: (lead.followup_step ?? 0) + 1, reason: reasons.join(",") });
+          } else {
+            await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
+            await insertAudit(db, { user_id: campaign.user_id, campaign_id: campaign.id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons, step: lead.followup_step } });
+          }
           followupsCancelled++;
-          await insertAudit(db, { user_id: campaign.user_id, campaign_id: campaign.id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons, step: lead.followup_step } });
           continue;
         }
 
@@ -924,7 +962,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         const currentStep = lead.followup_step ?? 0;
         const nextStep = currentStep + 1;
         if (nextStep > 14) {
-          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
+          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", reason: "completed" });
+          else await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
           continue;
         }
 
@@ -932,7 +971,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         const campSeq = seqByCampaign.get(campaign.id) ?? [];
         const nextSeqDef = campSeq.find((s) => s.step === nextStep);
         if (!nextSeqDef) {
-          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
+          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", reason: "completed_no_sequence" });
+          else await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
           continue;
         }
 
@@ -941,37 +981,49 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
           .select("id").eq("campaign_id", campaign.id).eq("lead_id", lead.id).eq("sequence", nextStep).limit(1).maybeSingle();
         if (existingStep) {
           // Already sent — advance the lead to the next step
-          await db.rpc("advance_lead_followup", { p_lead_id: lead.id, p_campaign_id: campaign.id, p_current_step: nextStep });
+          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "already_sent", step: nextStep });
+          else await db.rpc("advance_lead_followup", { p_lead_id: lead.id, p_campaign_id: campaign.id, p_current_step: nextStep });
           continue;
         }
 
         // ── ATOMIC CLAIM: CAS update followup_status from 'active' to 'sending' ──
-        // This prevents concurrent workers from double-sending
-        const { data: claimed } = await db.from("leads")
-          .update({ followup_status: "sending" }, { count: "exact" })
-          .eq("id", lead.id)
-          .eq("followup_status", "active")
-          .select("id")
-          .maybeSingle();
+        // This prevents concurrent workers from double-sending. (Dry-run treats
+        // the lead as claimed without mutating it.)
+        const { data: claimed } = dry
+          ? { data: { id: String(lead.id) } }
+          : await db.from("leads")
+            .update({ followup_status: "sending" }, { count: "exact" })
+            .eq("id", lead.id)
+            .eq("followup_status", "active")
+            .select("id")
+            .maybeSingle();
         if (!claimed) continue;
 
         // ── DAILY CAP CHECK ──
         const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
         const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
         const cap = await resolveDailyCap(db, profile, limits.dailyEmails, baseCap);
-        const { data: reserved } = await db.rpc("reserve_send_slot", { p_user: campaign.user_id, p_cap: cap });
+        const reserved = dry ? true : (await db.rpc("reserve_send_slot", { p_user: campaign.user_id, p_cap: cap })).data;
         if (!reserved) {
           // Defer 1 hour — restore to 'active' so next worker picks it up
-          const nextHour = new Date(Date.now() + 3600_000).toISOString();
-          await db.from("leads").update({ followup_status: "active", next_followup_at: nextHour }).eq("id", lead.id);
+          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "deferred_1h", step: nextStep });
+          else {
+            const nextHour = new Date(Date.now() + 3600_000).toISOString();
+            await db.from("leads").update({ followup_status: "active", next_followup_at: nextHour }).eq("id", lead.id);
+          }
           continue;
         }
 
-        // ── GMAIL TOKEN ──
-        const tok = await getAccessToken(db, campaign.user_id).catch(() => null);
+        // ── GMAIL TOKEN ── (skipped in dry-run: token presence is a read)
+        const tok = dry
+          ? ({ accessToken: "" } as Awaited<ReturnType<typeof getAccessToken>>)
+          : await getAccessToken(db, campaign.user_id).catch(() => null);
         if (!tok) {
-          await db.rpc("release_send_slot", { p_user: campaign.user_id });
-          await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
+          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", reason: "gmail_disconnected" });
+          else {
+            await db.rpc("release_send_slot", { p_user: campaign.user_id });
+            await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
+          }
           followupsCancelled++;
           continue;
         }
@@ -996,41 +1048,45 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         const fuOpener = pickOpenerDirective(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`);
         const fuSeqHint = await sequenceHintFor(db, campaign.id);
         const fuSeqSuffix = fuSeqHint ? sequenceHintSuffix(fuSeqHint.hint) : "";
-        const fuGate = await openAiCall(db, {
-          userId: campaign.user_id, campaignId: campaign.id, leadId: lead.id,
-          kind: "gen_followup", plan: effectivePlan(profile), fn: "send-worker", groqChat,
-        }, 500);
-        const gen = fuGate.mode === "ai"
-          ? await generateFollowUp(
-              String(profile.name ?? "Best regards"),
-              lead.name ?? "there",
-              lead.company ?? "your company",
-              lead.job_title ?? "professional",
-              String(profile.offer ?? "our service"),
-              previousBodies,
-              nextStep,
-              14,
-              destLink,
-              biCtx,
-              leadLang === "ar",
-              fuOpener,
-              buildLeadFacts(lead),
-              fuSeqSuffix,
-              fuGate,
-            )
-          : templateFollowUp(
-              String(profile.name ?? "Best regards"),
-              lead.name ?? "there",
-              lead.company ?? "your company",
-              String(profile.offer ?? "our service"),
-              nextStep,
-              14,
-              leadLang === "ar",
-            );
+        const fuGate = dry
+          ? null
+          : await openAiCall(db, {
+              userId: campaign.user_id, campaignId: campaign.id, leadId: lead.id,
+              kind: "gen_followup", plan: effectivePlan(profile), fn: "send-worker", groqChat,
+            }, 500);
+        const gen: { subject: string; body: string } = dry
+          ? { subject: `Re: dry-run step ${nextStep}`, body: "(dry-run placeholder)" }
+          : (fuGate!.mode === "ai"
+              ? await generateFollowUp(
+                  String(profile.name ?? "Best regards"),
+                  lead.name ?? "there",
+                  lead.company ?? "your company",
+                  lead.job_title ?? "professional",
+                  String(profile.offer ?? "our service"),
+                  previousBodies,
+                  nextStep,
+                  14,
+                  destLink,
+                  biCtx,
+                  leadLang === "ar",
+                  fuOpener,
+                  buildLeadFacts(lead),
+                  fuSeqSuffix,
+                  fuGate,
+                )
+              : templateFollowUp(
+                  String(profile.name ?? "Best regards"),
+                  lead.name ?? "there",
+                  lead.company ?? "your company",
+                  String(profile.offer ?? "our service"),
+                  nextStep,
+                  14,
+                  leadLang === "ar",
+                ));
 
         // Spam check
         let check = localSpamScore(gen.subject, gen.body);
-        if (check.score < 60 && check.hint && fuGate.mode === "ai") {
+        if (!dry && check.score < 60 && check.hint && fuGate!.mode === "ai") {
           try {
             const retry = await generateFollowUp(
               String(profile.name ?? "Best regards"),
@@ -1047,7 +1103,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
               fuOpener,
               buildLeadFacts(lead),
               fuSeqSuffix,
-              fuGate,
+              fuGate!,
             );
             if (localSpamScore(retry.subject, retry.body).score > check.score) {
               Object.assign(gen, retry);
@@ -1078,6 +1134,46 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
         const htmlBody = buildHtmlBody(bodyText, pixel);
         const trackedHtml = destLink ? await wrapUrlsForTracking(htmlBody, trackingBase, async (u) => signToken(`${trackingId}|${u}`)) : htmlBody;
 
+        // ── PRE-SEND EMITTED-STATE RE-CHECK ──
+        // Closes the mid-flight reply window: a reply or unsubscribe that lands
+        // between the safety re-check above and the wire send (content generation
+        // takes seconds) must abort here, never ship. With the reply-cancel trigger
+        // now firing on the 'sending' claim state too, a scanned reply flips
+        // followup_status to 'cancelled' — read back here as the claim no longer
+        // holding.
+        const { data: freshState } = await db.from("leads")
+          .select("unsubscribed, status, lifecycle, conv_mode, followup_status")
+          .eq("id", lead.id)
+          .maybeSingle();
+        const claimHolds = dry ? true : freshState?.followup_status === "sending";
+        const { data: freshReplied } = await db.from("emails_sent")
+          .select("id").eq("lead_id", lead.id).eq("campaign_id", campaign.id).eq("replied", true).limit(1).maybeSingle();
+        const { data: freshSuppressed } = await db.from("suppressions")
+          .select("id").eq("user_id", campaign.user_id).ilike("email", lead.email).limit(1).maybeSingle();
+        const blocked = !freshState
+          || !claimHolds
+          || freshReplied
+          || freshSuppressed
+          || freshState.unsubscribed
+          || ["unsubscribed", "bounced", "suppressed"].includes(freshState.status)
+          || ["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED"].includes(freshState.lifecycle ?? "")
+          || (freshState.conv_mode ?? "AI_AUTOPILOT") === "HUMAN";
+        if (blocked) {
+          if (dry) {
+            dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", step: nextStep, reason: "pre_send_recheck" });
+          } else {
+            try { await db.rpc("release_send_slot", { p_user: campaign.user_id }); } catch (_e) { /* best effort */ }
+            try { await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" }); } catch (_e) { /* best effort */ }
+            try { await insertAudit(db, { user_id: campaign.user_id, campaign_id: campaign.id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons: ["pre_send_recheck"], step: nextStep } }); } catch (_e) { /* best effort */ }
+          }
+          followupsCancelled++;
+          continue;
+        }
+
+        if (dry) {
+          dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "would_send", step: nextStep });
+          // fall through — the loop-end pacing delay still applies (PASS 2 parity)
+        } else {
         // ── SEND ──
         const ids = await sendGmailRaw(
           tok.accessToken,
@@ -1110,23 +1206,30 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
         });
 
         followupsSent++;
+        }
       } catch (e) {
-        // Release slot and restore lead to active on failure
-        try {
-          await db.rpc("release_send_slot", { p_user: lead.campaign?.user_id });
-        } catch { /* best effort */ }
-        try {
-          await db.from("leads").update({ followup_status: "active" }).eq("id", lead.id);
-        } catch { /* best effort */ }
-        try {
-          await insertAudit(db, {
-            user_id: lead.campaign?.user_id, campaign_id: lead.campaign?.id, lead_id: lead.id,
-            event: "followup.failed",
-            payload: { error: e instanceof Error ? e.message : String(e), step: (lead.followup_step ?? 0) + 1 },
-          });
-        } catch { /* best effort */ }
+        // Release slot and restore lead to active on failure (dry-run: no writes)
+        if (!dry) {
+          try {
+            await db.rpc("release_send_slot", { p_user: lead.campaign?.user_id });
+          } catch { /* best effort */ }
+          try {
+            await db.from("leads").update({ followup_status: "active" }).eq("id", lead.id);
+          } catch { /* best effort */ }
+          try {
+            await insertAudit(db, {
+              user_id: lead.campaign?.user_id, campaign_id: lead.campaign?.id, lead_id: lead.id,
+              event: "followup.failed",
+              payload: { error: e instanceof Error ? e.message : String(e), step: (lead.followup_step ?? 0) + 1 },
+            });
+          } catch { /* best effort */ }
+        }
       }
+      // Pacing (PASS 2 parity): idle DELAY_MS between processed leads so follow-up
+      // bursts never hammer the mailbox. Early-exit `continue` paths skip this,
+      // mirroring how PASS 2 only paces jobs that reached their send pipeline.
+      await new Promise((r) => setTimeout(r, DELAY_MS));
     }
-    return { followupsSent, followupsCancelled };
+    return dry ? { followupsSent, followupsCancelled, dryDecisions } : { followupsSent, followupsCancelled };
   }
 });
