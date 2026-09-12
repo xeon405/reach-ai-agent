@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Children, lazy, Suspense, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
+import { Children, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { ArrowRight, Bot, Mail, Repeat, Check, Menu, X, Inbox, Search, Send, Target, Calendar } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
@@ -271,6 +271,9 @@ function Landing() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [orbReady, setOrbReady] = useState(false);
+  const [orbDone, setOrbDone] = useState(false);
+  const [orbHidden, setOrbHidden] = useState(false);
+  const handleOrbReady = useCallback(() => setOrbDone(true), []);
 
   useEffect(() => {
     const w = window as Window & {
@@ -285,7 +288,12 @@ function Landing() {
     const boot = () => {
       if (cancelled) return;
       if (w.requestIdleCallback) {
-        const id = w.requestIdleCallback(() => setOrbReady(true), { timeout: 2500 });
+        const id = w.requestIdleCallback(() => {
+          // Warm the three.js chunk during idle so the swap is instant once the
+          // webgl orb has painted its first frame.
+          void import("@/components/hero-orb");
+          setOrbReady(true);
+        }, { timeout: 2500 });
         timer = id;
       } else {
         timer = window.setTimeout(() => setOrbReady(true), 900);
@@ -307,6 +315,13 @@ function Landing() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!orbDone) return;
+    // crossfade the poster out, then drop it from the DOM
+    const t = window.setTimeout(() => setOrbHidden(true), 750);
+    return () => window.clearTimeout(t);
+  }, [orbDone]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -456,13 +471,21 @@ function Landing() {
           </div>
 
           <div className="relative w-full h-[450px] md:h-[520px]">
-            {orbReady ? (
-              <Suspense fallback={<div className="hero-orb" aria-hidden />}>
-                <HeroOrb />
+            <div className={`hero-orb${orbDone ? " orb-live" : ""}`} aria-hidden>
+              {!orbHidden && (
+                <img
+                  className="hero-orb-poster"
+                  src="/3d-core.jpg"
+                  alt=""
+                  draggable={false}
+                  fetchPriority="high"
+                  decoding="async"
+                />
+              )}
+              <Suspense fallback={null}>
+                {orbReady ? <HeroOrb onReady={handleOrbReady} /> : null}
               </Suspense>
-            ) : (
-              <div className="hero-orb" aria-hidden />
-            )}
+            </div>
             <div className="float-email float1"><Mail className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> New lead found · Chicago</div>
             <div className="float-email float2"><Target className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Reply detected · Interested</div>
             <div className="float-email float3"><Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Meeting booked · Tomorrow 2pm</div>
