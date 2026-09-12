@@ -87,6 +87,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "mobile-web-app-capable", content: "yes" },
       { title: "OutshipAi — AI Cold Email Agent That Fills Your Pipeline On Autopilot" },
       {
+        name: "theme-color",
+        content: "#fcfcfc",
+      },
+      {
         name: "description",
         content:
           "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and sends interested leads your way.",
@@ -122,7 +126,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "icon", href: "/icon.svg", type: "image/svg+xml" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
-      { name: "theme-color", content: "#7c3aed" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {

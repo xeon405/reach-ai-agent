@@ -7,8 +7,8 @@
   "id": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#ffffff",
-  "theme_color": "#7c3aed",
+  "background_color": "#fcfcfc",
+  "theme_color": "#fcfcfc",
   "categories": ["business", "productivity"],
   "icons": [
     {

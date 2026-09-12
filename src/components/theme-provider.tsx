@@ -27,7 +27,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", theme === "dark" ? "#15171e" : "#ffffff");
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#070707" : "#fcfcfc");
   }, [theme]);
 
   return (
