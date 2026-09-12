@@ -16,6 +16,25 @@ export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
 
+function CopyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mt-1.5 flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2">
+      <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <code className="min-w-0 flex-1 truncate text-[11px]">{value}</code>
+      <button
+        type="button"
+        className="shrink-0 text-xs font-medium text-primary underline-offset-2 hover:underline"
+        onClick={() => {
+          navigator.clipboard.writeText(value);
+          toast.success(`${label} copied`);
+        }}
+      >
+        Copy
+      </button>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const navigate = useNavigate();
   const push = usePushNotifications();
@@ -50,6 +69,7 @@ function SettingsPage() {
   const [networkMode, setNetworkMode] = useState(false);
   const [rewardPlan, setRewardPlan] = useState<string | null>(null);
   const [rewardUntil, setRewardUntil] = useState<string | null>(null);
+  const [calendly, setCalendly] = useState<{ url: string; secret: string } | null>(null);
 
   async function exportData() {
     setExporting(true);
@@ -130,6 +150,17 @@ function SettingsPage() {
         }
       }
     });
+  }, []);
+
+  useEffect(() => {
+    supabase.functions
+      .invoke("get-calendly-config")
+      .then(({ data }) => {
+        if (data?.webhook_url && data?.webhook_secret) {
+          setCalendly({ url: data.webhook_url, secret: data.webhook_secret });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   function connectGmail() {
@@ -359,6 +390,28 @@ function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             Appended at the end of every email your agent sends — looks professional and builds recognition.
           </p>
+        </div>
+        <div className="rounded-xl border border-border bg-background/40 p-4">
+          <div className="font-medium">Calendly bookings</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            When a lead books a meeting on your Calendly page, it's recorded on your dashboard, follow-ups stop, and you get a high-priority alert. This only tracks Calendly accounts wired to the webhook below — other booking links stay untracked.
+          </p>
+          {calendly ? (
+            <ol className="mt-3 space-y-1 text-xs text-muted-foreground">
+              <li>1. Calendly → Settings → Webhooks → Webhook subscriptions → Add subscription</li>
+              <li>2. Signing key: <strong>HMAC (option 1)</strong>, then paste these two values:</li>
+              <CopyField label="Webhook URL" value={calendly.url} />
+              <CopyField label="Signing key" value={calendly.secret} />
+              <li>3. Subscribe to events: <code>invitee.created</code> and <code>invitee.canceled</code></li>
+              <li>
+                4. Point the <strong>Booking link</strong> above at this same Calendly account — that's how meetings are attributed to you.
+              </li>
+            </ol>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Calendly tracking isn't configured on this app yet — bookings stay untracked for now.
+            </p>
+          )}
         </div>
       </Section>
 

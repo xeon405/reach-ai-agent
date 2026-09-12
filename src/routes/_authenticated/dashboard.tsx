@@ -59,6 +59,11 @@ type SuppressRow = {
   id: string; email: string; reason: string; created_at: string;
 };
 
+type MeetingRow = {
+  id: string; campaign_id: string | null; status: string;
+  booked_at: string; start_time: string | null; provider: string | null;
+};
+
 const DATE_RANGES = [
   { label: "Today", days: 1 },
   { label: "7 days", days: 7 },
@@ -88,6 +93,7 @@ function Dashboard() {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [tracking, setTracking] = useState<TrackRow[]>([]);
   const [suppressions, setSuppressions] = useState<SuppressRow[]>([]);
+  const [meetings, setMeetings] = useState<MeetingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<number>(3650);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
@@ -98,7 +104,7 @@ function Dashboard() {
   async function loadAll() {
     setLoading(true);
     try {
-    const [leadsR, emailsR, campsR, clsR, auditR, alertR, trackR, supR] = await Promise.all([
+    const [leadsR, emailsR, campsR, clsR, auditR, alertR, trackR, supR, meetR] = await Promise.all([
       supabase.from("leads").select("id, user_id, campaign_id, status, lifecycle, conv_mode, email_status, email_confidence, unsubscribed, created_at, lead_source").order("created_at", { ascending: false }).limit(1000),
       supabase.from("emails_sent").select("id, user_id, lead_id, campaign_id, sent_at, opened, replied, autoreplied, ai_paused, ai_turns, reply_sentiment, follow_up_sent, gmail_message_id").order("sent_at", { ascending: false }).limit(1000),
       supabase.from("campaigns").select("id, name, status, autopilot, created_at").order("created_at", { ascending: false }),
@@ -107,6 +113,7 @@ function Dashboard() {
       supabase.from("owner_alerts").select("id, lead_id, kind, title, body, priority, read, created_at").order("created_at", { ascending: false }).limit(100),
       supabase.from("tracking_events").select("id, email_id, event, occurred_at").order("occurred_at", { ascending: false }).limit(500),
       supabase.from("suppressions").select("id, email, reason, created_at").order("created_at", { ascending: false }).limit(100),
+      supabase.from("meetings").select("id, campaign_id, status, provider, booked_at, start_time").order("booked_at", { ascending: false }).limit(500),
     ]);
     setLeads((leadsR.data as LeadRow[]) ?? []);
     setEmails((emailsR.data as EmailRow[]) ?? []);
@@ -116,6 +123,7 @@ function Dashboard() {
     setAlerts((alertR.data as AlertRow[]) ?? []);
     setTracking((trackR.data as TrackRow[]) ?? []);
     setSuppressions((supR.data as SuppressRow[]) ?? []);
+    setMeetings((meetR.data as MeetingRow[]) ?? []);
     } catch (e) {
       console.error("dashboard: failed to load analytics", e);
     } finally {
@@ -132,6 +140,7 @@ function Dashboard() {
   const fAlerts = useMemo(() => alerts.filter((a) => a.created_at >= cutoff), [alerts, cutoff]);
   const fTracking = useMemo(() => tracking.filter((t) => t.occurred_at >= cutoff), [tracking, cutoff]);
   const fSuppressions = useMemo(() => suppressions.filter((s) => s.created_at >= cutoff), [suppressions, cutoff]);
+  const fMeetings = useMemo(() => meetings.filter((m) => m.booked_at >= cutoff), [meetings, cutoff]);
 
   const kpis = useMemo(() => {
     const totalLeads = fLeads.length;
@@ -143,19 +152,20 @@ function Dashboard() {
     const replies = fEmails.filter((e) => e.replied).length;
     const positiveReplies = fCls.filter((c) => c.interested || c.booking_intent).length;
     const bookingIntents = fCls.filter((c) => c.booking_intent).length;
+    const confirmedBookings = fMeetings.filter((m) => m.status === "scheduled").length;
     const bounces = fAudit.filter((a) => a.event === "email.bounced").length;
     const suppressed = fSuppressions.length;
     const aiReplies = fAudit.filter((a) => a.event === "ai.reply_sent").length;
     const humanHandoffs = fAudit.filter((a) => a.event === "agent.handoff").length;
     const takeovers = fAudit.filter((a) => a.event === "human.takeover").length;
-    return { totalLeads, verifiedLeads, totalSent, sentSuccess, opens, clicks, replies, positiveReplies, bookingIntents, bounces, suppressed, aiReplies, humanHandoffs, takeovers };
-  }, [fLeads, fEmails, fCls, fAudit, fSuppressions, fTracking]);
+    return { totalLeads, verifiedLeads, totalSent, sentSuccess, opens, clicks, replies, positiveReplies, bookingIntents, confirmedBookings, bounces, suppressed, aiReplies, humanHandoffs, takeovers };
+  }, [fLeads, fEmails, fCls, fAudit, fSuppressions, fTracking, fMeetings]);
 
   const humanConversion = useMemo(() => {
     const handoffs = fAudit.filter((a) => a.event === "agent.handoff").length;
     const takeovers = fAudit.filter((a) => a.event === "human.takeover").length;
-    const bookingDetected = fAudit.filter((a) => a.event === "booking.detected").length;
-    const totalHumanActions = handoffs + takeovers + bookingDetected;
+    const bookingConfirmed = fMeetings.filter((m) => m.status === "scheduled").length;
+    const totalHumanActions = handoffs + takeovers + bookingConfirmed;
     const repliedLeads = new Set(
       fEmails.filter((e) => e.replied).map((e) => e.lead_id).filter(Boolean)
     ).size;
@@ -169,16 +179,16 @@ function Dashboard() {
     return {
       handoffs,
       takeovers,
-      bookingDetected,
+      bookingConfirmed,
       totalHumanActions,
       repliedLeads,
       humanManagedLeads,
       humanConversionRate: pct(humanManagedLeads, repliedLeads),
       handoffRate: pct(handoffs, repliedLeads),
       takeoverRate: pct(takeovers, repliedLeads),
-      bookingRate: pct(bookingDetected, repliedLeads),
+      bookingRate: pct(bookingConfirmed, repliedLeads),
     };
-  }, [fAudit, fEmails]);
+  }, [fAudit, fEmails, fMeetings]);
 
   const funnel = useMemo(() => {
     const found = fLeads.length;
@@ -188,7 +198,7 @@ function Dashboard() {
     const opened = kpis.opens;
     const replied = kpis.replies;
     const interested = kpis.positiveReplies;
-    const booking = kpis.bookingIntents;
+    const booking = kpis.confirmedBookings;
     const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
     return [
       { label: "Leads Found", value: found, pct: 100 },
@@ -210,7 +220,7 @@ function Dashboard() {
     const replied = fEmails.filter((e) => e.replied).length;
     const bounced = kpis.bounces;
     const positive = fCls.filter((c) => c.interested || c.booking_intent).length;
-    const booking = kpis.bookingIntents;
+    const booking = kpis.confirmedBookings;
     const r = (n: number) => sent > 0 ? ((n / sent) * 100).toFixed(1) : "0.0";
     return { sent, openRate: r(opened), clickRate: r(clicked), replyRate: r(replied), bounceRate: r(bounced), positiveRate: r(positive), bookingRate: r(booking) };
   }, [fEmails, fCls, kpis, fTracking]);
@@ -227,11 +237,12 @@ function Dashboard() {
         return leadInCampaign && (cl.interested || cl.booking_intent);
       }).length;
       const bounces = fAudit.filter((a) => a.campaign_id === c.id && a.event === "email.bounced").length;
+      const bookings = fMeetings.filter((m) => m.campaign_id === c.id && m.status === "scheduled").length;
       const rr = sent > 0 ? ((replies / sent) * 100).toFixed(1) : "0.0";
-      const br = sent > 0 ? ((positives / sent) * 100).toFixed(1) : "0.0";
-      return { ...c, cLeads, sent, opens, replies, positives, bounces, replyRate: rr, bookingRate: br };
+      const br = sent > 0 ? ((bookings / sent) * 100).toFixed(1) : "0.0";
+      return { ...c, cLeads, sent, opens, replies, positives, bounces, bookings, replyRate: rr, bookingRate: br };
     });
-  }, [campaigns, fLeads, fEmails, fCls, fAudit]);
+  }, [campaigns, fLeads, fEmails, fCls, fAudit, fMeetings]);
 
   const aiPerf = useMemo(() => {
     const totalCls = fCls.length;
@@ -338,7 +349,7 @@ function Dashboard() {
         <KpiCard icon={<Eye className="h-4 w-4" />} label="Opens" value={kpis.opens} />
         <KpiCard icon={<Reply className="h-4 w-4" />} label="Replies" value={kpis.replies} accent={kpis.replies > 0} />
         <KpiCard icon={<CheckCircle className="h-4 w-4 text-emerald-500" />} label="Interested" value={kpis.positiveReplies} />
-        <KpiCard icon={<CalendarCheck className="h-4 w-4 text-orange-500" />} label="Bookings" value={kpis.bookingIntents} accent={kpis.bookingIntents > 0} />
+        <KpiCard icon={<CalendarCheck className="h-4 w-4 text-orange-500" />} label="Bookings" value={kpis.confirmedBookings} accent={kpis.confirmedBookings > 0} />
         <KpiCard icon={<Bot className="h-4 w-4 text-purple-500" />} label="AI Replies" value={kpis.aiReplies} />
         <KpiCard icon={<Hand className="h-4 w-4 text-amber-500" />} label="Handoffs" value={kpis.humanHandoffs} />
         <KpiCard icon={<AlertTriangle className="h-4 w-4 text-red-500" />} label="Bounces" value={kpis.bounces} />
@@ -397,11 +408,11 @@ function Dashboard() {
               </div>
               <div className="rounded-xl border border-border bg-muted/30 p-4">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" /> Bookings Detected
+                  <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" /> Bookings Confirmed
                 </div>
-                <div className="mt-1.5 text-2xl font-bold">{humanConversion.bookingDetected}</div>
+                <div className="mt-1.5 text-2xl font-bold">{humanConversion.bookingConfirmed}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.bookingRate}% of replies</div>
-                <p className="mt-2 text-xs text-muted-foreground/70">Lead confirmed or requested a meeting booking</p>
+                <p className="mt-2 text-xs text-muted-foreground/70">Confirmed bookings from tracked calendars</p>
               </div>
             </div>
 
@@ -413,7 +424,7 @@ function Dashboard() {
                     { label: "AI-Handled (auto-reply)", count: humanConversion.repliedLeads - humanConversion.humanManagedLeads, color: "bg-purple-500" },
                     { label: "AI Handoff to Human", count: humanConversion.handoffs, color: "bg-amber-500" },
                     { label: "Owner Takeover", count: humanConversion.takeovers, color: "bg-orange-500" },
-                    { label: "Booking Confirmed", count: humanConversion.bookingDetected, color: "bg-emerald-500" },
+                    { label: "Booking Confirmed", count: humanConversion.bookingConfirmed, color: "bg-emerald-500" },
                   ].map((row) => (
                     <div key={row.label} className="flex items-center gap-3">
                       <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${row.color}`} />
@@ -466,6 +477,7 @@ function Dashboard() {
                   <th className="pb-2 pr-4 text-right">Opens</th>
                   <th className="pb-2 pr-4 text-right">Replies</th>
                   <th className="pb-2 pr-4 text-right">Interested</th>
+                  <th className="pb-2 pr-4 text-right">Bookings</th>
                   <th className="pb-2 pr-4 text-right">Bounces</th>
                   <th className="pb-2 pr-4 text-right">Reply %</th>
                   <th className="pb-2 pr-4 text-right">Booking %</th>
@@ -484,6 +496,7 @@ function Dashboard() {
                     <td className="py-2.5 pr-4 text-right">{c.opens}</td>
                     <td className="py-2.5 pr-4 text-right">{c.replies}</td>
                     <td className="py-2.5 pr-4 text-right">{c.positives}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.bookings}</td>
                     <td className="py-2.5 pr-4 text-right">{c.bounces}</td>
                     <td className="py-2.5 pr-4 text-right">{c.replyRate}%</td>
                     <td className="py-2.5 pr-4 text-right">{c.bookingRate}%</td>
@@ -688,6 +701,7 @@ function auditIcon(event: string): { node: React.ReactNode; color: string } {
   if (event.includes("ai.classified")) return { node: <Bot className="h-3 w-3" />, color: "text-purple-500" };
   if (event.includes("ai.reply_sent")) return { node: <Bot className="h-3 w-3" />, color: "text-purple-500" };
   if (event.includes("ai.reply_generated")) return { node: <Bot className="h-3 w-3" />, color: "text-purple-400" };
+  if (event.includes("booking.confirmed")) return { node: <CalendarCheck className="h-3 w-3" />, color: "text-emerald-500" };
   if (event.includes("booking.detected")) return { node: <CalendarCheck className="h-3 w-3" />, color: "text-orange-500" };
   if (event.includes("email.bounced")) return { node: <AlertTriangle className="h-3 w-3" />, color: "text-red-500" };
   if (event.includes("lead.suppressed") || event.includes("lead.unsubscribed")) return { node: <ShieldX className="h-3 w-3" />, color: "text-red-500" };

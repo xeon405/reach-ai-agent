@@ -85,20 +85,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { name: "apple-mobile-web-app-title", content: "OutshipAi" },
       { name: "mobile-web-app-capable", content: "yes" },
-      { title: "OutshipAi — AI Cold Email Agent That Books Meetings On Autopilot" },
+      { title: "OutshipAi — AI Cold Email Agent That Fills Your Pipeline On Autopilot" },
       {
         name: "description",
         content:
-          "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
+          "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and sends interested leads your way.",
       },
       {
         property: "og:title",
-        content: "OutshipAi — AI Cold Email Agent That Books Meetings On Autopilot",
+        content: "OutshipAi — AI Cold Email Agent That Fills Your Pipeline On Autopilot",
       },
       {
         property: "og:description",
         content:
-          "Give us your ideal customer. We find them, email them, follow up, and book meetings — while you sleep.",
+          "Give us your ideal customer. We find them, email them, follow up, and hand you the interested ones — while you sleep.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -20,13 +20,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and books meetings into your calendar.",
+          "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and sends interested leads your way.",
       },
       { property: "og:title", content: "OutshipAi — Your AI Sales Agent" },
       {
         property: "og:description",
         content:
-          "Finds leads worldwide, writes personalized cold emails, handles replies, and books meetings — automatically.",
+          "Finds leads worldwide, writes personalized cold emails, handles replies, and hands you the interested ones — automatically.",
       },
       { property: "og:image", content: "/og.png" },
       { property: "og:type", content: "website" },
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/")({
       {
         name: "twitter:description",
         content:
-          "Finds leads worldwide, writes personalized cold emails, handles replies, and books meetings — automatically.",
+          "Finds leads worldwide, writes personalized cold emails, handles replies, and hands you the interested ones — automatically.",
       },
       { name: "twitter:image", content: "/og.png" },
     ],
@@ -51,7 +51,7 @@ export const Route = createFileRoute("/")({
               url: "https://outreach-ochre-sigma.vercel.app",
               email: "outreachai.team@gmail.com",
               description:
-                "OutshipAi is an AI sales agent that finds ideal customers, writes personalized cold emails, follows up automatically, and books meetings.",
+                "OutshipAi is an AI sales agent that finds ideal customers, writes personalized cold emails, follows up automatically, and surfaces interested replies.",
             },
             {
               "@type": "FAQPage",
@@ -184,8 +184,8 @@ const steps = [
   {
     n: "03",
     icon: Send,
-    title: "We send, follow up & book",
-    text: "Autopilot sends, re-engages non-replies, and slots meetings straight into your calendar.",
+    title: "We send & follow up",
+    text: "Autopilot sends, re-engages non-replies, and hands interested leads to your booking link the moment they're ready.",
   },
 ];
 
@@ -473,7 +473,7 @@ function Landing() {
           <div className="hero-mock">
             <span className="mock-accent" aria-hidden />
             <div className="float-chip float-chip-a"><i aria-hidden />7.5% reply rate</div>
-            <div className="float-chip float-chip-b"><i aria-hidden />Booked in calendar</div>
+            <div className="float-chip float-chip-b"><i aria-hidden />Booking requested</div>
             <div className="mock-head">
               <span className="mock-title">Your outbound engine</span>
               <span className="mock-live"><span className="mock-live-dot" />Running</span>
@@ -761,7 +761,7 @@ function Landing() {
         <div data-reveal className="reveal cta-band">
           <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">Ready to outsource your cold outreach?</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm text-white/70 md:text-base">
-            OutshipAi finds the leads, writes the emails, follows up, and books the meetings — so you only close.
+            OutshipAi finds the leads, writes the emails, follows up, and hands you ready-to-talk leads — so you only close.
           </p>
           <div className="mt-8 flex justify-center">
             <Button asChild size="lg" className="h-12 bg-white px-8 text-black hover:bg-white/90 hover:shadow-lg">
@@ -779,7 +779,7 @@ function Landing() {
             <div>
               <Logo />
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Your AI sales agent — finds the leads, writes the cold emails, follows up, and books the meetings. On autopilot.
+                Your AI sales agent — finds the leads, writes the cold emails, follows up, and surfaces hot replies. On autopilot.
               </p>
             </div>
             <FooterCol title="Product">

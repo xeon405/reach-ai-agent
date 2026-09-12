@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
           .eq("user_id", dp.id).in("event", ["lead.unsubscribed", "lead.suppressed"]).gte("created_at", since);
         const { count: bookings24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
           .eq("user_id", dp.id).eq("event", "booking.detected").gte("created_at", since);
+        const { count: meetings24 } = await supabase.from("meetings").select("id", { count: "exact", head: true })
+          .eq("user_id", dp.id).eq("status", "scheduled").gte("booked_at", since);
         const { count: takeovers24 } = await supabase.from("audit_events").select("id", { count: "exact", head: true })
           .eq("user_id", dp.id).eq("event", "human.takeover").gte("created_at", since);
 
@@ -87,6 +89,7 @@ Deno.serve(async (req) => {
 • Replies: ${replies.length}
 • 🔥 Interested: ${hot}
 • 📅 Booking-intent conversations: ${bookings24 ?? 0}
+• ✅ Meetings booked: ${meetings24 ?? 0}
 • 🚫 Unsubscribes: ${unsubs24 ?? 0}
 • 🤖 AI replies sent: ${aiSent}
 • 🤝 Human takeovers: ${takeovers24 ?? 0}
@@ -94,12 +97,12 @@ Deno.serve(async (req) => {
 Campaign performance (last 24h):
 ${campLines || "   • (none)"}
 
-${hot > 0 || (bookings24 ?? 0) > 0 ? "You have HOT leads waiting — check Gmail now!" : "Keep the pipeline full — import fresh leads today."}
+${hot > 0 || (bookings24 ?? 0) > 0 || (meetings24 ?? 0) > 0 ? "You have HOT leads waiting — check Gmail now!" : "Keep the pipeline full — import fresh leads today."}
 
 — OutshipAi Agent`,
           self));
         await supabase.from("profiles").update({ last_digest_date: today }).eq("id", dp.id);
-        await insertAudit(supabase, { user_id: dp.id, event: "digest.sent", payload: { sent: sentRows.length, replies: replies.length, hot } });
+        await insertAudit(supabase, { user_id: dp.id, event: "digest.sent", payload: { sent: sentRows.length, replies: replies.length, hot, meetings_booked: meetings24 } });
         digestsSent++;
       } catch (digestErr) {
         console.error("[daily-digest] profile failed:", digestErr instanceof Error ? digestErr.message : digestErr);

@@ -266,8 +266,8 @@ function Onboarding() {
             </div>
             <div className="space-y-1.5">
               <Label>Booking link (optional)</Label>
-              <Input value={bookingLink} onChange={(e) => setBookingLink(e.target.value)} placeholder="https://cal.com/you/15min" />
-              <p className="text-xs text-muted-foreground">Added to outbound emails so leads can book a call.</p>
+<Input value={bookingLink} onChange={(e) => setBookingLink(e.target.value)} placeholder="https://cal.com/you/15min" />
+ <p className="text-xs text-muted-foreground">Added to outbound emails so leads can book a call. To track confirmed bookings automatically, head to Settings after launch and wire up the Calendly webhook.</p>
             </div>
             <div className="flex items-center gap-3 rounded-xl border border-border bg-background/40 p-4">
               <input type="checkbox" checked={hasProductImage} onChange={(e) => setHasProductImage(e.target.checked)}

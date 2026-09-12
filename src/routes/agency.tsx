@@ -11,8 +11,8 @@ const INCLUDED = [
   { icon: "🎯", title: "Lead research", desc: "We build your ideal-customer list every week — country, niche, company size, you choose." },
   { icon: "✍️", title: "AI-personalized emails", desc: "Every prospect gets an email written specifically for them. No templates that read like spam." },
   { icon: "🔁", title: "Automated follow-ups", desc: "Gentle persistence until they answer — up to 5 touches, perfectly timed." },
-  { icon: "🤖", title: "AI reply handling", desc: "Replies classified and answered instantly; hot leads land on your calendar." },
-  { icon: "📊", title: "Weekly report", desc: "Emails sent, opens, replies, meetings booked — one clean email every Monday." },
+  { icon: "🤖", title: "AI reply handling", desc: "Replies classified and answered instantly; hot leads surface on your radar the moment they reply." },
+  { icon: "📊", title: "Weekly report", desc: "Emails sent, opens, replies, booking-intent conversations — one clean email every Monday." },
   { icon: "🛡️", title: "Deliverability guard", desc: "Safe sending limits, spam-word screening, and unsubscribe handling built in." },
 ];
 
@@ -35,8 +35,8 @@ function AgencyPage() {
           Done-For-You Service
         </div>
         <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">
-          We book sales calls into your calendar.<br />
-          <span className="text-gradient">You just show up.</span>
+          Warm conversations land in your inbox.<br />
+          <span className="text-gradient">You close.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
           Our AI outreach team finds your ideal customers worldwide, writes them personal emails from your own address, follows up automatically, and hands you warm conversations — starting at{" "}

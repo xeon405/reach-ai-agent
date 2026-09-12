@@ -15,6 +15,16 @@ export const Route = createFileRoute("/_authenticated/campaigns")({
 
 type Campaign = { id: string; name: string; status: string; created_at: string; ab_test?: boolean; autopilot?: boolean; delivery?: string };
 
+// Substitutes the owner's real booking link when set; otherwise drops the
+// booking line entirely — never emits a placeholder/fake scheduling URL.
+function finalizeTemplateBody(body: string, bookingLink: string | null): string {
+  if (bookingLink) return body.replace(/{{booking_link}}/g, bookingLink);
+  return body
+    .split("\n")
+    .filter((line) => !line.includes("{{booking_link}}"))
+    .join("\n");
+}
+
 function CampaignsPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Campaign[]>([]);
@@ -33,10 +43,26 @@ function CampaignsPage() {
   const [aiForm, setAiForm] = useState({
     leadName: "", leadCompany: "", leadJobTitle: "",
     yourCompany: "OutshipAi",
-    yourOffer: "AI-powered cold email automation that finds leads and books meetings automatically",
+    yourOffer: "AI-powered cold email automation that finds leads, writes personalized follow-ups, and surfaces interested replies",
   });
+  const [bookingLink, setBookingLink] = useState<string | null>(null);
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    void supabase.auth
+      .getUser()
+      .then(async ({ data }) => {
+        if (!data.user) return;
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("booking_link")
+          .eq("id", data.user.id)
+          .maybeSingle();
+        setBookingLink(p?.booking_link ?? null);
+      })
+      .catch(() => {});
+  }, []);
 
   async function load() {
     const { data } = await supabase.from("campaigns").select("*").order("created_at", { ascending: false });
@@ -193,7 +219,7 @@ function CampaignsPage() {
                       const t = TEMPLATES[Number(e.target.value)];
                       if (!t) return;
                       setAiForm({ ...aiForm, yourOffer: t.body.slice(0, 300) });
-                      setGeneratedEmail(t.body.replace(/{{booking_link}}/g, "https://cal.com/you/15min"));
+                      setGeneratedEmail(finalizeTemplateBody(t.body, bookingLink));
                       toast.success(`Template loaded: ${t.name}`);
                     }}
                   >
