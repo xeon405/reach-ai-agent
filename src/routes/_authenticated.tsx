@@ -29,11 +29,23 @@ const nav = [
   { tKey: "app_settings", url: "/settings", icon: Settings },
 ] as const;
 
+const pageTitles: Array<[string, string]> = [
+  ["/dashboard", "Dashboard"],
+  ["/leads", "Leads"],
+  ["/campaigns", "Campaigns"],
+  ["/emails", "Emails"],
+  ["/billing", "Billing"],
+  ["/settings", "Settings"],
+];
+
 function AuthenticatedLayout() {
   const { t } = useLang();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const currentTitle = pageTitles.find(([p]) => path === p)?.[1]
+    ?? pageTitles.find(([p]) => path.startsWith(p + "/"))?.[1]
+    ?? "OutshipAi";
   const { autoSync } = usePushNotifications();
 
   useEffect(() => {
@@ -129,14 +141,14 @@ function AuthenticatedLayout() {
         </Sidebar>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
-            <span className="text-sm text-muted-foreground">OutshipAi</span>
+            <span className="truncate text-sm font-medium">{currentTitle}</span>
             <div className="ml-auto flex items-center gap-1">
               <NotificationBell />
             </div>
           </header>
-          <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-8">
+          <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
             <Outlet />
           </main>
           <SupportChat />

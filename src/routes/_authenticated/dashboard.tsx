@@ -283,47 +283,52 @@ function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Outreach performance overview</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-xs text-muted-foreground">Outreach performance overview</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setAlertPanelOpen(!alertPanelOpen)}>
-            <Bell className="mr-2 h-4 w-4" /> Alerts
-            {unreadAlerts > 0 && <Badge className="ml-2 bg-destructive text-white">{unreadAlerts}</Badge>}
+            <Bell className="mr-1.5 h-3.5 w-3.5" /> Alerts
+            {unreadAlerts > 0 && <Badge variant="secondary" className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium">{unreadAlerts}</Badge>}
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-card">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <div className="flex flex-wrap gap-1.5">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
+        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
           {DATE_RANGES.map((dr) => (
-            <Button key={dr.days} variant={dateRange === dr.days ? "default" : "ghost"} size="sm"
+            <button
+              key={dr.days}
               onClick={() => setDateRange(dr.days)}
-              className={dateRange === dr.days ? "bg-primary text-primary-foreground" : ""}>
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                dateRange === dr.days ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
               {dr.label}
-            </Button>
+            </button>
           ))}
         </div>
-        <div className="h-4 w-px bg-border" />
-        <div className="relative">
-          <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
-            className="appearance-none rounded-lg border border-border bg-background px-3 py-1.5 pr-8 text-sm outline-none focus:ring-2 focus:ring-ring">
-            <option value="all">All campaigns</option>
-            {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <div className="ml-auto flex items-center gap-2">
+          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+          <div className="relative">
+            <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}
+              className="appearance-none rounded-lg border border-border bg-card py-1.5 pl-3 pr-7 text-xs outline-none focus:ring-2 focus:ring-ring">
+              <option value="all">All campaigns</option>
+              {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          </div>
         </div>
       </div>
 
       {/* Alerts Panel */}
       {alertPanelOpen && (
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-card space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-96 overflow-y-auto rounded-lg border border-border bg-card p-4">
           <h2 className="text-sm font-semibold uppercase text-muted-foreground">Recent Alerts</h2>
           {fAlerts.length === 0 ? <p className="text-sm text-muted-foreground">No alerts in this period.</p> : (
             <div className="divide-y divide-border">
@@ -343,7 +348,7 @@ function Dashboard() {
       )}
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard icon={<Users className="h-4 w-4" />} label="Total Leads" value={kpis.totalLeads} />
         <KpiCard icon={<Send className="h-4 w-4" />} label="Emails Sent" value={kpis.totalSent} />
         <KpiCard icon={<Eye className="h-4 w-4" />} label="Opens" value={kpis.opens} />
@@ -390,34 +395,34 @@ function Dashboard() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Hand className="h-3.5 w-3.5 text-amber-500" /> AI Handoffs
                 </div>
-                <div className="mt-1.5 text-2xl font-bold">{humanConversion.handoffs}</div>
+                <div className="mt-1.5 text-lg font-semibold tabular-nums">{humanConversion.handoffs}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.handoffRate}% of replies</div>
                 <p className="mt-2 text-xs text-muted-foreground/70">AI detected complex intent and transferred to human</p>
               </div>
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Users className="h-3.5 w-3.5 text-orange-500" /> Owner Takeovers
                 </div>
-                <div className="mt-1.5 text-2xl font-bold">{humanConversion.takeovers}</div>
+                <div className="mt-1.5 text-lg font-semibold tabular-nums">{humanConversion.takeovers}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.takeoverRate}% of replies</div>
                 <p className="mt-2 text-xs text-muted-foreground/70">Owner manually took control of the conversation</p>
               </div>
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" /> Bookings Confirmed
                 </div>
-                <div className="mt-1.5 text-2xl font-bold">{humanConversion.bookingConfirmed}</div>
+                <div className="mt-1.5 text-lg font-semibold tabular-nums">{humanConversion.bookingConfirmed}</div>
                 <div className="mt-0.5 text-xs text-muted-foreground">{humanConversion.bookingRate}% of replies</div>
                 <p className="mt-2 text-xs text-muted-foreground/70">Confirmed bookings from tracked calendars</p>
               </div>
             </div>
 
             {humanConversion.repliedLeads > 0 && (
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Conversion Breakdown</h3>
                 <div className="space-y-2">
                   {[
@@ -635,8 +640,8 @@ function Dashboard() {
 
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase text-muted-foreground">
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {icon} {title}
       </h2>
       {children}
@@ -648,22 +653,22 @@ function KpiCard({ icon, label, value, accent, warn }: {
   icon: React.ReactNode; label: string; value: number; accent?: boolean; warn?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${
+    <div className={`rounded-lg border p-3 ${
       accent ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
         : warn ? "border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20"
         : "border-border bg-card"
     }`}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon} {label}</div>
-      <div className="mt-1 text-2xl font-bold">{value}</div>
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">{icon} {label}</div>
+      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
 
 function StatCard({ label, value, accent, warn }: { label: string; value: string | number; accent?: boolean; warn?: boolean }) {
   return (
-    <div className={`rounded-xl border p-3 ${warn ? "border-amber-200 dark:border-amber-800 bg-amber-50/30" : "border-border bg-muted/30"}`}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`mt-0.5 text-lg font-bold ${accent ? "text-emerald-600 dark:text-emerald-400" : warn ? "text-amber-600 dark:text-amber-400" : ""}`}>{value}</div>
+    <div className={`rounded-lg border p-2.5 ${warn ? "border-amber-200 dark:border-amber-800 bg-amber-50/30" : "border-border bg-card"}`}>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 text-base font-semibold ${accent ? "text-emerald-600 dark:text-emerald-400" : warn ? "text-amber-600 dark:text-amber-400" : ""}`}>{value}</div>
     </div>
   );
 }
