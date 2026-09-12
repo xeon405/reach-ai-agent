@@ -12,19 +12,12 @@ function supportsWebGL(): boolean {
   }
 }
 
-export function HeroOrb({ onReady }: { onReady?: () => void } = {}) {
+export function HeroOrb() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mount = ref.current;
     if (!mount) return;
-
-    let readySent = false;
-    const signalReady = () => {
-      if (readySent) return;
-      readySent = true;
-      requestAnimationFrame(() => onReady?.());
-    };
 
     if (!supportsWebGL()) {
       mount.classList.add("is-fallback");
@@ -279,7 +272,6 @@ export function HeroOrb({ onReady }: { onReady?: () => void } = {}) {
       root.rotation.x = 0.05;
       specLight.intensity = 0.3;
       renderer.render(scene, camera);
-      signalReady();
     } else {
       const loop = () => {
         if (visible && !document.hidden) {
@@ -312,7 +304,6 @@ export function HeroOrb({ onReady }: { onReady?: () => void } = {}) {
           glowMat.opacity = 0.95 + Math.sin(t * 0.5) * 0.12;
 
           renderer.render(scene, camera);
-          signalReady();
         }
         raf = requestAnimationFrame(loop);
       };
@@ -335,7 +326,7 @@ export function HeroOrb({ onReady }: { onReady?: () => void } = {}) {
       if (renderer.domElement.parentElement === mount) renderer.domElement.remove();
       renderer.dispose();
     };
-  }, [onReady]);
+  }, []);
 
-  return <div ref={ref} className="hero-orb-canvas" aria-hidden />;
+  return <div ref={ref} className="hero-orb" aria-hidden />;
 }
