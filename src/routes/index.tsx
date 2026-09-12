@@ -443,7 +443,7 @@ function Landing() {
       <section className="relative w-full min-h-screen bg-[#F7F6F3] dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 pt-24 pb-14 px-6 md:px-12 overflow-hidden flex flex-col justify-between">
         <div className="mx-auto w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-16">
           <div className="flex flex-col items-start space-y-6 text-left max-w-xl z-10">
-            <div className="inline-flex items-center gap-2 bg-white/70 border border-[#E0DED9] dark:border-neutral-800 px-3.5 py-1.5 rounded-full text-xs text-neutral-500 dark:text-neutral-400 font-normal">
+            <div className="inline-flex items-center gap-2 bg-white/70 border border-[#E0DED9] dark:bg-white/5 dark:border-neutral-700 dark:text-neutral-300 px-3.5 py-1.5 rounded-full text-xs text-neutral-500 font-normal">
               <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 dark:bg-neutral-100" />
               Built by a hands-on outbound agency
             </div>
