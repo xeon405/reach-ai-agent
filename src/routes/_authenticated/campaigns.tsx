@@ -108,7 +108,7 @@ function CampaignsPage() {
   async function setDelivery(c: Campaign, delivery: "smart" | "instant") {
     const { error } = await supabase.from("campaigns").update({ delivery }).eq("id", c.id);
     if (error) toast.error(error.message);
-    else toast.success(delivery === "instant" ? "⚡ Sending instantly on launch" : "⏰ Sending at each lead's local morning");
+    else toast.success(delivery === "instant" ? "Sending instantly on launch" : "Sending at each lead's local morning");
     load();
   }
 
@@ -155,7 +155,7 @@ function CampaignsPage() {
       if (data?.error) throw new Error(data.error);
 
       if (data?.queued > 0) {
-        toast.success(`📥 ${data.message}`);
+        toast.success(`${data.message}`);
         // stats refresh as the background worker sends
         setTimeout(() => load(), 15000);
         setTimeout(() => load(), 45000);
@@ -207,11 +207,11 @@ function CampaignsPage() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>✨ AI Email Generator</DialogTitle>
+                <DialogTitle>AI Email Generator</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">📚 Start from a proven template</label>
+                  <label className="text-sm font-medium">Start from a proven template</label>
                   <select
                     className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value=""
@@ -260,7 +260,7 @@ function CampaignsPage() {
                   <Input placeholder="AI-powered cold email automation..." value={aiForm.yourOffer}
                     onChange={(e) => setAiForm({ ...aiForm, yourOffer: e.target.value })} />
                 </div>
-                <Button onClick={handleGenerateEmail} disabled={generating} className="w-full bg-gradient-primary">
+                <Button onClick={handleGenerateEmail} disabled={generating} className="w-full bg-primary">
                   {generating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
                     : <><Sparkles className="mr-2 h-4 w-4" /> Generate Email</>}
                 </Button>
@@ -272,7 +272,7 @@ function CampaignsPage() {
                       <div className={`mt-3 rounded-lg border p-3 text-xs ${
                         spam.score >= 70 ? "border-success/30 bg-success/10" : spam.score >= 50 ? "border-warning/40 bg-warning/10" : "border-destructive/40 bg-destructive/10"
                       }`}>
-                        <div className="font-bold">🛡️ Deliverability score: {spam.score}/100 — {spam.grade}</div>
+                        <div className="font-bold">Deliverability score: {spam.score}/100 — {spam.grade}</div>
                         {spam.issues?.length > 0 && (
                           <ul className="mt-2 list-disc space-y-1 pl-4">
                             {spam.issues.map((i: { message: string }, k: number) => <li key={k}>{i.message}</li>)}
@@ -294,7 +294,7 @@ function CampaignsPage() {
                           } catch { toast.error("Spam check failed"); }
                           setCheckingSpam(false);
                         }}>
-                        {checkingSpam ? "Checking…" : "🛡️ Check spam score"}
+                        {checkingSpam ? "Checking…" : "Check spam score"}
                       </Button>
                       <Button className="flex-1" variant="outline"
                         onClick={() => { navigator.clipboard.writeText(generatedEmail); toast.success("Copied!"); }}>
@@ -317,7 +317,7 @@ function CampaignsPage() {
               <DialogHeader><DialogTitle>Create campaign</DialogTitle></DialogHeader>
               <Input placeholder="Campaign name" value={name} onChange={(e) => setName(e.target.value)} />
               <DialogFooter>
-                <Button onClick={create} className="bg-gradient-primary">Create</Button>
+                <Button onClick={create} className="bg-primary">Create</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -383,14 +383,14 @@ function CampaignsPage() {
                       onClick={() => setFlag(c, "ab_test", !c.ab_test)}
                       className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.ab_test ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
                     >
-                      🧪 A/B subjects {c.ab_test ? "ON" : "OFF"}
+                      A/B subjects {c.ab_test ? "ON" : "OFF"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setFlag(c, "autopilot", !c.autopilot)}
                       className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.autopilot ? "border-success bg-success/10 text-success" : "border-border text-muted-foreground hover:text-foreground"}`}
                     >
-                      🤖 Autopilot replies {c.autopilot ? "ON" : "OFF"}
+                      Autopilot replies {c.autopilot ? "ON" : "OFF"}
                     </button>
                     <button
                       type="button"
@@ -412,7 +412,7 @@ function CampaignsPage() {
                   </Button>
                   <Button
                     size="sm"
-                    className="bg-gradient-primary"
+                    className="bg-primary"
                     disabled={sending === c.id || c.status !== "active"}
                     onClick={() => launchCampaign(c.id)}
                   >

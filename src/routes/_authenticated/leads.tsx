@@ -35,11 +35,11 @@ const PIPELINE_STATUSES = ["new", "emailed", "replied", "booked", "won"] as cons
 const SYSTEM_STATUSES = ["bounced", "unsubscribed", "invalid", "skipped"];
 
 function temperature(l: { status: string }): { label: string; cls: string } {
-  if (l.status === "won") return { label: "🏆 Closed", cls: "bg-success/15 text-success" };
-  if (l.status === "replied") return { label: "🔥 Hot", cls: "bg-destructive/10 text-destructive" };
-  if (l.status === "emailed" || l.status === "booked") return { label: "🌤 Warm", cls: "bg-warning/15 text-warning" };
+  if (l.status === "won") return { label: "Closed", cls: "bg-success/15 text-success" };
+  if (l.status === "replied") return { label: "Hot", cls: "bg-destructive/10 text-destructive" };
+  if (l.status === "emailed" || l.status === "booked") return { label: "Warm", cls: "bg-warning/15 text-warning" };
   if (SYSTEM_STATUSES.includes(l.status)) return { label: "—", cls: "text-muted-foreground" };
-  return { label: "❄️ Cold", cls: "bg-primary/10 text-primary" };
+  return { label: "Cold", cls: "bg-primary/10 text-primary" };
 }
 
 function burstConfetti() {
@@ -93,7 +93,7 @@ function LeadsPage() {
       void load();
     } else if (next === "won") {
       burstConfetti();
-      toast.success("🏆 Marked as won — great job!");
+      toast.success("Marked as won — great job!");
     }
   }
   const [country, setCountry] = useState("all");
@@ -310,7 +310,7 @@ function LeadsPage() {
                 </Select>
                 <div className="rounded-xl border border-dashed border-border p-3">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    📥 Bulk import — paste a list (up to 500)
+                    Bulk import — paste a list (up to 500)
                   </label>
                   <textarea
                     value={bulkText}
@@ -353,7 +353,7 @@ function LeadsPage() {
             <SelectItem value="emailed">Emailed</SelectItem>
             <SelectItem value="replied">Replied</SelectItem>
             <SelectItem value="booked">Booked</SelectItem>
-            <SelectItem value="won">🏆 Won</SelectItem>
+            <SelectItem value="won">Won</SelectItem>
           </SelectContent>
         </Select>
         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
@@ -442,7 +442,7 @@ function LeadsPage() {
                       <option value="emailed">Contacted</option>
                       <option value="replied">Replied</option>
                       <option value="booked">Booked</option>
-                      <option value="won">🏆 Won</option>
+                      <option value="won">Won</option>
                     </select>
                   )}
                 </td>

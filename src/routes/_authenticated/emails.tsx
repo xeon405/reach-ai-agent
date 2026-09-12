@@ -306,10 +306,10 @@ function EmailsPage() {
                         : selectedEmail.lead.conv_mode === "PAUSED" ? "secondary"
                         : "default"
                     }>
-                      {selectedEmail.lead.conv_mode === "HUMAN" ? "🤝 Owner taking over" :
-                       selectedEmail.lead.conv_mode === "AI_OVERRIDDEN" ? "⚠️ Needs owner" :
-                       selectedEmail.lead.conv_mode === "PAUSED" ? "⏸️ Paused" :
-                       selectedEmail.lead.conv_mode === "AI_AUTOPILOT" ? "🤖 AI Autopilot" :
+                      {selectedEmail.lead.conv_mode === "HUMAN" ? "Owner taking over" :
+                       selectedEmail.lead.conv_mode === "AI_OVERRIDDEN" ? "Needs owner" :
+                       selectedEmail.lead.conv_mode === "PAUSED" ? "Paused" :
+                       selectedEmail.lead.conv_mode === "AI_AUTOPILOT" ? "AI Autopilot" :
                        selectedEmail.lead.conv_mode}
                     </Badge>
                   )}
@@ -424,7 +424,7 @@ function EmailsPage() {
                   <Button
                     onClick={() => sendReply(selectedEmail)}
                     disabled={sending === selectedEmail.id}
-                    className="w-full bg-gradient-primary"
+                    className="w-full bg-primary"
                   >
                     {sending === selectedEmail.id
                       ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>

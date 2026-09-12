@@ -495,7 +495,7 @@ function LeadFinderPage() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-3">
-          <Button onClick={search} disabled={finding || !activeNiche} className="bg-gradient-primary px-6">
+          <Button onClick={search} disabled={finding || !activeNiche} className="bg-primary px-6">
             {finding ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching...</>
             ) : (
@@ -794,7 +794,7 @@ function LeadFinderPage() {
                   </span>
                 )}
               </div>
-              <Button onClick={saveSelected} disabled={saving || creatingCampaign} className="bg-gradient-primary">
+              <Button onClick={saveSelected} disabled={saving || creatingCampaign} className="bg-primary">
                 {(saving || creatingCampaign) ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {creatingCampaign ? "Creating campaign..." : "Adding..."}</>
                 ) : (
@@ -887,7 +887,7 @@ function LeadFinderPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full bg-gradient-primary text-primary-foreground hover:bg-gradient-primary/90"
+                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                       disabled={sendingNetwork !== null}
                       onClick={() => requestIntro(m)}
                     >

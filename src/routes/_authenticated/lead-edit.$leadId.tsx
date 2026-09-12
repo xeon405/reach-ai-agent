@@ -248,7 +248,7 @@ function LeadEditPage() {
 
         <div className="flex gap-3 border-t border-border pt-4">
           <Button variant="outline" onClick={() => navigate({ to: "/leads" })}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="bg-gradient-primary">
+          <Button onClick={save} disabled={saving} className="bg-primary">
             {saving ? (
               <><div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Saving...</>
             ) : (

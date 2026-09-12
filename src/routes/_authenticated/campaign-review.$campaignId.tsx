@@ -476,7 +476,7 @@ function CampaignReviewPage() {
           <Button
             onClick={launchCampaign}
             disabled={launching || stats.eligible === 0 || campaign.status !== "active"}
-            className="bg-gradient-primary px-6"
+            className="bg-primary px-6"
             size="lg"
           >
             {launching ? (

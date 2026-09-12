@@ -428,12 +428,12 @@ function SettingsPage() {
       </Section>
 
       <div className="flex gap-2">
-        <Button onClick={save} disabled={saving} className="bg-gradient-primary">
+        <Button onClick={save} disabled={saving} className="bg-primary">
           Save changes
         </Button>
       </div>
 
-      <Section title="Autopilot 🤖">
+      <Section title="Autopilot">
         <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -480,7 +480,7 @@ function SettingsPage() {
           </div>
           {rewardPlan && rewardUntil && new Date(rewardUntil).getTime() > Date.now() && (
             <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-              🎁 +7 free days earned — <span className="uppercase">{rewardPlan}</span> access until{" "}
+              +7 free days earned — <span className="uppercase">{rewardPlan}</span> access until{" "}
               {new Date(rewardUntil).toLocaleDateString()}
             </div>
           )}

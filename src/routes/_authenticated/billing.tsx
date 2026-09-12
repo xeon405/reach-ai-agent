@@ -116,11 +116,11 @@ function BillingPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-2xl border border-border bg-card/60 px-6 py-4 text-sm text-muted-foreground">
-        <span>✅ No hidden fees · taxes shown at checkout before you pay</span>
-        <span>✅ Exact email caps — hard stop, never overage</span>
-        <span>✅ Prices never change based on your activity</span>
-        <span>✅ 14-day money-back, no questions asked</span>
-        <a href="/honesty" target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-4">🤝 Our Honesty Charter →</a>
+        <span>No hidden fees · taxes shown at checkout before you pay</span>
+        <span>Exact email caps — hard stop, never overage</span>
+        <span>Prices never change based on your activity</span>
+        <span>14-day money-back, no questions asked</span>
+        <a href="/honesty" target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-4">Our Honesty Charter →</a>
       </div>
 
       {/* Pricing */}
@@ -158,7 +158,7 @@ function BillingPage() {
               </ul>
 
               <Button
-                className={`mt-6 w-full ${!isCurrent ? "bg-gradient-primary" : ""}`}
+                className={`mt-6 w-full ${!isCurrent ? "bg-primary" : ""}`}
                 variant={isCurrent ? "outline" : "default"}
                 disabled={isCurrent}
                 onClick={() => window.open(p.checkoutUrl, "_blank")}
@@ -177,7 +177,7 @@ function BillingPage() {
       {/* Guarantee */}
       <div className="rounded-lg border border-border bg-card p-4 text-center">
         <p className="text-sm text-muted-foreground">
-          🔒 <strong>14-day money back guarantee.</strong> No questions asked. Cancel anytime from your dashboard.
+          <strong>14-day money back guarantee.</strong> No questions asked. Cancel anytime from your dashboard.
         </p>
       </div>
 
