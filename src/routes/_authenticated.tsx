@@ -1,17 +1,12 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
-import { useLang } from "@/lib/i18n";import { useEffect } from "react";
+import { useLang } from "@/lib/i18n";import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu,
-  SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, SidebarHeader, SidebarFooter,
-} from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Megaphone, Mail, Settings, CreditCard, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Megaphone, Mail, CreditCard, Settings, LogOut, Ellipsis } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
 import { NotificationBell } from "@/components/notification-bell";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -38,6 +33,10 @@ const pageTitles: Array<[string, string]> = [
   ["/settings", "Settings"],
 ];
 
+function isActive(path: string, url: string) {
+  return path === url || path.startsWith(url + "/");
+}
+
 function AuthenticatedLayout() {
   const { t } = useLang();
   const { user, loading } = useAuth();
@@ -47,6 +46,7 @@ function AuthenticatedLayout() {
     ?? pageTitles.find(([p]) => path.startsWith(p + "/"))?.[1]
     ?? "OutshipAi";
   const { autoSync } = usePushNotifications();
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -77,11 +77,11 @@ function AuthenticatedLayout() {
   if (loading || !user) {
     return (
       <div className="flex h-dvh w-full bg-background">
-        <div className="hidden w-64 shrink-0 border-r border-border/50 p-4 lg:block">
-          <Skeleton className="mb-6 h-8 w-32" />
+        <div className="hidden w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 p-4 lg:flex">
+          <Skeleton className="mb-6 h-8 w-32 bg-white/10" />
           <div className="space-y-2">
             {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-9 w-full" />
+              <Skeleton key={i} className="h-9 w-full bg-white/10" />
             ))}
           </div>
         </div>
@@ -103,57 +103,119 @@ function AuthenticatedLayout() {
     navigate({ to: "/" });
   }
 
-  return (
-    <SidebarProvider>
-        <div className="flex h-dvh w-full min-w-0 bg-background overflow-hidden">
-          <Sidebar collapsible="icon">
-          <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
-            <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-              <Logo />
-              <ThemeToggle className="shrink-0 group-data-[collapsible=icon]:hidden" />
-            </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {nav.map((item) => (
-                    <SidebarMenuItem key={item.tKey}>
-                      <SidebarMenuButton asChild isActive={path === item.url}>
-                        <Link to={item.url} className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{t(item.tKey)}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter className="border-t border-sidebar-border p-3">
-            <div className="mb-2 truncate px-2 text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">{user.email}</div>
-            <Button variant="ghost" size="sm" onClick={signOut} className="w-full justify-start group-data-[collapsible=icon]:justify-center">
-              <LogOut className="group-data-[collapsible=icon]:mr-0 mr-2 h-4 w-4" />
-              <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
-            </Button>
-          </SidebarFooter>
-        </Sidebar>
+  const desktopItems = nav.slice(0, 4);
+  const moreItems = nav.slice(4);
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-            <SidebarTrigger />
-            <span className="truncate text-sm font-medium">{currentTitle}</span>
-            <div className="ml-auto flex items-center gap-1">
-              <NotificationBell />
-            </div>
-          </header>
-          <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-            <Outlet />
-          </main>
-          <SupportChat />
+  return (
+    <div className="flex h-dvh w-full min-w-0 overflow-hidden bg-background">
+      {/* Desktop dark sidebar */}
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-neutral-800 bg-neutral-950 text-neutral-400 lg:flex">
+        <div className="flex h-14 shrink-0 items-center px-4">
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <Logo className="text-white" />
+          </Link>
         </div>
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+          {nav.map((item) => (
+            <Link
+              key={item.tKey}
+              to={item.url}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isActive(path, item.url)
+                  ? "bg-white/10 text-white"
+                  : "hover:bg-white/5 hover:text-neutral-200"
+              }`}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t(item.tKey)}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="shrink-0 border-t border-neutral-800 p-2">
+          <div className="truncate px-3 pb-1.5 pt-1 text-xs text-neutral-500">{user.email}</div>
+          <button
+            onClick={signOut}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-white/5 hover:text-neutral-200"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>Sign out</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Top app bar */}
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-4">
+          <Link to="/dashboard" className="lg:hidden">
+            <Logo className="h-6 scale-90 origin-left" />
+          </Link>
+          <span className="truncate text-sm font-semibold">{currentTitle}</span>
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle />
+            <NotificationBell />
+          </div>
+        </header>
+
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 pb-24 md:p-6 lg:pb-6">
+          <Outlet />
+        </main>
+
+        {/* Mobile bottom tab bar */}
+        <nav className="shrink-0 border-t border-border bg-background pb-[env(safe-area-inset-bottom)] lg:hidden">
+          {moreOpen && (
+            <>
+              <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setMoreOpen(false)} />
+              <div className="fixed inset-x-3 bottom-20 z-50 overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-xl">
+                {moreItems.map((item) => (
+                  <Link
+                    key={item.tKey}
+                    to={item.url}
+                    onClick={() => setMoreOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${
+                      isActive(path, item.url) ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {t(item.tKey)}
+                  </Link>
+                ))}
+                <button
+                  onClick={() => { setMoreOpen(false); signOut(); }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive hover:bg-accent/60"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
+            </>
+          )}
+          <div className="grid grid-cols-5">
+            {desktopItems.map((item) => (
+              <Link
+                key={item.tKey}
+                to={item.url}
+                className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
+                  isActive(path, item.url) ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{t(item.tKey)}</span>
+              </Link>
+            ))}
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
+                moreItems.some((i) => isActive(path, i.url)) ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Ellipsis className="h-5 w-5" />
+              <span>More</span>
+            </button>
+          </div>
+        </nav>
       </div>
-    </SidebarProvider>
+
+      <SupportChat />
+    </div>
   );
 }
