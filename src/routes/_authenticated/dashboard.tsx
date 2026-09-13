@@ -361,6 +361,9 @@ function Dashboard() {
         <KpiCard icon={<Shield className="h-4 w-4 text-red-500" />} label="Suppressed" value={kpis.suppressed} />
       </div>
 
+      {/* Two-column workspace */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="flex min-h-0 flex-col gap-4">
       {/* Conversion Funnel */}
       <Section title="Conversion Funnel" icon={<TrendingUp className="h-4 w-4" />}>
         <div className="space-y-3">
@@ -466,61 +469,11 @@ function Dashboard() {
         </div>
         {emailPerf.sent === 0 && <p className="mt-3 text-center text-sm text-muted-foreground">No emails sent in this period.</p>}
       </Section>
-
-      {/* Campaign Performance */}
-      <Section title="Campaign Performance" icon={<BarChart3 className="h-4 w-4" />}>
-        {campaignPerf.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground">No campaigns created yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs font-semibold uppercase text-muted-foreground">
-                  <th className="pb-2 pr-4">Campaign</th>
-                  <th className="pb-2 pr-4 text-right">Leads</th>
-                  <th className="pb-2 pr-4 text-right">Sent</th>
-                  <th className="pb-2 pr-4 text-right">Opens</th>
-                  <th className="pb-2 pr-4 text-right">Replies</th>
-                  <th className="pb-2 pr-4 text-right">Interested</th>
-                  <th className="pb-2 pr-4 text-right">Bookings</th>
-                  <th className="pb-2 pr-4 text-right">Bounces</th>
-                  <th className="pb-2 pr-4 text-right">Reply %</th>
-                  <th className="pb-2 pr-4 text-right">Booking %</th>
-                  <th className="pb-2 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {campaignPerf.map((c) => (
-                  <tr key={c.id} className="hover:bg-muted/30">
-                    <td className="py-2.5 pr-4">
-                      <div className="font-medium">{c.name}</div>
-                      <div className="text-xs text-muted-foreground">{c.autopilot ? "Autopilot" : "Manual"}</div>
-                    </td>
-                    <td className="py-2.5 pr-4 text-right">{c.cLeads}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.sent}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.opens}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.replies}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.positives}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.bookings}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.bounces}</td>
-                    <td className="py-2.5 pr-4 text-right">{c.replyRate}%</td>
-                    <td className="py-2.5 pr-4 text-right">{c.bookingRate}%</td>
-                    <td className="py-2.5 text-right">
-                      <Badge variant={c.status === "active" ? "default" : "secondary"}
-                        className={c.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : ""}>
-                        {c.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Section>
+        </div>
+        <div className="flex min-h-0 flex-col gap-4">
 
       {/* AI Performance + Reply Intelligence */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="flex flex-col gap-4">
         <Section title="AI Performance" icon={<Bot className="h-4 w-4" />}>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -597,6 +550,60 @@ function Dashboard() {
           </div>
         </Section>
       </div>
+        </div>
+      </div>
+
+      {/* Campaign Performance */}
+      <Section title="Campaign Performance" icon={<BarChart3 className="h-4 w-4" />}>
+        {campaignPerf.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground">No campaigns created yet.</p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs font-semibold uppercase text-muted-foreground">
+                  <th className="pb-2 pr-4">Campaign</th>
+                  <th className="pb-2 pr-4 text-right">Leads</th>
+                  <th className="pb-2 pr-4 text-right">Sent</th>
+                  <th className="pb-2 pr-4 text-right">Opens</th>
+                  <th className="pb-2 pr-4 text-right">Replies</th>
+                  <th className="pb-2 pr-4 text-right">Interested</th>
+                  <th className="pb-2 pr-4 text-right">Bookings</th>
+                  <th className="pb-2 pr-4 text-right">Bounces</th>
+                  <th className="pb-2 pr-4 text-right">Reply %</th>
+                  <th className="pb-2 pr-4 text-right">Booking %</th>
+                  <th className="pb-2 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {campaignPerf.map((c) => (
+                  <tr key={c.id} className="hover:bg-muted/30">
+                    <td className="py-2.5 pr-4">
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-xs text-muted-foreground">{c.autopilot ? "Autopilot" : "Manual"}</div>
+                    </td>
+                    <td className="py-2.5 pr-4 text-right">{c.cLeads}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.sent}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.opens}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.replies}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.positives}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.bookings}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.bounces}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.replyRate}%</td>
+                    <td className="py-2.5 pr-4 text-right">{c.bookingRate}%</td>
+                    <td className="py-2.5 text-right">
+                      <Badge variant={c.status === "active" ? "default" : "secondary"}
+                        className={c.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : ""}>
+                        {c.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
 
       {/* Activity Timeline */}
       <Section title="Activity Timeline" icon={<Clock className="h-4 w-4" />}>

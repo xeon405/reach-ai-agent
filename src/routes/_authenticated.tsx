@@ -76,7 +76,7 @@ function AuthenticatedLayout() {
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen w-full bg-background">
+      <div className="flex h-dvh w-full bg-background">
         <div className="hidden w-64 shrink-0 border-r border-border/50 p-4 lg:block">
           <Skeleton className="mb-6 h-8 w-32" />
           <div className="space-y-2">
@@ -105,7 +105,7 @@ function AuthenticatedLayout() {
 
   return (
     <SidebarProvider>
-        <div className="flex min-h-screen w-full min-w-0 bg-background">
+        <div className="flex h-dvh w-full min-w-0 bg-background overflow-hidden">
           <Sidebar collapsible="icon">
           <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
             <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
