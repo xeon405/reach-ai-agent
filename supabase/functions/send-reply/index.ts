@@ -4,6 +4,7 @@ import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import { nextLifecycle } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 import { signToken } from "../_shared/crypto.ts";
 import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
 
@@ -185,7 +186,7 @@ IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft,
     const origSubject = row.subject ?? "";
     const subject = origSubject.toLowerCase().startsWith("re:") ? origSubject : `Re: ${origSubject}`;
 
-    const SITE = "https://reach-ai-agent.vercel.app";
+    const SITE = APP_BASE_URL;
     const leadIdForUnsub = leadRow?.id ?? row.lead_id;
     const raw = buildRawEmail(toEmail, subject, replyBody, profile.gmail_email ?? "", leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}&t=${await signToken(leadIdForUnsub)}` : undefined);
     const ids = await sendGmailRaw(accessToken, raw);

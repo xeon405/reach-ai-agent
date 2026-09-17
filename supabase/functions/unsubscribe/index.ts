@@ -3,6 +3,7 @@
 // (with DB triggers blocking queue/sent inserts), and worker re-checks.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertAudit } from "../_shared/audit.ts";
+import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { verifyToken } from "../_shared/crypto.ts";
 
@@ -21,7 +22,7 @@ Deno.serve(async (req) => {
     // RFC 8058: mailbox providers one-click via POST with no interaction.
     // Humans who land here via GET get redirected to the branded confirmation page instead.
     if (req.method === "GET") {
-      const target = new URL("https://reach-ai-agent.vercel.app/unsubscribe");
+      const target = new URL(`${APP_BASE_URL}/unsubscribe`);
       target.searchParams.set("l", leadId);
       target.searchParams.set("t", token);
       return new Response(null, { status: 302, headers: { Location: target.toString() } });

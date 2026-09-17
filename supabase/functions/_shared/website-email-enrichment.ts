@@ -2,6 +2,8 @@
 // Only collects publicly displayed emails from contact/about/team/footer pages.
 // Deno runtime. Used by google-maps.ts and osm.ts.
 
+import { APP_BASE_URL } from "./app-base-url.ts";
+
 export interface EnrichedEmail {
   email: string;
   source_url: string;
@@ -162,7 +164,7 @@ async function fetchPage(url: string, signal: AbortSignal): Promise<string | nul
     const res = await fetch(url, {
       signal,
       headers: {
-        "User-Agent": "OutshipAi-EmailEnrichment/1.0 (https://outreach-ochre-sigma.vercel.app; +https://outreach-ochre-sigma.vercel.app/privacy)",
+        "User-Agent": `OutshipAi-EmailEnrichment/1.0 (${APP_BASE_URL}; +${APP_BASE_URL}/privacy)`,
         "Accept": "text/html,application/xhtml+xml",
       },
       redirect: "follow",

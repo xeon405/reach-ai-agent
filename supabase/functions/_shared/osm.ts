@@ -1,4 +1,5 @@
 // Shared OpenStreetMap lead-finder (used by find-leads API and autopilot cron)
+import { APP_BASE_URL } from "./app-base-url.ts";
 import { enrichWebsiteEmails } from "./website-email-enrichment.ts";
 export type Niche = { tag: string; label: string };
 export const COUNTRY_ISO: Record<string, string> = {
@@ -102,7 +103,7 @@ export async function searchDirectory(niche: Niche, iso: string, limit: number) 
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "OutshipAi-LeadFinder/1.0 (https://outreach-ochre-sigma.vercel.app)",
+          "User-Agent": `OutshipAi-LeadFinder/1.0 (${APP_BASE_URL})`,
         },
         body,
         signal: ctrl.signal,

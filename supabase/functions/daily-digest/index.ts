@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -41,7 +42,7 @@ Deno.serve(async (req) => {
       try {
         const { data: sentRows } = await supabase
           .from("emails_sent")
-          .select("id, replied, opened, reply_sentiment, autoreplied, campaign_id")
+          .select("id, lead_id, replied, opened, reply_sentiment, autoreplied, campaign_id")
           .eq("user_id", dp.id)
           .gte("sent_at", since)
           .limit(500);
@@ -63,6 +64,10 @@ Deno.serve(async (req) => {
         const opens = sentRows.filter((r: { opened?: boolean }) => r.opened).length;
         const replies = sentRows.filter((r: { replied: boolean }) => r.replied);
         const hot = replies.filter((r: { reply_sentiment?: string }) => r.reply_sentiment === "INTERESTED").length;
+        const hotLead = replies.find((r: { reply_sentiment?: string; lead_id?: string }) => r.reply_sentiment === "INTERESTED" && !!r.lead_id);
+        const hotLeadEditUrl = hotLead?.lead_id
+          ? `${APP_BASE_URL}/lead-edit/${hotLead.lead_id}`
+          : `${APP_BASE_URL}/leads`;
         const aiSent = sentRows.filter((r: { autoreplied?: boolean }) => r.autoreplied).length;
 
         const perCamp = new Map<string, { s: number; r: number }>();
@@ -88,6 +93,7 @@ Deno.serve(async (req) => {
 • Opens: ${opens}
 • Replies: ${replies.length}
 • 🔥 Interested: ${hot}
+• Open them now: ${hotLeadEditUrl}
 • 📅 Booking-intent conversations: ${bookings24 ?? 0}
 • ✅ Meetings booked: ${meetings24 ?? 0}
 • 🚫 Unsubscribes: ${unsubs24 ?? 0}

@@ -5,6 +5,7 @@
 // Also hosts: 05:00 UTC autopilot top-up. (Daily digest lives in its own scheduled fn.)
 // Auth: CRON_SECRET header or service-role bearer only.
 // ============================================================
+import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
 import { groqChat, groqKeys, sanitizeForPrompt } from "../_shared/groq.ts";
@@ -38,7 +39,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-const SITE = "https://outreach-ochre-sigma.vercel.app";
+const SITE = APP_BASE_URL;
 
 /** Build structured business intelligence context for AI prompts. */
 function buildBIContext(profile: Record<string, unknown>): string {

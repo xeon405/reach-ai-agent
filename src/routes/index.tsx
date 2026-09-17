@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Children, lazy, Suspense, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { ArrowRight, Bot, Mail, Repeat, Check, Menu, X, Inbox, Search, Send, Target, Calendar } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { APP_BASE_URL } from "@/lib/app-config";
 import { SupportChat } from "@/components/support-chat";
 import { ThemeToggle } from "@/components/theme-provider";
 
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/")({
             {
               "@type": "Organization",
               name: "OutshipAi",
-              url: "https://outreach-ochre-sigma.vercel.app",
+              url: APP_BASE_URL,
               email: "outreachai.team@gmail.com",
               description:
                 "OutshipAi is an AI sales agent that finds ideal customers, writes personalized cold emails, follows up automatically, and surfaces interested replies.",

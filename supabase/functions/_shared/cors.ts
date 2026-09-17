@@ -1,9 +1,14 @@
 // Shared CORS config — restrict to the production frontend origin.
 // Cron-only functions should omit CORS headers entirely (they're not called from browsers).
 
+// APP_BASE_URL is the ONE shared value every function that builds a clickable
+// frontend URL reads. It is the digest's per-lead /lead-edit link, the
+// unsubscribe route, and the fallback /leads link. Change ONE line, everything
+// follows.
+import { APP_BASE_URL } from "./app-base-url.ts";
+
 const ALLOWED_ORIGINS = [
-  "https://outreach-ochre-sigma.vercel.app",
-  "https://reach-ai-agent.vercel.app",
+  APP_BASE_URL,
   "http://localhost:5173",
   "http://localhost:3000",
 ];

@@ -5,6 +5,7 @@
 // Auth: CRON_SECRET header or service-role bearer only.
 // ============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { openAiCall, type AiCallHandle } from "../_shared/ai-cost-gate.ts";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
@@ -41,7 +42,7 @@ const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
   agency: { dailyEmails: 500 },
 };
 
-const SITE = "https://outreach-ochre-sigma.vercel.app";
+const SITE = APP_BASE_URL;
 
 /** Deterministic cold-email template (Stage 7 conserve path: metering degraded /
  *  ceiling tripped / per-call guard). No LLM, no ledger, no debit. Mirrors the

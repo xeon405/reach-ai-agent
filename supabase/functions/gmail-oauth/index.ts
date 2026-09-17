@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encryptSecret } from "../_shared/crypto.ts";
 import { insertAudit } from "../_shared/audit.ts";
+import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,7 +54,7 @@ serve(async (req) => {
 
     const redirectUri =
       Deno.env.get("GOOGLE_REDIRECT_URI") ??
-      "https://reach-ai-agent.vercel.app/gmail/callback";
+      `${APP_BASE_URL}/gmail/callback`;
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
