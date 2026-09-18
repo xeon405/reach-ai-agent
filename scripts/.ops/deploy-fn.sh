@@ -2,7 +2,10 @@
 # Standing pre-deploy routine for THIS project's edge functions.
 # Usage:  bash scripts/.ops/deploy-fn.sh <fn-slug> [more-slugs...]
 # Guarantees, in order:
-#   1. The shared-module staleness sweep runs FIRST and BLOCKS the deploy if any
+#   0. A Deno typecheck of every deployable entrypoint (supabase/functions/**/
+#      index.ts) runs FIRST and BLOCKS the deploy on any type error. esbuild
+#      bundles without typechecking, so this is otherwise a silent gap.
+#   1. The shared-module staleness sweep runs NEXT and BLOCKS the deploy if any
 #      NON-targeted function is running a bundle older than an imported _shared
 #      module. The functions named in THIS invocation are exempt pre-deploy,
 #      because deploying them IS the fix for their own staleness (previously the
@@ -23,6 +26,17 @@ if [ "$#" -lt 1 ]; then echo "usage: bash scripts/.ops/deploy-fn.sh <fn-slug> [.
 
 set -a; . ./.env; set +a   # SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF
 REF="${SUPABASE_PROJECT_REF}"
+
+# Gate 0: typecheck every deployable entrypoint with Deno (see AGENTS.md).
+if ! command -v deno >/dev/null 2>&1; then
+  echo "ABORT: 'deno' not found on PATH (need Deno 2.9.6; see AGENTS.md)." >&2
+  exit 1
+fi
+echo "== pre-deploy typecheck (deno: supabase/functions/**/index.ts) =="
+deno task check || {
+  echo "ABORT: deno typecheck failed -- fix the errors above before deploying." >&2
+  exit 1
+}
 
 echo "== pre-deploy staleness sweep (scoped: deploy targets exempt -> $*) =="
 node scripts/.ops/sweep-shared-staleness.mjs --exempt "$@" || {

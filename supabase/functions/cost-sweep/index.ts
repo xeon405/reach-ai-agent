@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
 
       if (isDegraded) degraded++;
     } catch (err) {
-      console.error(`[cost-sweep] profile ${userId}:`, err?.message ?? err);
+      console.error(`[cost-sweep] profile ${userId}:`, err instanceof Error ? err.message : err);
     }
   }
 

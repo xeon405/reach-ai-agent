@@ -31,8 +31,8 @@ export const GDPR_COUNTRY_ISOS: ReadonlySet<string> = new Set([
 ]);
 
 // ---- Niche keyword -> OpenStreetMap tag selectors + name regex ----
-interface Niche { tags: string[]; regex?: string }
-export function nicheFor(jobTitleRaw: string): Niche {
+interface NicheSelector { tags: string[]; regex?: string }
+export function nicheFor(jobTitleRaw: string): NicheSelector {
   const t = jobTitleRaw.toLowerCase();
   const has = (...k: string[]) => k.some((x) => t.includes(x));
 
@@ -64,7 +64,7 @@ export function nicheFor(jobTitleRaw: string): Niche {
   return { tags: [], regex: word.length >= 3 ? word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "" };
 }
 
-export function buildQuery(niche: Niche, iso: string, limit: number): string {
+export function buildQuery(niche: NicheSelector, iso: string, limit: number): string {
   const head =
     `[out:json][timeout:25];\narea["ISO3166-1"="${iso}"][admin_level=2]->.a;\n(\n`;
   const tagLines = niche.tags
@@ -86,7 +86,7 @@ interface OsmEl {
   lon?: number;
 }
 
-export async function searchDirectory(niche: Niche, iso: string, limit: number) {
+export async function searchDirectory(niche: NicheSelector, iso: string, limit: number) {
   const body = "data=" + encodeURIComponent(buildQuery(niche, iso, limit));
   const PER_MIRROR_MS = 35_000;
   let lastErr: unknown = new Error("no endpoint attempted");

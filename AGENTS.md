@@ -55,6 +55,13 @@
 - `bash` env does not persist between tool calls — `set -a; . ./.env; set +a` before
   `supabase` CLI commands; run those from the repo root (`.env` lives there).
 - `npm install` is currently broken (OpenSSL/TLS) — use existing deps only; `npx tsc --noEmit`
-  is the typecheck gate.
+  (`npm run typecheck`) is the frontend typecheck gate, and `npm run typecheck:functions`
+  is the separate edge-function gate (below).
+- **Deno (edge-function typecheck):** pinned to **2.9.6** (`winget install --id
+  DenoLand.Deno`). `npm run typecheck:functions` runs `deno task check` (config in
+  `deno.json` + `scripts/.ops/deno-check.json`), which typechecks every
+  `supabase/functions/**/index.ts` plus the `_shared/*` modules they import. Remote
+  `esm.sh`/`deno.land`/`npm:` imports resolve with no import map and no lockfile.
+  Also enforced as Gate 0 of `scripts/.ops/deploy-fn.sh`.
 - Management API returns the last result set; harmless libuv "Assertion failed" lines on
   Windows Node can be filtered with `grep -v Assertion`.

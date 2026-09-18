@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const nowIso = new Date().toISOString();
   const pingUrl = Deno.env.get("HEALTHCHECKS_PING_URL");
+  let systemOwner: string | undefined;
 
   try {
     const problems: HealthProblem[] = [];
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
       const p = await supabase.from("profiles").select("id").order("created_at", { ascending: true }).limit(1).maybeSingle();
       ownerId = p.data?.id ?? null;
     }
-    const systemOwner = ownerId ?? undefined;
+    systemOwner = ownerId ?? undefined;
 
     async function probe(name: string, body: () => Promise<HealthProblem[]>): Promise<void> {
       try {

@@ -113,7 +113,7 @@ export async function findSavedLeads(
 
 export async function saveBusinesses(
   supabase: SupabaseClient,
-  leads: Array<Record<string, unknown>>,
+  leads: Array<Record<string, any>>,
   niche: string,
   country: string,
 ): Promise<number> {

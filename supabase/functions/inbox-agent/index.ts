@@ -21,7 +21,7 @@ import { insertAudit } from "../_shared/audit.ts";
 import { signToken } from "../_shared/crypto.ts";
 import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
 import { resolveAgentConfig, replyPolicySuffix, type AgentConfig } from "../_shared/agent-config.ts";
-import { openAiCall, type AiCallHandle } from "../_shared/ai-cost-gate.ts";
+import { openAiCall, type AiCallHandle, type GateContext } from "../_shared/ai-cost-gate.ts";
 import {
   summarizeThreadMemory,
   memoryContextFor,
@@ -58,7 +58,7 @@ const MAX_TURN_BUDGET_CEILING = 10; // hard SQL scan bound; the real budget is c
 // Per-invocation config cache. Judgment knobs are read once per (user, campaign).
 const cfgCache = new Map<string, AgentConfig>();
 async function configFor(
-  db: ReturnType<typeof createClient>,
+  db: ReturnType<typeof createClient<any>>,
   userId: string,
   campaignId: string | null,
 ): Promise<AgentConfig> {
@@ -84,7 +84,7 @@ function cfgAudit(cfg: AgentConfig) {
 // the drafting prompts stay byte-identical to today.
 const styleCache = new Map<string, CampaignHint | null>();
 async function styleHintFor(
-  db: ReturnType<typeof createClient>,
+  db: ReturnType<typeof createClient<any>>,
   userId: string,
   campaignId: string | null,
 ): Promise<CampaignHint | null> {
@@ -102,7 +102,7 @@ async function styleHintFor(
 // internalDate gate below still has to clear before a takeover fires.
 const ownSentIdsCache = new Map<string, { ids: Set<string>; unavailable: boolean }>();
 async function ownOutboundMessageIds(
-  db: ReturnType<typeof createClient>,
+  db: ReturnType<typeof createClient<any>>,
   userId: string,
   leadId: string,
 ): Promise<{ ids: Set<string>; unavailable: boolean }> {
@@ -376,7 +376,7 @@ async function fetchThreadHistory(
   }
 }
 
-async function fetchTokenMap(db: ReturnType<typeof createClient>, ids: string[]): Promise<Record<string, string>> {
+async function fetchTokenMap(db: ReturnType<typeof createClient<any>>, ids: string[]): Promise<Record<string, string>> {
   if (ids.length === 0) return {};
   const { data } = await db.from("gmail_tokens").select("profile_id, refresh_token").in("profile_id", ids);
   return Object.fromEntries((data ?? []).map((r) => [r.profile_id, r.refresh_token]));
@@ -422,8 +422,8 @@ async function gmailThreadMessages(
 // (deterministic path: no LLM, no ledger, no debit). Content keeps the same
 // message shape so prompt text (and behavior) is identical under 'ai'.
 async function gatedChat(
-  db: { from: (t: string) => any; rpc: (f: string, a: any) => Promise<any> },
-  ctx: Parameters<typeof openAiCall>[1],
+  db: { from: (t: string) => any; rpc: (f: string, a: any) => any },
+  ctx: GateContext,
   messages: Array<{ role: string; content: string }>,
   opts: { maxTokens?: number; temperature?: number } = {},
 ): Promise<string | null> {
@@ -472,7 +472,7 @@ Deno.serve(async (req) => {
     try {
       const { data: openEmails } = await supabase
         .from("emails_sent")
-        .select("id, user_id, campaign_id, sent_at, replied, lead:leads(id, email, unsubscribed, status, conv_mode, lifecycle, name, company, job_title, country)")
+        .select("id, user_id, campaign_id, sent_at, replied, ai_turns, lead:leads(id, email, unsubscribed, status, conv_mode, lifecycle, name, company, job_title, country)")
         .eq("replied", false)
         .order("sent_at", { ascending: false })
         .limit(60);
@@ -551,7 +551,7 @@ Deno.serve(async (req) => {
             { headers: { Authorization: `Bearer ${tok.accessToken}` } }
           );
           if (!searchRes.ok) continue;
-          const hits = ((await searchRes.json()).messages ?? []) as Array<{ id: string }>;
+          const hits = ((await searchRes.json()).messages ?? []) as Array<{ id: string; threadId?: string }>;
           if (hits.length === 0) continue;
 
           repliesFound++;
@@ -855,7 +855,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
     try {
       const { data: threads } = await supabase
         .from("emails_sent")
-        .select("id, user_id, campaign_id, subject, sent_at, ai_turns, last_lead_msg_at, last_ai_msg_at, ai_paused, replied, reply_sentiment, lead:leads(id, email, name, company, job_title, country, unsubscribed, status, conv_mode, lifecycle)")
+        .select("id, user_id, campaign_id, subject, sent_at, ai_draft, ai_turns, last_lead_msg_at, last_ai_msg_at, ai_paused, replied, reply_sentiment, lead:leads(id, email, name, company, job_title, country, unsubscribed, status, conv_mode, lifecycle)")
         .eq("ai_paused", false)
         .lt("ai_turns", MAX_TURN_BUDGET_CEILING)
         .order("sent_at", { ascending: false })
@@ -1272,7 +1272,7 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
   }
 
   async function suppressLead(
-    db: ReturnType<typeof createClient>,
+    db: ReturnType<typeof createClient<any>>,
     userId: string,
     campaignId: string | null,
     lead: Record<string, any>,

@@ -19,6 +19,18 @@ interface CachePayload {
   message: string;
 }
 
+type Lead = {
+  name: string; email: string; company: string;
+  job_title: string; country: string; city: string;
+  website: string; phone: string; address: string;
+  rating: number | null; source: string;
+  category: string; place_id: string;
+  email_source?: string; email_source_url?: string;
+  email_status?: string; email_confidence?: number;
+  email_is_role?: boolean; email_is_disposable?: boolean;
+  email_verification_reason?: string;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -94,17 +106,7 @@ serve(async (req) => {
       return json({ ...cached, cached: true });
     }
 
-    let leads: Array<{
-      name: string; email: string; company: string;
-      job_title: string; country: string; city: string;
-      website: string; phone: string; address: string;
-      rating: number | null; source: string;
-      category: string; place_id: string;
-      email_source?: string; email_source_url?: string;
-      email_status?: string; email_confidence?: number;
-      email_is_role?: boolean; email_is_disposable?: boolean;
-      email_verification_reason?: string;
-    }> = [];
+    let leads: Lead[] = [];
     let source = "open-business-directory";
     let quotaHit = false;
 
@@ -295,7 +297,7 @@ serve(async (req) => {
     });
 
     // Verify emails in parallel — enrich each lead with verification data
-    let verifiedLeads = await Promise.all(
+    let verifiedLeads: Lead[] = await Promise.all(
       leads.map(async (lead) => {
         if (!lead.email) {
           return {

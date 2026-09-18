@@ -70,7 +70,7 @@ export interface GateContext {
   fn?: string;
 }
 
-type Db = { from: (table: string) => any; rpc: (fn: string, args: any) => Promise<{ data?: any; error?: any }> };
+type Db = { from: (table: string) => any; rpc: (fn: string, args: any) => any };
 
 const REPLY_KINDS = new Set(["classify", "reply_draft", "escalate"]);
 
@@ -176,7 +176,7 @@ export async function resolveAiQuality(
   }
 
   const pools = aiPools(ctx.plan);
-  const degraded = metaDegraded || driftedFresh(state, pools);
+  const degraded = metaDegraded || driftedFresh(state);
   const isReply = REPLY_KINDS.has(ctx.kind);
 
   if (stateReadFailed) return concede("unreadable_state");

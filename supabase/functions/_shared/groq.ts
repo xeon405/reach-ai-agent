@@ -21,6 +21,9 @@ export interface MeterContext {
   /** Anonymous-visitor call (support-chat guest bucket): settle ai_cost_guest_state
    *  instead of a per-user ai_cost_state row (guests have no profile id). */
   guest?: boolean;
+  /** Up-front reservation (USD) the durable counter was debited by; the meter
+   *  settles actual spend minus this. Only set by gated calls (openAiCall). */
+  reserve?: number;
 }
 
 interface LedgerRow {
@@ -42,7 +45,7 @@ function estimateCost(inTokens: number, outTokens: number): number {
   return Math.round(usd * 1_000_000) / 1_000_000; // 6dp precision
 }
 
-let meterAdmin: ReturnType<typeof createClient> | null = null;
+let meterAdmin: ReturnType<typeof createClient<any>> | null = null;
 let meterPending: LedgerRow[] = [];
 let meterDropped = 0;
 let meterWarned = false;

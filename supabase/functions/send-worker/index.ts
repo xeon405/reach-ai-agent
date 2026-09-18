@@ -12,7 +12,7 @@ import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
-import { resolveDailyCap } from "../_shared/sender-health.ts";
+import { resolveDailyCap, type CapProfile } from "../_shared/sender-health.ts";
 import { getLeadScore, getNextSequenceHint, sequenceHintSuffix, strategyRef, type CampaignHint } from "../_shared/intelligence-reads.ts";
 import { signToken } from "../_shared/crypto.ts";
 import {
@@ -396,7 +396,7 @@ Write 5 alternative email subject lines for this offer. Rules: max 8 words each,
 // note: CONSUMER BUILT, PRODUCER DEFERRED â€” learning-loop never populates the
 // key, so this is always null in production (see AUDIT-FOLLOWUP.md).
 const sequenceHintCache = new Map<string, CampaignHint | null>();
-async function sequenceHintFor(db: ReturnType<typeof createClient>, campaignId: string): Promise<CampaignHint | null> {
+async function sequenceHintFor(db: ReturnType<typeof createClient<any>>, campaignId: string): Promise<CampaignHint | null> {
   if (!campaignId) return null;
   if (!sequenceHintCache.has(campaignId)) {
     try {
@@ -494,6 +494,7 @@ Deno.serve(async (req) => {
       if (claimErr || !jobs || jobs.length === 0) break;
 
       for (const job of jobs as QueueJob[]) {
+        let slotHeld = false;
         try {
           // Advisory lead-score read (Stage 5): behind the agent_config kill-switch,
           // stale/missing => null => logged as such. Purely observational here â€”
@@ -501,8 +502,6 @@ Deno.serve(async (req) => {
           // and at claim (claim_queue_jobs_v2); volume stays owned by sender_health.
           const leadScore = await getLeadScore(supabase, { userId: job.user_id, campaignId: job.campaign_id, leadId: job.lead_id });
           await insertAudit(supabase, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: job.lead_id, event: "email.claimed", payload: { job_id: job.id, attempt: job.attempts, ...(leadScore ? { lead_score: leadScore.score, lead_tier: leadScore.tier, lead_score_version: leadScore.score_version, lead_score_at: leadScore.computed_at } : { lead_score: null }) } });
-          let slotHeld = false;
-
           let ctx = ctxs.get(job.user_id);
           if (!ctx) {
             const fresh = await getUserCtx(supabase, job.user_id).catch(() => null);
@@ -568,7 +567,7 @@ Deno.serve(async (req) => {
   }
 
   // ------------------------------------------------------------------
-  async function getUserCtx(db: ReturnType<typeof createClient>, uid: string): Promise<UserCtx | null> {
+  async function getUserCtx(db: ReturnType<typeof createClient<any>>, uid: string): Promise<UserCtx | null> {
     const { data: profile } = await db.from("profiles").select("*").eq("id", uid).single();
     if (!profile?.gmail_connected) return null;
     const tok = await getAccessToken(db, uid).catch(() => null);
@@ -587,7 +586,7 @@ Deno.serve(async (req) => {
   }
 
   /** Deterministic failure handling: exponential backoff â†’ dead-letter. */
-  async function failJob(db: ReturnType<typeof createClient>, job: QueueJob, errMsg: string, maxAttempts: number): Promise<"retry" | "dead"> {
+  async function failJob(db: ReturnType<typeof createClient<any>>, job: QueueJob, errMsg: string, maxAttempts: number): Promise<"retry" | "dead"> {
     const attempts = (job.attempts ?? 1);
     const isDead = attempts >= maxAttempts;
     const backoffMs = Math.min(60 * 60000, Math.pow(2, attempts) * 5 * 60000);
@@ -603,7 +602,7 @@ Deno.serve(async (req) => {
   }
 
   /** THE 13-point eligibility gate. Returns null when eligible, else reason. */
-  async function eligibilityBlock(db: ReturnType<typeof createClient>, job: QueueJob, profile: Record<string, any>): Promise<string | null> {
+  async function eligibilityBlock(db: ReturnType<typeof createClient<any>>, job: QueueJob, profile: Record<string, any>): Promise<string | null> {
     const { data: campaign } = await db.from("campaigns").select("id,status,autopilot").eq("id", job.campaign_id).maybeSingle();
     if (!campaign) return "campaign_missing";
     if (campaign.status !== "active") return "campaign_not_active";                       // 3
@@ -618,14 +617,14 @@ Deno.serve(async (req) => {
     if (sup) return "lead_suppressed_db";                                                  // 5/7 (DB truth)
     if (!profile.gmail_connected) return "gmail_disconnected";                             // 1/2
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
-    const cap = await resolveDailyCap(db, profile, limits.dailyEmails, profile.gmail_account_type === "workspace" ? 2000 : 500);
+    const cap = await resolveDailyCap(db, profile as CapProfile, limits.dailyEmails, profile.gmail_account_type === "workspace" ? 2000 : 500);
     const today = new Date().toISOString().split("T")[0];
     const used = profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0;
     if (used >= cap) return "daily_limit";                                                 // 9/10
     return null;
   }
 
-  async function processJob(db: ReturnType<typeof createClient>, job: QueueJob, ctx: UserCtx, _start: number): Promise<boolean> {
+  async function processJob(db: ReturnType<typeof createClient<any>>, job: QueueJob, ctx: UserCtx, _start: number): Promise<boolean> {
     const blockReason = await eligibilityBlock(db, job, ctx.profile);
     if (blockReason) {
       await db.from("send_queue").update({ status: "cancelled", last_error: blockReason, lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
@@ -869,7 +868,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT â€
   }
 
   async function processDueFollowUps(
-    db: ReturnType<typeof createClient>,
+    db: ReturnType<typeof createClient<any>>,
     dry = false,
     onlyIds: string[] | null = null,
   ): Promise<{ followupsSent: number; followupsCancelled: number; dryDecisions?: Array<Record<string, unknown>> }> {
@@ -1073,7 +1072,7 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT â€
                   fuOpener,
                   buildLeadFacts(lead),
                   fuSeqSuffix,
-                  fuGate,
+                  fuGate ?? undefined,
                 )
               : templateFollowUp(
                   String(profile.name ?? "Best regards"),

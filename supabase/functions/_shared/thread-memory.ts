@@ -83,7 +83,9 @@ export interface MemoryWriteOutcome {
   watermarkMs?: number;
 }
 
-type Db = { from: (table: string) => any; rpc: (fn: string, args: any) => Promise<{ data?: any; error?: any }> };
+type Db = { from: (table: string) => any; rpc: (fn: string, args: any) => any };
+
+type ThreadRow = { id: string; forget_at: string | null; last_summarized_at: string | null };
 
 export function ms(v: string | null | undefined): number {
   if (!v) return 0;
@@ -255,7 +257,7 @@ export async function summarizeThreadMemory(
   if (!opts.threadId) return no("no_thread", "no_gmail_thread");
 
   // Thread row = per-(user, lead) unit; carries forget_at + watermark.
-  let threadRow: { id: string; forget_at: string | null; last_summarized_at: string | null } | null = null;
+  let threadRow: ThreadRow | null = null;
   try {
     const { data } = await db
       .from("email_threads")
@@ -263,7 +265,7 @@ export async function summarizeThreadMemory(
       .eq("user_id", ctx.userId)
       .eq("lead_id", ctx.leadId)
       .maybeSingle();
-    threadRow = data as typeof threadRow;
+    threadRow = data as ThreadRow | null;
   } catch {
     return no("no_thread", "thread_read_failed");
   }

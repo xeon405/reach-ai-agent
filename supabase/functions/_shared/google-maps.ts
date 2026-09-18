@@ -230,7 +230,7 @@ async function searchRegion(
       const room = Math.min(budget - shared.enrichmentsUsed, limit - leads.length, perRegionCap - leads.length);
       if (room <= 0) break;
       type Candidate = {
-        place: NewTextSearchResponse["places"] extends Array<infer P> ? P : never;
+        place: NonNullable<NewTextSearchResponse["places"]>[number];
         website: string;
         phone: string;
         address: string;

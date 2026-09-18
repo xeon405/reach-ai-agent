@@ -1,0 +1,6 @@
+{
+  "lock": false,
+  "tasks": {
+    "check": "deno check --config scripts/.ops/deno-check.json \"supabase/functions/**/index.ts\""
+  }
+}

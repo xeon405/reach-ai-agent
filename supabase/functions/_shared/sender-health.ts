@@ -40,7 +40,7 @@ export function measureRates(m: HealthMetrics): { bounce_rate: number; unsub_rat
 }
 
 export interface HealthUpdateInput {
-  prev: HealthState | null; // null = first measurement for this mailbox
+  prev: Pick<HealthState, "phase" | "current_cap" | "clean_days"> | null; // null = first measurement for this mailbox
   metrics: HealthMetrics;
   warm: number;   // the plan-ramp ceiling: min(plan.dailyEmails, 5 + daysWarm*5, ceiling)
   planDaily: number;

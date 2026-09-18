@@ -313,7 +313,9 @@ Deno.serve(async (req) => {
           .gte("created_at", todayStart);
         if ((threadCount ?? 0) >= 3) throw new Error("Too many conversations — please email outreachai.team@gmail.com");
       }
-      const row = isGuest ? { guest_id: guestId, status: "auto" } : { user_id: userId, status: "auto" };
+      const row: { guest_id?: string; user_id?: string | null; status: string } = isGuest
+        ? { guest_id: guestId, status: "auto" }
+        : { user_id: userId, status: "auto" };
       const { data: created, error: cErr } = await admin
         .from("support_chat_threads").insert(row)
         .select("id").single();
