@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-provider";
+import { SiteHeader } from "@/components/site-header";
 import { Activity, RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/status")({
@@ -61,13 +61,7 @@ function StatusPage() {
   return (
     <div className="min-h-screen bg-background">
         <EnOnlyNotice />
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
-        <Link to="/" className="text-lg font-bold">Outship<span className="text-primary">Ai</span></Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link to="/auth"><Button variant="outline" size="sm">Open app</Button></Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="mx-auto max-w-2xl px-4 pt-10 text-center">
         <div

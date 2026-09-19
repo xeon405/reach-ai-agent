@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Activity, Flame, Users } from "lucide-react";
-import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/stats")({
@@ -41,14 +41,7 @@ function StatsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border/50">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Logo />
-          <Button asChild size="sm" className="bg-gradient-primary shadow-glow">
-            <Link to="/auth">Start free</Link>
-          </Button>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="mx-auto max-w-5xl px-6 py-14">
         <div className="text-center">

@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { EnOnlyNotice } from "@/components/EnOnlyNotice";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-provider";
+import { SiteHeader } from "@/components/site-header";
 import { Compass } from "lucide-react";
 
 export const Route = createFileRoute("/about")({
@@ -27,13 +26,7 @@ function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
         <EnOnlyNotice />
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
-        <Link to="/" className="text-lg font-bold">Outship<span className="text-primary">Ai</span></Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link to="/auth"><Button variant="outline" size="sm">Open app</Button></Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-8 text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">

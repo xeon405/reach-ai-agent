@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Children, lazy, Suspense, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Menu, X, Inbox, Search, Send, Target, Calendar } from "lucide-react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Inbox, Search, Send, Target, Calendar } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { SiteHeader } from "@/components/site-header";
 import { APP_BASE_URL } from "@/lib/app-config";
 import { SupportChat } from "@/components/support-chat";
-import { ThemeToggle } from "@/components/theme-provider";
 
 // three.js is big (~560 kB minified); load the orb only after first paint/idle
 // so the page's copy, CTAs and CSS render instantly. Vite splits it into its own chunk.
@@ -12,7 +12,7 @@ const HeroOrb = lazy(() => import("@/components/hero-orb").then((m) => ({ defaul
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useLang, LangToggle } from "@/lib/i18n";
+import { useLang } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -269,8 +269,6 @@ const plans = [
 function Landing() {
   const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [orbReady, setOrbReady] = useState(false);
 
   useEffect(() => {
@@ -286,34 +284,6 @@ function Landing() {
     }
     const t = window.setTimeout(() => setOrbReady(true), 150);
     return () => window.clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const spyEls = Array.from(document.querySelectorAll<HTMLElement>("[data-spy]"));
-    const ids = spyEls
-      .map((a) => a.getAttribute("href")?.slice(1) ?? "")
-      .filter(Boolean);
-    const onSpy = () => {
-      const pos = window.scrollY + 168;
-      let current = "";
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (el && el.offsetTop <= pos) current = id;
-      }
-      spyEls.forEach((a) =>
-        a.classList.toggle("is-active", current !== "" && a.getAttribute("href") === `#${current}`),
-      );
-    };
-    onSpy();
-    window.addEventListener("scroll", onSpy, { passive: true, capture: true });
-    return () => window.removeEventListener("scroll", onSpy, true);
   }, []);
 
   useEffect(() => {
@@ -346,63 +316,19 @@ function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header
-        className={`sticky top-0 z-50 border-b bg-background/70 backdrop-blur-xl transition-all duration-300 ${
-          scrolled ? "border-border/50 py-2 shadow-sm" : "border-transparent py-4"
-        }`}
-      >
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
-          <Logo />
-          <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
-            <a href="#features" data-spy className="nav-link hover:text-foreground">{t("nav_features")}</a>
-            <a href="#pricing" data-spy className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
-            <a href="#how" data-spy className="nav-link hover:text-foreground">How it works</a>
-            <a href="#faq" data-spy className="nav-link hover:text-foreground">FAQ</a>
-            <Link to="/stats" className="nav-link hover:text-foreground">{t("nav_stats")}</Link>
-          </nav>
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex">
-              <LangToggle />
-            </div>
-            <ThemeToggle />
-            <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-              <Link to="/auth">{t("nav_login")}</Link>
-            </Button>
-            <Button asChild size="sm" className="hidden bg-gradient-primary shadow-glow md:inline-flex">
-              <Link to="/auth">{t("start_free")}</Link>
-            </Button>
-            <button
-              type="button"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground md:hidden"
-            >
-              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-        {menuOpen && (
-          <div className="border-t border-border/50 bg-background animate-fade-in md:hidden">
-            <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-6 py-4 text-sm">
-              <a href="#features" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_features")}</a>
-              <a href="#pricing" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_pricing")}</a>
-              <a href="#how" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">How it works</a>
-              <a href="#faq" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">FAQ</a>
-              <Link to="/stats" onClick={() => setMenuOpen(false)} className="rounded-md px-3 py-2.5 hover:bg-accent hover:text-accent-foreground">{t("nav_stats")}</Link>
-              <div className="mt-3 flex items-center gap-2 border-t border-border/50 px-3 pt-4 pb-1">
-                <LangToggle />
-                <Button asChild variant="ghost" size="sm" className="ml-auto">
-                  <Link to="/auth" onClick={() => setMenuOpen(false)}>{t("nav_login")}</Link>
-                </Button>
-                <Button asChild size="sm" className="bg-gradient-primary shadow-glow">
-                  <Link to="/auth" onClick={() => setMenuOpen(false)}>{t("start_free")}</Link>
-                </Button>
-              </div>
-            </nav>
-          </div>
-        )}
-      </header>
+      <SiteHeader
+        nav={[
+          { label: t("nav_features"), href: "#features", spy: true },
+          { label: t("nav_pricing"), href: "#pricing", spy: true },
+          { label: "How it works", href: "#how", spy: true },
+          { label: "FAQ", href: "#faq", spy: true },
+          { label: t("nav_stats"), to: "/stats" },
+        ]}
+        secondaryCta={t("nav_login")}
+        cta={t("start_free")}
+        ctaVariant="primary"
+        showLangToggle
+      />
 
       {/* Hero */}
       <section className="relative w-full min-h-screen bg-[#F7F6F3] dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 pt-24 pb-14 px-6 md:px-12 overflow-hidden flex flex-col justify-between">

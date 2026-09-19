@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { EnOnlyNotice } from "@/components/EnOnlyNotice";
 import { useState } from "react";
 import { Check, Copy, Loader2, MailCheck, Sparkles, X } from "lucide-react";
-import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,14 +66,7 @@ function ToolsPage() {
   return (
     <div className="min-h-screen bg-background">
         <EnOnlyNotice />
-      <header className="border-b border-border/50">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Logo />
-          <Button asChild size="sm" className="bg-gradient-primary shadow-glow">
-            <Link to="/auth">Start free</Link>
-          </Button>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="mx-auto max-w-5xl space-y-14 px-6 py-14">
         <div className="text-center">
