@@ -767,39 +767,6 @@
   position: relative;
   z-index: 1;
 }
-.hero-orb::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background:
-    radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 26%),
-    radial-gradient(circle at 50% 52%, #e7e1d4 0 24%, #222 24.8% 46%, rgba(34, 34, 34, 0) 62%),
-    radial-gradient(circle at 50% 50%, rgba(255, 196, 110, 0.5), rgba(255, 196, 110, 0) 58%);
-  filter: blur(7px);
-  opacity: 0.9;
-  transition: opacity 0.7s ease;
-  pointer-events: none;
-}
-.hero-orb[data-hero-ready]::before {
-  opacity: 0.22;
-}
-.hero-orb::after {
-  content: "";
-  position: absolute;
-  left: 16%;
-  right: 16%;
-  bottom: 7%;
-  height: 10%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 68%);
-  filter: blur(3px);
-  pointer-events: none;
-  z-index: 0;
-}
-.dark .hero-orb::after {
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 68%);
-}
 .hero-orb.is-fallback {
   display: none;
 }

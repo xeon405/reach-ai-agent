@@ -244,9 +244,8 @@ export function HeroOrb() {
     const ro = new ResizeObserver(resize);
     ro.observe(mount);
 
-    // Paint the opening frame right away and fade out the CSS placeholder.
+    // Paint the opening frame right away so the orb never flashes blank.
     renderer.render(scene, camera);
-    mount.setAttribute("data-hero-ready", "");
 
     // Damped spring parallax — smooth, not jittery
     let targetX = 0;
