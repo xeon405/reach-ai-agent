@@ -767,6 +767,22 @@
   position: relative;
   z-index: 1;
 }
+.hero-orb::after {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  bottom: 7%;
+  height: 10%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 68%);
+  filter: blur(3px);
+  pointer-events: none;
+  z-index: 0;
+}
+.dark .hero-orb::after {
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 68%);
+}
 .hero-orb.is-fallback {
   display: none;
 }
