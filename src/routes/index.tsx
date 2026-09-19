@@ -269,22 +269,6 @@ const plans = [
 function Landing() {
   const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
-  const [orbReady, setOrbReady] = useState(false);
-
-  useEffect(() => {
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    if (w.requestIdleCallback) {
-      const id = w.requestIdleCallback(() => setOrbReady(true), { timeout: 300 });
-      return () => w.cancelIdleCallback?.(id);
-    }
-    const t = window.setTimeout(() => setOrbReady(true), 150);
-    return () => window.clearTimeout(t);
-  }, []);
 
   useEffect(() => {
     supabase.rpc("public_stats").then(({ data }) => {
@@ -362,13 +346,9 @@ function Landing() {
           </div>
 
           <div className="relative w-full h-[450px] md:h-[520px]">
-            {orbReady ? (
-              <Suspense fallback={<div className="hero-orb" aria-hidden />}>
-                <HeroOrb />
-              </Suspense>
-            ) : (
-              <div className="hero-orb" aria-hidden />
-            )}
+            <Suspense fallback={<div className="hero-orb" aria-hidden />}>
+              <HeroOrb />
+            </Suspense>
             <div className="float-email float1"><Mail className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> New lead found · Chicago</div>
             <div className="float-email float2"><Target className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Reply detected · Interested</div>
             <div className="float-email float3"><Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Meeting booked · Tomorrow 2pm</div>
