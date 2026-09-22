@@ -1,0 +1,12 @@
+allprojects {
+    buildscript {
+        repositories {
+            maven { url 'file:///C:/Dev/reach-ai-agent/android/m2local' }
+            maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+        }
+    }
+    repositories {
+        maven { url 'file:///C:/Dev/reach-ai-agent/android/m2local' }
+        maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+    }
+}

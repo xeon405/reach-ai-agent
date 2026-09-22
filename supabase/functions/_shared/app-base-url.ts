@@ -5,6 +5,6 @@
 // ships; no other file moves anything.
 //
 // Byte-truth (proven by curl on this box):
-//   outreach-ochre-sigma.vercel.app  -> HTTP 200 (and /lead-edit/{uuid} -> 200)
-//   app.reach-ai.dev                -> HTTP 000, no DNS record from this box
-export const APP_BASE_URL = "https://outreach-ochre-sigma.vercel.app";
+//   out-ship.com  -> HTTP 200 (and /lead-edit/{uuid} -> 200)
+//   www.out-ship.com -> HTTP 200 (redirects to apex)
+export const APP_BASE_URL = "https://out-ship.com";

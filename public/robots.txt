@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://outreach-ochre-sigma.vercel.app/sitemap.xml
+Sitemap: https://out-ship.com/sitemap.xml

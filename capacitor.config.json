@@ -1,0 +1,7 @@
+{
+  "appId": "ai.reach.agent",
+  "appName": "Reach AI Agent",
+  "webDir": "dist/client",
+  "bundledWebRuntime": false,
+  "server": { "androidScheme": "https" }
+}

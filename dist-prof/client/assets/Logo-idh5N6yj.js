@@ -1,0 +1,2 @@
+import{j as e}from"./index-DHQSmhWM.js";import{Z as r}from"./zap-Bi65sfLO.js";function i({className:s=""}){return e.jsxs("div",{className:`flex items-center gap-2 font-semibold tracking-tight ${s}`,children:[e.jsx("span",{className:"inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-glow",children:e.jsx(r,{className:"h-4 w-4 text-primary-foreground",strokeWidth:2.5})}),e.jsx("span",{className:"text-lg group-data-[collapsible=icon]:hidden",children:"OutreachAI"})]})}export{i as L};
+//# sourceMappingURL=Logo-idh5N6yj.js.map

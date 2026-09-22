@@ -1,0 +1,25 @@
+buildscript {
+    repositories {
+        maven { url 'file:///C:/Dev/reach-ai-agent/android/m2local' }
+        maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath 'com.google.gms:google-services:4.4.4'
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        maven { url 'file:///C:/Dev/reach-ai-agent/android/m2local' }
+        maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+        google()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

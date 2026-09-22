@@ -8,4 +8,4 @@
 // Override without a code change by setting VITE_APP_BASE_URL in .env
 // (public value — never put secrets in a VITE_ var; it ships to the browser).
 export const APP_BASE_URL: string =
-  import.meta.env.VITE_APP_BASE_URL ?? "https://outreach-ochre-sigma.vercel.app";
+  import.meta.env.VITE_APP_BASE_URL ?? "https://out-ship.com";
