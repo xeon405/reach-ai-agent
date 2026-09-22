@@ -63,4 +63,6 @@ android-app/rebuild*.log
 
 .vercel
 .env*
-!.env.example
+!.env.example# build-cache blobs (55MB jars) — never commit
+android/m2local/
+*.jar
