@@ -121,7 +121,7 @@ export function SiteHeader({
         showNav
           ? scrolled
             ? "border-border/50 py-2 shadow-sm"
-            : "border-transparent py-4"
+            : "border-border/30 py-4"
           : "border-border/50 py-3"
       }`}
     >

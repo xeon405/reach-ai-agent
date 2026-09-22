@@ -1,6 +1,28 @@
 import { useEffect, useRef } from "react";
-import * as THREE from "three";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import {
+  WebGLRenderer,
+  PMREMGenerator,
+  Scene,
+  PerspectiveCamera,
+  Group,
+  MeshPhysicalMaterial,
+  AmbientLight,
+  DirectionalLight,
+  PointLight,
+  SphereGeometry,
+  TorusGeometry,
+  Mesh,
+  Vector3,
+  BufferGeometry,
+  CanvasTexture,
+  SpriteMaterial,
+  Sprite,
+  AdditiveBlending,
+  type Texture,
+} from "three";
+// No RoomEnvironment: it shipped a ~510KB chunk and built a whole procedural
+// room at runtime just to give the chrome orb reflections. Replaced with a tiny
+// 64x32 equirect canvas gradient baked once via PMREM — identical look, ~0KB.
 
 function supportsWebGL(): boolean {
   if (typeof window === "undefined") return false;
@@ -24,9 +46,9 @@ export function HeroOrb() {
       return;
     }
 
-    let renderer: THREE.WebGLRenderer;
+    let renderer: WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({
+      renderer = new WebGLRenderer({
         antialias: true,
         alpha: true,
         powerPreference: "high-performance",
@@ -43,17 +65,35 @@ export function HeroOrb() {
     renderer.domElement.style.display = "block";
     mount.appendChild(renderer.domElement);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    const scene = new Scene();
+    const camera = new PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 0, 7);
     camera.lookAt(0, 0, 0);
 
-    // Soft white studio reflections for crisp, neutral metal
-    let pmrem: THREE.PMREMGenerator | null = null;
-    let envTex: THREE.Texture | null = null;
+    // Soft white studio reflections for crisp, neutral metal — baked from a
+    // tiny equirect gradient (no RoomEnvironment, no 510KB chunk, near-zero cost)
+    let pmrem: PMREMGenerator | null = null;
+    let envTex: Texture | null = null;
     try {
-      pmrem = new THREE.PMREMGenerator(renderer);
-      envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem = new PMREMGenerator(renderer);
+      const c = document.createElement("canvas");
+      c.width = 64;
+      c.height = 32;
+      const x = c.getContext("2d");
+      if (x) {
+        const g = x.createLinearGradient(0, 0, 0, 32);
+        g.addColorStop(0, "#f8f8f8");
+        g.addColorStop(0.3, "#d9d9d9");
+        g.addColorStop(0.6, "#b5b5b5");
+        g.addColorStop(1, "#8c8c8c");
+        x.fillStyle = g;
+        x.fillRect(0, 0, 64, 32);
+        const tex = new CanvasTexture(c);
+        envTex = pmrem.fromEquirectangular(tex).texture;
+        tex.dispose();
+      } else {
+        throw new Error("2d context unavailable");
+      }
       scene.environment = envTex;
     } catch {
       pmrem = null;
@@ -61,21 +101,21 @@ export function HeroOrb() {
     }
 
     // All-neutral lighting — no warm tones
-    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
+    const ambient = new AmbientLight(0xffffff, 0.55);
+    const keyLight = new DirectionalLight(0xffffff, 1.15);
     keyLight.position.set(4, 7, 6);
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    const fillLight = new DirectionalLight(0xffffff, 0.5);
     fillLight.position.set(-5, -2, -4);
-    const underLight = new THREE.DirectionalLight(0xffffff, 0.28);
+    const underLight = new DirectionalLight(0xffffff, 0.28);
     underLight.position.set(1, -6, 2);
     scene.add(ambient, keyLight, fillLight, underLight);
 
     // Specular key-light that rides the parallax so metal "answers" the cursor
-    const specLight = new THREE.PointLight(0xffffff, 0, 8);
+    const specLight = new PointLight(0xffffff, 0, 8);
     specLight.position.set(3, 2.5, 3);
     scene.add(specLight);
 
-    const chromeMat = new THREE.MeshPhysicalMaterial({
+    const chromeMat = new MeshPhysicalMaterial({
       color: 0x161616,
       metalness: 1.0,
       roughness: 0.28,
@@ -83,14 +123,14 @@ export function HeroOrb() {
       clearcoatRoughness: 0.1,
       envMapIntensity: 1.6,
     });
-    const chromeDimMat = new THREE.MeshPhysicalMaterial({
+    const chromeDimMat = new MeshPhysicalMaterial({
       color: 0x4a4a4a,
       metalness: 1.0,
       roughness: 0.45,
       clearcoat: 0.6,
       envMapIntensity: 0.8,
     });
-    const nucleusMat = new THREE.MeshPhysicalMaterial({
+    const nucleusMat = new MeshPhysicalMaterial({
       color: 0xd9a441,
       metalness: 0.6,
       roughness: 0.22,
@@ -100,16 +140,14 @@ export function HeroOrb() {
       emissiveIntensity: 0.5,
       envMapIntensity: 1.6,
     });
-    const ringMat = new THREE.MeshPhysicalMaterial({
+    const ringMat = new MeshPhysicalMaterial({
       color: 0x2a2a2a,
       metalness: 1.0,
       roughness: 0.32,
       envMapIntensity: 1.1,
-      anisotropy: 1.0,
     });
 
     // Theme-aware palette: dark metal on light background, bright metal on dark background.
-    // Highlights ride on the studio reflections so the orb always contrasts its canvas.
     const isDarkTheme = () =>
       typeof document !== "undefined" && document.documentElement.classList.contains("dark");
     const applyPalette = (dark: boolean) => {
@@ -126,13 +164,13 @@ export function HeroOrb() {
       } else {
         chromeMat.color.setHex(0x161616);
         chromeMat.roughness = 0.28;
-        chromeMat.envMapIntensity = 1.2;
+        chromeMat.envMapIntensity = 1.6;
         chromeDimMat.color.setHex(0x4a4a4a);
         chromeDimMat.roughness = 0.45;
-        chromeDimMat.envMapIntensity = 0.65;
+        chromeDimMat.envMapIntensity = 0.8;
         ringMat.color.setHex(0x2a2a2a);
         ringMat.roughness = 0.32;
-        ringMat.envMapIntensity = 0.85;
+        ringMat.envMapIntensity = 1.1;
       }
     };
     applyPalette(isDarkTheme());
@@ -140,21 +178,21 @@ export function HeroOrb() {
     themeObs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     // root: parallax + breath + bob — never spins on its own
-    const root = new THREE.Group();
+    const root = new Group();
     scene.add(root);
 
     // shell: nodes + web, slow spin
-    const shell = new THREE.Group();
+    const shell = new Group();
     root.add(shell);
 
     // core: nucleus + calibration rings, counter-spin
-    const core = new THREE.Group();
+    const core = new Group();
     root.add(core);
 
-    const disposedGeos: THREE.BufferGeometry[] = [];
+    const disposedGeos: BufferGeometry[] = [];
 
     // Equal-sphere (fibonacci) node ring, radius 2.15
-    const nodePositions: THREE.Vector3[] = [];
+    const nodePositions: Vector3[] = [];
     const phi = Math.PI * (3 - Math.sqrt(5));
     const count = 22;
     for (let i = 0; i < count; i++) {
@@ -162,18 +200,18 @@ export function HeroOrb() {
       const radius = Math.sqrt(Math.max(0, 1 - y * y));
       const theta = phi * i;
       nodePositions.push(
-        new THREE.Vector3(Math.cos(theta) * radius * 2.15, y * 2.15, Math.sin(theta) * radius * 2.15),
+        new Vector3(Math.cos(theta) * radius * 2.15, y * 2.15, Math.sin(theta) * radius * 2.15),
       );
     }
 
     // Fake depth: front nodes slightly larger + bright, back smaller + dim
-    const nodeGeos: THREE.BufferGeometry[] = [];
-    const nodeMeshes: THREE.Mesh[] = [];
+    const nodeGeos: BufferGeometry[] = [];
+    const nodeMeshes: Mesh[] = [];
     nodePositions.forEach((pos) => {
       const size = pos.z > 0.3 ? 0.135 : pos.z < -0.3 ? 0.1 : 0.115;
-      const g = new THREE.SphereGeometry(size, 16, 16);
+      const g = new SphereGeometry(size, 16, 16);
       nodeGeos.push(g);
-      const mesh = new THREE.Mesh(g, pos.z < -0.3 ? chromeDimMat : chromeMat);
+      const mesh = new Mesh(g, pos.z < -0.3 ? chromeDimMat : chromeMat);
       mesh.position.copy(pos);
       shell.add(mesh);
       nodeMeshes.push(mesh);
@@ -181,8 +219,8 @@ export function HeroOrb() {
 
     // Nodes float free — no outer connections
 
-    const nucleusGeo = new THREE.SphereGeometry(0.28, 24, 24);
-    const nucleus = new THREE.Mesh(nucleusGeo, nucleusMat);
+    const nucleusGeo = new SphereGeometry(0.28, 24, 24);
+    const nucleus = new Mesh(nucleusGeo, nucleusMat);
     core.add(nucleus);
 
     // Warm golden glow shining from behind the core
@@ -200,34 +238,33 @@ export function HeroOrb() {
         ctx.fillRect(0, 0, 128, 128);
       }
     }
-    const glowTex = new THREE.CanvasTexture(glowCanvas);
-    const glowMat = new THREE.SpriteMaterial({
+    const glowTex = new CanvasTexture(glowCanvas);
+    const glowMat = new SpriteMaterial({
       map: glowTex,
       color: 0xffc56b,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
       depthWrite: false,
     });
-    const glowSprite = new THREE.Sprite(glowMat);
+    const glowSprite = new Sprite(glowMat);
     glowSprite.scale.setScalar(1.7);
     glowSprite.position.set(0, 0, -0.1);
     core.add(glowSprite);
 
     // Calibration rings, counter-rotating
-    // Three counter-rotating rings, equal thickness
-    const ringGeo = new THREE.TorusGeometry(1.15, 0.032, 12, 64);
-    const ringA = new THREE.Mesh(ringGeo, ringMat);
+    const ringGeo = new TorusGeometry(1.15, 0.032, 12, 64);
+    const ringA = new Mesh(ringGeo, ringMat);
     ringA.rotation.x = Math.PI / 4;
     core.add(ringA);
 
-    const ringGeo2 = new THREE.TorusGeometry(0.85, 0.032, 12, 64);
-    const ringB = new THREE.Mesh(ringGeo2, ringMat);
+    const ringGeo2 = new TorusGeometry(0.85, 0.032, 12, 64);
+    const ringB = new Mesh(ringGeo2, ringMat);
     ringB.rotation.x = -Math.PI / 3;
     ringB.rotation.y = Math.PI / 6;
     core.add(ringB);
 
-    const ringGeo3 = new THREE.TorusGeometry(0.72, 0.032, 12, 64);
-    const ringC = new THREE.Mesh(ringGeo3, ringMat);
+    const ringGeo3 = new TorusGeometry(0.72, 0.032, 12, 64);
+    const ringC = new Mesh(ringGeo3, ringMat);
     ringC.rotation.x = Math.PI / 2.4;
     ringC.rotation.y = -Math.PI / 4;
     core.add(ringC);

@@ -786,6 +786,23 @@
 .hero-orb.is-fallback {
   display: none;
 }
+/* First-paint placeholder: static chrome sphere until the lazy WebGL orb mounts */
+.hero-orb-loading::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72%, 360px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #f4f2ee 0%, #d9d6cf 40%, #a8a49c 75%, #7d7a73 100%);
+  opacity: 0.55;
+}
+.dark .hero-orb-loading::before {
+  background: radial-gradient(circle at 34% 30%, #4a4a4a 0%, #2f2f2f 40%, #1e1e1e 75%, #141414 100%);
+  opacity: 0.6;
+}
 .float-email {
   position: absolute;
   background: #ffffff;
