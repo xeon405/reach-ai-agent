@@ -70,24 +70,47 @@ export function HeroOrb() {
     camera.position.set(0, 0, 7);
     camera.lookAt(0, 0, 0);
 
-    // Soft white studio reflections for crisp, neutral metal — baked from a
-    // tiny equirect gradient (no RoomEnvironment, no 510KB chunk, near-zero cost)
+    // Studio light-box reflections for polished chrome — baked from a tiny
+    // equirect canvas (bright panels → crisp specular streaks, no RoomEnvironment chunk)
     let pmrem: PMREMGenerator | null = null;
     let envTex: Texture | null = null;
     try {
       pmrem = new PMREMGenerator(renderer);
       const c = document.createElement("canvas");
-      c.width = 64;
-      c.height = 32;
+      c.width = 128;
+      c.height = 64;
       const x = c.getContext("2d");
       if (x) {
-        const g = x.createLinearGradient(0, 0, 0, 32);
-        g.addColorStop(0, "#f8f8f8");
-        g.addColorStop(0.3, "#d9d9d9");
-        g.addColorStop(0.6, "#b5b5b5");
-        g.addColorStop(1, "#8c8c8c");
+        // Neutral studio base: bright ceiling, dimmer floor
+        const g = x.createLinearGradient(0, 0, 0, 64);
+        g.addColorStop(0, "#eaeaea");
+        g.addColorStop(0.25, "#d9d9d9");
+        g.addColorStop(0.55, "#b0b0b0");
+        g.addColorStop(1, "#7f7f7f");
         x.fillStyle = g;
-        x.fillRect(0, 0, 64, 32);
+        x.fillRect(0, 0, 128, 64);
+        // Bright light-box panels → the mirror-like streak highlights on metal.
+        // Equirect: horizontal = full 360°, top = up. Panels above and beside the sphere.
+        const box = (px: number, py: number, w: number, h: number, a: number) => {
+          x.fillStyle = `rgba(255,255,255,${a})`;
+          if (typeof x.roundRect === "function") {
+            x.beginPath();
+            x.roundRect(px, py, w, h, 4);
+            x.fill();
+          } else {
+            x.fillRect(px, py, w, h);
+          }
+        };
+        // Overhead lamp (warm, like the old RoomEnvironment key)
+        box(24, 3, 80, 8, 1);
+        // Tall side light-boxes at the left and right edges
+        box(2, 6, 10, 32, 0.9);
+        box(116, 4, 10, 28, 0.9);
+        // Key and fill panels
+        box(12, 26, 26, 14, 0.92);
+        box(88, 22, 26, 14, 0.92);
+        // Soft floor bounce below the horizon
+        box(50, 46, 28, 6, 0.4);
         const tex = new CanvasTexture(c);
         envTex = pmrem.fromEquirectangular(tex).texture;
         tex.dispose();
