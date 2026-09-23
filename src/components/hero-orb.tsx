@@ -81,12 +81,12 @@ export function HeroOrb() {
       c.height = 64;
       const x = c.getContext("2d");
       if (x) {
-        // Neutral studio base: bright ceiling, dimmer floor
+        // Jet-black polished metal: deep charcoal studio, bright sharp panels
         const g = x.createLinearGradient(0, 0, 0, 64);
-        g.addColorStop(0, "#eaeaea");
-        g.addColorStop(0.25, "#d9d9d9");
-        g.addColorStop(0.55, "#b0b0b0");
-        g.addColorStop(1, "#7f7f7f");
+        g.addColorStop(0, "#2b2b2b");
+        g.addColorStop(0.25, "#191919");
+        g.addColorStop(0.55, "#101010");
+        g.addColorStop(1, "#060606");
         x.fillStyle = g;
         x.fillRect(0, 0, 128, 64);
         // Bright light-box panels → the mirror-like streak highlights on metal.
@@ -102,13 +102,13 @@ export function HeroOrb() {
           }
         };
         // Overhead lamp (warm, like the old RoomEnvironment key)
-        box(24, 3, 80, 8, 1);
+        box(24, 3, 80, 8, 0.95);
         // Tall side light-boxes at the left and right edges
-        box(2, 6, 10, 32, 0.9);
-        box(116, 4, 10, 28, 0.9);
+        box(2, 6, 10, 32, 0.85);
+        box(116, 4, 10, 28, 0.85);
         // Key and fill panels
-        box(12, 26, 26, 14, 0.92);
-        box(88, 22, 26, 14, 0.92);
+        box(12, 26, 26, 14, 0.88);
+        box(88, 22, 26, 14, 0.88);
         // Soft floor bounce below the horizon
         box(50, 46, 28, 6, 0.4);
         const tex = new CanvasTexture(c);
@@ -139,19 +139,19 @@ export function HeroOrb() {
     scene.add(specLight);
 
     const chromeMat = new MeshPhysicalMaterial({
-      color: 0x161616,
+      color: 0x0d0d0d,
       metalness: 1.0,
       roughness: 0.28,
       clearcoat: 1,
       clearcoatRoughness: 0.1,
-      envMapIntensity: 1.6,
+      envMapIntensity: 1.2,
     });
     const chromeDimMat = new MeshPhysicalMaterial({
-      color: 0x4a4a4a,
+      color: 0x0a0a0a,
       metalness: 1.0,
       roughness: 0.45,
       clearcoat: 0.6,
-      envMapIntensity: 0.8,
+      envMapIntensity: 0.7,
     });
     const nucleusMat = new MeshPhysicalMaterial({
       color: 0xd9a441,
@@ -164,36 +164,36 @@ export function HeroOrb() {
       envMapIntensity: 1.6,
     });
     const ringMat = new MeshPhysicalMaterial({
-      color: 0x2a2a2a,
+      color: 0x111111,
       metalness: 1.0,
       roughness: 0.32,
-      envMapIntensity: 1.1,
+      envMapIntensity: 0.9,
     });
 
-    // Theme-aware palette: dark metal on light background, bright metal on dark background.
+    // Theme-aware palette: deep black polished metal in both themes
     const isDarkTheme = () =>
       typeof document !== "undefined" && document.documentElement.classList.contains("dark");
     const applyPalette = (dark: boolean) => {
       if (dark) {
-        chromeMat.color.setHex(0x1c1c1c);
+        chromeMat.color.setHex(0x0d0d0d);
         chromeMat.roughness = 0.38;
-        chromeMat.envMapIntensity = 1.35;
-        chromeDimMat.color.setHex(0x3f3f3f);
+        chromeMat.envMapIntensity = 1.1;
+        chromeDimMat.color.setHex(0x0a0a0a);
         chromeDimMat.roughness = 0.5;
-        chromeDimMat.envMapIntensity = 0.8;
-        ringMat.color.setHex(0x303030);
+        chromeDimMat.envMapIntensity = 0.7;
+        ringMat.color.setHex(0x111111);
         ringMat.roughness = 0.42;
-        ringMat.envMapIntensity = 1.05;
+        ringMat.envMapIntensity = 0.85;
       } else {
-        chromeMat.color.setHex(0x161616);
+        chromeMat.color.setHex(0x0d0d0d);
         chromeMat.roughness = 0.28;
-        chromeMat.envMapIntensity = 1.6;
-        chromeDimMat.color.setHex(0x4a4a4a);
+        chromeMat.envMapIntensity = 1.2;
+        chromeDimMat.color.setHex(0x0a0a0a);
         chromeDimMat.roughness = 0.45;
-        chromeDimMat.envMapIntensity = 0.8;
-        ringMat.color.setHex(0x2a2a2a);
+        chromeDimMat.envMapIntensity = 0.7;
+        ringMat.color.setHex(0x111111);
         ringMat.roughness = 0.32;
-        ringMat.envMapIntensity = 1.1;
+        ringMat.envMapIntensity = 0.9;
       }
     };
     applyPalette(isDarkTheme());
