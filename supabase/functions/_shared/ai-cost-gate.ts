@@ -44,12 +44,14 @@ export const PLAN_EMAIL_CAPS: Record<string, number> = {
   agency: 500,
 };
 
-/** Visitor wall of the public support-chat widget (no real traffic yet — keep it
- *  tight; raise with real usage data). The guest bucket is a single-row global
- *  counter (ai_cost_guest_state) because guests have no profile row and
- *  ai_cost_state.profile_id FKs to profiles. Default pool $0.10/day (~50 short
- *  chats at the 0.0025 reserve guard), ~30x daily for the month. */
-export const AI_GUEST_POOL_DAILY = Number(Deno.env.get("AI_GUEST_POOL_DAILY") ?? "0.10");
+/** Visitor wall of the public support-chat widget. The guest bucket is a
+ *  single-row global counter (ai_cost_guest_state) because guests have no
+ *  profile row and ai_cost_state.profile_id FKs to profiles. Raised from
+ *  $0.10/day to $0.50/day (2026-09) after real usage data showed ~$0.0033 per
+ *  chat message — $0.10 was ~30 messages/day for ALL visitors (a single
+ *  curious visitor could exhaust the whole widget). $0.50 ≈ 150 messages/day,
+ *  ~5-6x the daily usage we observed. */
+export const AI_GUEST_POOL_DAILY = Number(Deno.env.get("AI_GUEST_POOL_DAILY") ?? "0.50");
 export const AI_GUEST_POOL_MONTHLY = Number(Deno.env.get("AI_GUEST_POOL_MONTHLY") ?? String(round6(AI_GUEST_POOL_DAILY * 30)));
 
 export type AiMode = "ai" | "template" | "hard_stop";
@@ -64,10 +66,20 @@ export interface GateContext {
   userId?: string | null;
   campaignId?: string | null;
   leadId?: string | null;
-  kind: string; // gen_email | gen_followup | gen_email_alt | summarize | classify | reply_draft | escalate
+  kind: string; // gen_email | gen_followup | gen_email_alt | summarize | classify | reply_draft | escalate | chat
   decisionId?: string | null;
   plan?: string | null;
   fn?: string;
+  /** Override the global per-call USD guard for THIS call site. The guard's job
+   *  is catching a single runaway call (100K+ char prompt); a support-chat call
+   *  legitimately ships the full product manual (~17K chars) plus history, whose
+   *  reserve lands ~$0.003-0.004 — above the generic email-sized guard of
+   *  $0.0025. Scalars that carry a knowledge base opt into a higher ceiling. */
+  perCallGuard?: number;
+  /** Optional model for the LLM call (support-chat opts into groq/compound's
+   *  70K TPM pool because its multi-K-token prompt exhausts gpt-oss-120b free
+   *  tier TPM after a burst). Defaults to GROQ_MODEL when unset. */
+  model?: string;
 }
 
 type Db = { from: (table: string) => any; rpc: (fn: string, args: any) => any };
@@ -249,6 +261,7 @@ export async function openAiCall(
             context: {
               fn: ctx.fn ?? "openAiCall",
               kind: ctx.kind,
+              model: ctx.model,
               user_id: ctx.userId ?? undefined,
               campaign_id: ctx.campaignId ?? undefined,
               lead_id: ctx.leadId ?? undefined,
@@ -269,7 +282,7 @@ export async function openAiCall(
     async run(promptText, opts) {
       const pool = aiPools(ctx.plan);
       const reserve = reserveEstimate(promptText.length, opts?.maxTokens ?? maxTokens);
-      if (reserve > AI_PER_CALL_GUARD) return null; // single-call guard (→ template)
+      if (reserve > (ctx.perCallGuard ?? AI_PER_CALL_GUARD)) return null; // single-call guard (→ template)
       let debit: any = null;
       try {
         const res = await db.rpc("ai_cost_debit", {
@@ -292,6 +305,7 @@ export async function openAiCall(
             context: {
               fn: ctx.fn ?? "openAiCall",
               kind: ctx.kind,
+              model: ctx.model,
               user_id: ctx.userId ?? undefined,
               campaign_id: ctx.campaignId ?? undefined,
               lead_id: ctx.leadId ?? undefined,
@@ -321,7 +335,13 @@ export async function openAiCall(
 // ------------------------------------------------------------------
 export async function openGuestAiCall(
   db: Db,
-  ctx: { kind: string; fn?: string; groqChat: (m: Array<{ role: string; content: string }>, o?: any) => Promise<string> },
+  ctx: {
+    kind: string;
+    fn?: string;
+    perCallGuard?: number;
+    model?: string;
+    groqChat: (m: Array<{ role: string; content: string }>, o?: any) => Promise<string>;
+  },
   maxTokens = 1024,
 ): Promise<AiCallHandle> {
   const bypass = await readConfig(db, ["ai_quality.gate_enabled"], {});
@@ -337,7 +357,7 @@ export async function openGuestAiCall(
           {
             maxTokens: opts?.maxTokens ?? maxTokens,
             temperature: opts?.temperature,
-            context: { fn: ctx.fn ?? "openGuestAiCall", kind: ctx.kind },
+            context: { fn: ctx.fn ?? "openGuestAiCall", kind: ctx.kind, model: ctx.model },
           },
         );
       },
@@ -379,7 +399,7 @@ export async function openGuestAiCall(
     reason: null,
     async run(promptText, opts) {
       const reserve = reserveEstimate(promptText.length, opts?.maxTokens ?? maxTokens);
-      if (reserve > AI_PER_CALL_GUARD) return null;
+      if (reserve > (ctx.perCallGuard ?? AI_PER_CALL_GUARD)) return null;
       let debit: any = null;
       try {
         const res = await db.rpc("ai_cost_guest_debit", {
@@ -401,6 +421,7 @@ export async function openGuestAiCall(
             context: {
               fn: ctx.fn ?? "openGuestAiCall",
               kind: ctx.kind,
+              model: ctx.model,
               reserve,
               guest: true,
             },

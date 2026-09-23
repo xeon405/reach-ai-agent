@@ -442,7 +442,7 @@ ${history
 
     let answer: string | null = null;
     if (isGuest) {
-      const handle = await openGuestAiCall(admin, { kind: "chat", fn: "support-chat", groqChat }, 900);
+      const handle = await openGuestAiCall(admin, { kind: "chat", fn: "support-chat", groqChat, perCallGuard: 0.006 }, 900);
       if (handle.mode === "ai") answer = await handle.run(promptText, { maxTokens: 900, temperature: 0.3 });
       answer = answer ?? BUSY_LINE;
     } else {
@@ -452,7 +452,7 @@ ${history
       if (!allowed) {
         answer = DAILY_LIMIT_LINE;
       } else {
-        const handle = await openAiCall(admin, { userId, kind: "chat", fn: "support-chat", plan: userPlan, groqChat }, 900);
+        const handle = await openAiCall(admin, { userId, kind: "chat", fn: "support-chat", plan: userPlan, groqChat, perCallGuard: 0.006 }, 900);
         if (handle.mode === "ai") answer = await handle.run(promptText, { maxTokens: 900, temperature: 0.3 });
         answer = answer ?? BUSY_LINE;
       }

@@ -1,6 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const DEFAULT_MODEL = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
+// TPM-budget escape hatches: when the primary model's token-per-minute pool is
+// exhausted (429), retry the SAME prompt on a model with its OWN per-model TPM
+// pool. Groq rate-limits per API key AND per model, so a burst on gpt-oss-120b
+// (free tier 8K TPM) can be re-sent to gpt-oss-20b (its own 8K TPM window) on
+// any of the other healthy keys — effectively multiplying the budget across
+// keys and models. Only models PROBED to exist on this account are listed.
+const MODEL_FALLBACKS = (Deno.env.get("GROQ_MODEL_FALLBACKS") ?? "openai/gpt-oss-20b")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 
 // Metered AI spend (INTELLIGENCE-LAYER-DESIGN.md §6.1). Token prices are ENV-
 // configurable so rate changes never need a deploy; defaults are the gpt-oss-120b
@@ -24,6 +32,10 @@ export interface MeterContext {
   /** Up-front reservation (USD) the durable counter was debited by; the meter
    *  settles actual spend minus this. Only set by gated calls (openAiCall). */
   reserve?: number;
+  /** Per-call model override. The support-chat widget ships a ~4.5K-token prompt,
+   *  so it opts into groq/compound (70K TPM) instead of gpt-oss-120b's tiny 8K
+   *  free-tier TPM window — quality is frontier-level and bursts stop 429ing. */
+  model?: string;
 }
 
 interface LedgerRow {
@@ -120,7 +132,38 @@ export function groqKeys(): string[] {
     .split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+// ── Healthy-key pool ───────────────────────────────────────────
+// A key that returns 429/5xx is parked in cooldown (default 60s) so a single
+// hot/rate-limited key never blocks a reply: every send picks RANDOMLY among
+// the keys that are currently healthy, so load spreads across ALL configured
+// keys instead of a round-robin cursor that a throttled key can monopolize.
+const KEY_COOLDOWN_MS = Number(Deno.env.get("GROQ_KEY_COOLDOWN_MS") ?? `${60_000}`);
+
+interface KeyState {
+  coolUntil: number; // epoch ms; 0 = healthy
+}
+
+const keyStates = new Map<string, KeyState>();
+
 let keyCursor = 0;
+
+function healthyKeys(keys: string[]): string[] {
+  const now = Date.now();
+  return keys.filter((k) => (keyStates.get(k)?.coolUntil ?? 0) <= now);
+}
+
+function pickKey(keys: string[]): string {
+  const healthy = healthyKeys(keys);
+  const pool = healthy.length > 0 ? healthy : keys; // all parked → reuse soonest-expiring one
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function parkKey(key: string, retryAfterSec: number | null): void {
+  const delay = retryAfterSec && Number.isFinite(retryAfterSec) && retryAfterSec > 0
+    ? Math.min(retryAfterSec, 300) * 1000
+    : KEY_COOLDOWN_MS;
+  keyStates.set(key, { coolUntil: Date.now() + delay });
+}
 
 export async function groqChat(
   messages: Array<{ role: string; content: string }>,
@@ -128,10 +171,19 @@ export async function groqChat(
 ): Promise<string> {
   const keys = groqKeys();
   if (keys.length === 0) throw new Error("No GROQ API keys configured");
-  const maxTries = Math.max(3, keys.length * 2);
+  // models = [primary (per-call override or default), fallback1, fallback2...];
+  // keys = [key1...]. The override lets a call site (support-chat) pick a model
+  // with a bigger TPM pool while every other surface keeps DEFAULT_MODEL.
+  const primary = opts?.context?.model ?? DEFAULT_MODEL;
+  const models = [primary, ...MODEL_FALLBACKS];
+  // Up to 2 passes over every (key × model) pair so a burst still eventually
+  // completes once any pool frees up. Capped hard so we never loop forever.
+  const maxTries = Math.max(6, Math.min(keys.length * models.length * 2, 16));
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < maxTries; attempt++) {
-    const key = keys[keyCursor++ % keys.length];
+    const key = pickKey(keys);
+    const model = models[keyCursor % models.length];
+    keyCursor++;
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -140,7 +192,7 @@ export async function groqChat(
           Authorization: `Bearer ${key}`,
         },
         body: JSON.stringify({
-          model: DEFAULT_MODEL,
+          model,
           messages,
           max_tokens: opts?.maxTokens ?? 1024,
           temperature: opts?.temperature,
@@ -149,9 +201,14 @@ export async function groqChat(
         }),
       });
       if (res.status === 429 || res.status >= 500) {
-        // Rate-limited or upstream busy — rotate key and back off
-        lastErr = new Error(`AI busy (${res.status})`);
-        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        // Park THIS key so it cools down while the other keys absorb load; honor
+        // a Retry-After when provided. Rotating the model too lets us cross into
+        // a separate, larger TPM pool instead of stalling on the primary model.
+        const retryAfterRaw = res.headers.get("retry-after") ?? "";
+        const retryAfter = Number(retryAfterRaw);
+        parkKey(key, Number.isFinite(retryAfter) && retryAfterRaw !== "" ? retryAfter : null);
+        lastErr = new Error(`AI busy (${res.status}) on ${model}`);
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
         continue;
       }
       if (!res.ok) {
@@ -175,7 +232,7 @@ export async function groqChat(
       recordMeter({
         fn: ctx.fn ?? "unknown",
         kind: ctx.kind ?? "generic",
-        model: DEFAULT_MODEL,
+        model,
         input_tokens: inTokens,
         output_tokens: outTokens,
         est_cost_usd: estimateCost(inTokens, outTokens),
