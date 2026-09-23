@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
-import { buildSupportUserContext, containsArabic } from "../_shared/ai-lib.ts";
+import { buildSupportUserContext, containsArabic, routeSupportTopic, SUPPORT_SELF_FACTS, SUPPORT_CONTROLS, SUPPORT_FEWSHOTS } from "../_shared/ai-lib.ts";
 import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
 import { openAiCall, openGuestAiCall } from "../_shared/ai-cost-gate.ts";
 
@@ -408,7 +408,13 @@ Deno.serve(async (req) => {
 - If they ask about their account, billing or settings, explain they must create a free account first and point them to Sign up.
 - If they mention an email/phone or ask to be contacted, suggest emailing outreachai.team@gmail.com — never collect personal details.`
       : "";
-    const system = `${MANUAL}
+    const system = `${SUPPORT_SELF_FACTS}
+
+${MANUAL}
+
+${SUPPORT_CONTROLS}
+
+${SUPPORT_FEWSHOTS}
 
 ${accountCtx}
 ${arabic ? "\n\nLANGUAGE REQUIREMENT — the user writes in Arabic. Reply ONLY in Arabic (modern standard Arabic, friendly and clear). Product terms may stay in English where natural." : ""}${guestNote}`;
@@ -419,9 +425,17 @@ ${arabic ? "\n\nLANGUAGE REQUIREMENT — the user writes in Arabic. Reply ONLY i
     //    knob), then run inside their normal per-user USD pools (openAiCall).
     //    A refused or degraded mode NEVER surfaces as an error to the visitor:
     //    the reply degrades to a calm static line, zero LLM, zero spend. ──
-    const promptText = `SYSTEM:\n${system}\n${history
-      .map((m: any) => `\n---\n${m.role === "assistant" ? "ASSISTANT" : "USER"}:\n${m.content}`)
-      .join("")}`;
+    const topicDirective = routeSupportTopic(text);
+    const clockLine = `\n\n## CURRENT UTC TIME\n${new Date().toISOString()}`;
+    const promptText = `SYSTEM:\n${system}${clockLine}
+
+## TOPIC DIRECTIVE
+${topicDirective}
+
+## CONVERSATION (oldest → newest; the FINAL USER line is the message you must answer right now)
+${history
+  .map((m: any) => `\n---\n${m.role === "assistant" ? "ASSISTANT" : "USER"}:\n${m.content}`)
+  .join("")}`;
 
     const BUSY_LINE = "I'm catching my breath after a busy stretch — give me a minute and send that again. If it's urgent, email outreachai.team@gmail.com.";
     const DAILY_LIMIT_LINE = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outreachai.team@gmail.com.";
