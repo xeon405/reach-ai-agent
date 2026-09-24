@@ -6,11 +6,16 @@
 // (sweep is the single writer), and audits the sends-vs-ledger gap.
 // It NEVER rewrites the counter values: only ai_cost_debit (reserve) and
 // ai_cost_settle (meter) write counters; an absolute re-set here would race
-// in-flight debits. Reconciliation is read-only + marker-writing.
+// in-flight debits. Reconciliation is read-only + marker-writing. Counters
+// only roll window on a new debit, so on a fresh window with zero debits the
+// sweep treats a stale counter as zero (comparing a prior-day counter to
+// today's empty ledger would false-trip the degrade breaker).
 //
 // Marker ownership:
-//   * ai_quality.mode       — written by the sweep only when no user row exists
-//     (or the existing one is the default 'ai'). A row an admin set persists.
+//   * ai_quality.mode       — a row written by an admin (changed_by not
+//     'cost-sweep') wins and persists; a sweep-written row (changed_by
+//     'cost-sweep') or the default 'ai' is recomputed, so a sweep-triggered
+//     degrade heals itself ≤ 5 min after the cause clears.
 //   * ai_quality.metering_degraded — sweep-owned (single writer). Degrade heals
 //     itself ≤ 5 min after the cause clears; an admin wanting persistent degrade
 //     should set mode='template' instead (that row is never clobbered).
@@ -67,10 +72,17 @@ Deno.serve(async (req) => {
       const pools = aiPools(profile?.plan);
 
       const { data: state } = await supabase.from("ai_cost_state")
-        .select("used_daily_usd, used_monthly_usd, last_reported_at")
+        .select("used_daily_usd, used_monthly_usd, window_date, window_month, last_reported_at")
         .eq("profile_id", userId).maybeSingle();
-      const counterDaily = Number(state?.used_daily_usd ?? 0) || 0;
-      const counterMonth = Number(state?.used_monthly_usd ?? 0) || 0;
+      // Window rollover: counters only advance on ai_cost_debit, so on a fresh
+      // window (new day or month) with no debits yet the stored value still
+      // belongs to the previous window. Comparing a prior-day counter to today's
+      // ledger would trip a false degrade and lock AI out before day one of
+      // spend. Treat a stale window's counter as zero for all comparisons.
+      const freshDaily = state?.window_date === dayStr;
+      const freshMonth = state?.window_month === monthStr;
+      const counterDaily = (freshDaily ? Number(state?.used_daily_usd ?? 0) : 0) || 0;
+      const counterMonth = (freshMonth ? Number(state?.used_monthly_usd ?? 0) : 0) || 0;
 
       const { data: dayRows } = await supabase.from("ai_spend_ledger")
         .select("est_cost_usd").eq("user_id", userId).gte("ts", `${dayStr}T00:00:00Z`);
@@ -107,12 +119,11 @@ Deno.serve(async (req) => {
         }).then(() => {}, () => {});
       }
 
-      // Markers into agent_config (scoped user). mode: write only when absent or
-      // stale-default 'ai'; metering_degraded: sweep-owned, healed on clear.
+      // Markers into agent_config (scoped user). mode: admin rows win, our own
+      // (or default 'ai') rows are recomputed; metering_degraded is sweep-owned.
       const { data: modeRow } = await supabase.from("agent_config")
-        .select("id, value, enabled").eq("key", "ai_quality.mode")
+        .select("id, value, enabled, changed_by").eq("key", "ai_quality.mode")
         .eq("scope", "user").eq("scope_id", userId).maybeSingle();
-      const curMode = modeRow?.value;
       const computedMode = isDegraded
         ? "template"
         : counterDaily >= pools.daily || ledgerDaily >= pools.daily
@@ -120,10 +131,12 @@ Deno.serve(async (req) => {
           : counterMonth >= pools.monthly || ledgerMonth >= pools.monthly
             ? "hard_stop"
             : "ai";
-      // mode: an existing explicit (non-default) row is admin-owned and wins;
-      // a stale 'ai' default is recomputed by the sweep.
-      const finalMode = curMode != null && String(curMode).trim() !== "ai"
-        ? String(curMode).trim()
+      // mode: an existing explicit (non-default) row written by an admin is
+      // admin-owned and wins; a sweep-written degrade (changed_by='cost-sweep')
+      // or a stale 'ai' default is recomputed so the breaker heals itself.
+      const sweepOwned = !modeRow?.changed_by || modeRow.changed_by === "cost-sweep";
+      const finalMode = modeRow != null && String(modeRow.value).trim() !== "ai" && !sweepOwned
+        ? String(modeRow.value).trim()
         : computedMode;
 
       await supabase.rpc("set_agent_config", {
