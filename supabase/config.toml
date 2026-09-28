@@ -6,3 +6,10 @@ project_id = "lniciqpzvmvyalizwrjq"
 verify_jwt = false
 [functions.spam-check]
 verify_jwt = true
+# Razorpay cannot send an Authorization header; the HMAC signature check
+# inside the function is the auth gate, so the platform check must be off.
+[functions.razorpay-webhook]
+verify_jwt = false
+# Order creation is called from the signed-in app and must stay gated.
+[functions.razorpay-create-order]
+verify_jwt = true

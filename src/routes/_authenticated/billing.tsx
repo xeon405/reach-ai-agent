@@ -4,7 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Zap } from "lucide-react";
+import { Check, Zap, Loader2 } from "lucide-react";
+
+declare global {
+  interface Window {
+    Razorpay?: new (opts: Record<string, unknown>) => { open: () => void };
+  }
+}
 
 export const Route = createFileRoute("/_authenticated/billing")({
   component: BillingPage,
@@ -25,7 +31,6 @@ const PLANS = [
       "CSV import & export",
       "Email support",
     ],
-    checkoutUrl: "https://outreach-ai.lemonsqueezy.com/checkout/buy/c9a1d2d8-e87a-4942-aa82-8e402ebfe5d3",
   },
   {
     id: "growth",
@@ -41,7 +46,6 @@ const PLANS = [
       "CSV import & export",
       "Chat support",
     ],
-    checkoutUrl: "https://outreach-ai.lemonsqueezy.com/checkout/buy/4bb8c689-8b6b-465d-8d77-e371ec92a518",
     popular: true,
   },
   {
@@ -58,13 +62,16 @@ const PLANS = [
       "Priority support",
       "Early access to new features",
     ],
-    checkoutUrl: "https://outreach-ai.lemonsqueezy.com/checkout/buy/c03bf0be-ab01-4694-a26f-f589c3e70664",
   },
 ];
 
 function BillingPage() {
   const [plan, setPlan] = useState("starter");
   const [userId, setUserId] = useState<string | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [payments, setPayments] = useState<Array<{
+    id: string; plan: string; amount_cents: number; currency: string; status: string; created_at: string;
+  }>>([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -76,8 +83,69 @@ function BillingPage() {
         .eq("id", data.user.id)
         .single();
       if (p?.plan) setPlan(p.plan);
+
+      const { data: rows } = await supabase
+        .from("payments")
+        .select("id, plan, amount_cents, currency, status, created_at")
+        .eq("user_id", data.user.id)
+        .order("created_at", { ascending: false })
+        .limit(24);
+      setPayments(rows ?? []);
     });
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.async = true;
+    document.body.appendChild(s);
+    return () => { s.remove(); };
   }, []);
+
+  /**
+   * The amount is decided on the server: we send a plan id, Razorpay
+   * charges what our catalog says. The browser never states a price.
+   * On success we show the plan immediately — the webhook is the
+   * durable record and will agree, but waiting for it would look
+   * broken to a paying customer.
+   */
+  async function startCheckout(planId: string, planName: string) {
+    if (!userId) return toast.error("Please sign in first.");
+    setPaying(planId);
+    try {
+      const { data, error } = await supabase.functions.invoke("razorpay-create-order", {
+        body: { plan: planId, idempotency_key: `${userId}:${planId}:${Date.now()}` },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.order_id) throw new Error(data?.error ?? "Could not start checkout");
+
+      if (!window.Razorpay) {
+        // Script still loading (or blocked) — retry once after a tick.
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      if (!window.Razorpay) throw new Error("Payment window failed to load. Check your connection and try again.");
+
+      const rz = new window.Razorpay({
+        key: data.key_id,
+        order_id: data.order_id,
+        amount: data.amount,
+        currency: data.currency,
+        name: "OutshipAi",
+        description: `${planName} plan`,
+        handler: async (response: Record<string, string>) => {
+          setPlan(planId);
+          setPaying(null);
+          toast.success(`You're on the ${planName} plan. Welcome aboard!`);
+          void response;
+        },
+        modal: {
+          ondismiss: () => setPaying(null),
+        },
+        theme: { color: "#6366f1" },
+      });
+      rz.open();
+    } catch (e) {
+      setPaying(null);
+      toast.error(e instanceof Error ? e.message : "Checkout failed");
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -162,11 +230,13 @@ function BillingPage() {
               <Button
                 className={`mt-6 w-full ${!isCurrent ? "bg-primary" : ""}`}
                 variant={isCurrent ? "outline" : "default"}
-                disabled={isCurrent}
-                onClick={() => userId && window.open(`${p.checkoutUrl}${p.checkoutUrl.includes("?") ? "&" : "?"}checkout[custom][user_id]=${encodeURIComponent(userId)}`, "_blank")}
+                disabled={isCurrent || paying !== null}
+                onClick={() => startCheckout(p.id, p.name)}
               >
                 {isCurrent ? (
                   <><Check className="mr-2 h-4 w-4" /> Current plan</>
+                ) : paying === p.id ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening checkout…</>
                 ) : (
                   <><Zap className="mr-2 h-4 w-4" /> Get {p.name} — ${p.price}/mo</>
                 )}
@@ -179,11 +249,11 @@ function BillingPage() {
       {/* Guarantee */}
       <div className="rounded-lg border border-border bg-card p-4 text-center">
         <p className="text-sm text-muted-foreground">
-          <strong>14-day money back guarantee.</strong> No questions asked. Cancel anytime from your dashboard.
+          <strong>14-day money back guarantee.</strong> No questions asked. Payments are one-time — you are never auto-charged, and your plan runs until the end of the period you paid for.
         </p>
       </div>
 
-      {/* Invoice History */}
+      {/* Invoice History — real payment rows (RLS scopes these to the owner) */}
       <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="mb-4 text-lg font-semibold">Invoice history</h2>
         <div className="overflow-x-auto rounded-xl border border-border">
@@ -197,11 +267,33 @@ function BillingPage() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                  No invoices yet.
-                </td>
-              </tr>
+              {payments.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                    No invoices yet.
+                  </td>
+                </tr>
+              ) : (
+                payments.map((p) => (
+                  <tr key={p.id} className="border-t border-border">
+                    <td className="px-4 py-3">{new Date(p.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 capitalize">{p.plan}</td>
+                    <td className="px-4 py-3">
+                      {p.currency === "INR"
+                        ? `₹${(p.amount_cents / 100).toLocaleString("en-IN")}`
+                        : `$${(p.amount_cents / 100).toFixed(2)}`}
+                    </td>
+                    <td className="px-4 py-3 capitalize">
+                      <span className={
+                        p.status === "paid" ? "text-success" :
+                        p.status === "failed" ? "text-destructive" : "text-muted-foreground"
+                      }>
+                        {p.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

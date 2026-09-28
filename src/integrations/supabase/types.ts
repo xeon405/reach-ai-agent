@@ -1666,6 +1666,102 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          failure_reason: string | null
+          id: string
+          idempotency_key: string | null
+          method: string | null
+          notes: Json
+          paid_at: string | null
+          plan: string
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          source: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          method?: string | null
+          notes?: Json
+          paid_at?: string | null
+          plan: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          method?: string | null
+          notes?: Json
+          paid_at?: string | null
+          plan?: string
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      billing_events: {
+        Row: {
+          amount_cents: number | null
+          created_at: string
+          currency: string | null
+          event: string
+          id: string
+          payment_id: string | null
+          payload: Json
+          plan: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          created_at?: string
+          currency?: string | null
+          event: string
+          id?: string
+          payment_id?: string | null
+          payload?: Json
+          plan?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          created_at?: string
+          currency?: string | null
+          event?: string
+          id?: string
+          payment_id?: string | null
+          payload?: Json
+          plan?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
