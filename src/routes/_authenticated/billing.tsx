@@ -64,10 +64,12 @@ const PLANS = [
 
 function BillingPage() {
   const [plan, setPlan] = useState("starter");
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
+      setUserId(data.user.id);
       const { data: p } = await supabase
         .from("profiles")
         .select("plan")
@@ -161,7 +163,7 @@ function BillingPage() {
                 className={`mt-6 w-full ${!isCurrent ? "bg-primary" : ""}`}
                 variant={isCurrent ? "outline" : "default"}
                 disabled={isCurrent}
-                onClick={() => window.open(p.checkoutUrl, "_blank")}
+                onClick={() => userId && window.open(`${p.checkoutUrl}${p.checkoutUrl.includes("?") ? "&" : "?"}checkout[custom][user_id]=${encodeURIComponent(userId)}`, "_blank")}
               >
                 {isCurrent ? (
                   <><Check className="mr-2 h-4 w-4" /> Current plan</>
