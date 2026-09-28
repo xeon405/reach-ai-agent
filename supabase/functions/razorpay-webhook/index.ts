@@ -3,7 +3,7 @@
 //
 // Security model:
 //   * HMAC-SHA256 of the RAW body against RAZORPAY_WEBHOOK_SECRET,
-//     timing-safe compared (same standard as billing-webhook).
+//     compared in constant time via TextEncoder + timingSafeEqual.
 //   * The plan comes from OUR OWN payments row, matched by order id.
 //     We never trust plan/amount/user_id from the event payload —
 //     Razorpay echoes the notes, but a forged note must not be able

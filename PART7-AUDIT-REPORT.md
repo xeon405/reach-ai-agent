@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-09-28):** Payment processing in this report is obsolete. LemonSqueezy has been fully removed; billing is now Razorpay (one-time checkout, no auto-renewal) via `razorpay-create-order` + `razorpay-webhook`. Any statement below about `billing-webhook`, `LEMONSQUEEZY_WEBHOOK_SECRET`, proration, or renewals describes a system that no longer exists. Kept unaltered as a dated record.
+
 # PART 7 — AUDIT REPORT (READ-FIRST, FIX-ONLY)
 
 This audit classified every finding by severity and only fixed actual defects

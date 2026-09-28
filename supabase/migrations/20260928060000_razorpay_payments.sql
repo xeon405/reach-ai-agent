@@ -1,11 +1,11 @@
 -- ============================================================
 -- RAZORPAY PAYMENTS — order + payment ledger for the checkout flow.
--- LemonSqueezy only wrote profiles.plan and kept no transaction
--- record, so there was no way to show an invoice or reconcile a
--- failed renewal. Razorpay needs a durable row per attempt: the
--- order is created server-side (so the amount is never client
--- controlled) and the webhook settles it.
--- ============================================================
+-- The previous processor only wrote profiles.plan and kept no
+-- transaction record, so there was no way to show an invoice or
+-- reconcile a failed charge. Razorpay needs a durable row per
+-- attempt: the order is created server-side (so the amount is never
+-- client controlled) and the webhook settles it.
+-- =========================================================---
 
 create table if not exists public.payments (
   id                uuid primary key default gen_random_uuid(),

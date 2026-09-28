@@ -90,11 +90,13 @@ OutshipAi is an AI-powered cold-email agent. It finds leads, writes personalized
 
 ### Billing (/billing)
 - Free plan: 10 emails/month, 25 stored leads max.
-- Starter: $37/month — 50 emails, 250 leads.
-- Growth: $79/month — 200 emails, 1000 leads.
-- Agency: $149/month — 500 emails, 5000 leads.
-- Powered by LemonSqueezy for payment processing.
-- Upgrades/downgrades take effect immediately with proration.
+- Starter: $37 — 50 emails, 250 leads.
+- Growth: $79 — 200 emails, 1000 leads.
+- Agency: $149 — 500 emails, 5000 leads.
+- Payments are processed by Razorpay. Card, UPI, netbanking and wallets are supported.
+- Checkout is one-time: you are never auto-charged and there is no auto-renewal. Your plan stays active for the period you paid for.
+- Plan upgrades take effect immediately once payment is confirmed.
+- Refunds: we offer a 14-day money-back guarantee. Refund requests are handled by a human.
 - Referral rewards may temporarily raise your effective plan (free Starter days per friend who joins via your invite link).
 
 ### Free Tools (/tools)
@@ -174,13 +176,13 @@ A: When you click "Connect Gmail", Google's official login page opens. You sign 
 
 ### Billing
 Q: "What are the pricing plans?"
-A: Free: $0/mo — 10 emails, 25 leads. Starter: $37/mo — 50 emails, 250 leads. Growth: $79/mo — 200 emails, 1000 leads. Agency: $149/mo — 500 emails, 5000 leads.
+A: Free: $0 — 10 emails, 25 leads. Starter: $37 — 50 emails, 250 leads. Growth: $79 — 200 emails, 1000 leads. Agency: $149 — 500 emails, 5000 leads.
 
 Q: "Can I upgrade or downgrade?"
-A: Yes, anytime. Changes take effect immediately. Proration is handled by LemonSqueezy.
+A: Yes, anytime. Upgrades take effect as soon as your payment is confirmed, and you keep the added capacity right away. Downgrades apply at the end of the period you already paid for.
 
 Q: "How do I cancel?"
-A: Go to Billing → manage your subscription. Or email outreachai.team@gmail.com.
+A: Checkout is one-time and never auto-renews, so there is nothing to cancel — you are never charged again. Your plan simply stays active until the end of the period you paid for. To stop using it, just don't upgrade. If you want a refund, email outreachai.team@gmail.com and a human will help within our 14-day money-back window.
 
 ### Referrals
 Q: "How does the referral reward work?"

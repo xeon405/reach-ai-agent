@@ -66,3 +66,6 @@ android-app/rebuild*.log
 !.env.example# build-cache blobs (55MB jars) — never commit
 android/m2local/
 *.jar
+
+# profiling build output (not deployed, not referenced by build/deploy)
+dist-prof
