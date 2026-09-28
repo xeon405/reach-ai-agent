@@ -77,12 +77,14 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
   const signature = req.headers.get("x-razorpay-signature") ?? "";
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  try {
-    const a = Buffer.from(signature, "hex");
-    const b = Buffer.from(expected, "hex");
-    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("mismatch");
-  } catch {
-    console.error("[razorpay-webhook] invalid signature");
+  // NOTE: do NOT use Buffer here. Deno has no global Buffer, so the
+  // Buffer.from() comparison threw "Buffer is not defined" and rejected
+  // every request, including correctly signed ones. TextEncoder gives us
+  // the same constant-time comparison without the Node polyfill.
+  const a = new TextEncoder().encode(signature);
+  const b = new TextEncoder().encode(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    console.error("[razorpay-webhook] signature mismatch");
     return json({ error: "Invalid signature" }, 401);
   }
 

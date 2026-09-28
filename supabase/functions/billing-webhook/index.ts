@@ -46,11 +46,12 @@ Deno.serve(async (req) => {
   const signature = req.headers.get("X-Signature") ?? "";
   const digest = createHmac("sha256", secret).update(rawBody).digest("hex");
 
-  try {
-    const a = Buffer.from(signature, "hex");
-    const b = Buffer.from(digest, "hex");
-    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("mismatch");
-  } catch {
+  // Do NOT use Buffer here: Deno has no global Buffer, so this threw
+  // "Buffer is not defined" and rejected every webhook, including valid
+  // ones. TextEncoder gives the same constant-time comparison.
+  const a = new TextEncoder().encode(signature);
+  const b = new TextEncoder().encode(digest);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     console.error("[billing-webhook] Invalid signature");
     return json({ error: "Invalid signature" }, 401);
   }
