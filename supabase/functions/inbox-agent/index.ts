@@ -601,9 +601,23 @@ Deno.serve(async (req) => {
               groqFail = String(ce).slice(0, 160);
             }
           }
-          // CONFIDENCE FLOOR: heuristic fallback scores 0.3 → auto-routes to human review.
+          // CONFIDENCE FLOOR: an unreadable reply is NOT automatically a human
+          // problem. The AI is competent enough to answer routine, warm, angry,
+          // pricing, security/privacy and legal-information messages on its own;
+          // low confidence only matters when the reply is SAFE to answer but we
+          // are unsure. Only escalate when the model itself flagged a real
+          // commitment (refund/contract/human-request) — never on ambiguity
+          // alone, otherwise hot leads with short replies go silent for hours.
           if (!cls.confidence || cls.confidence < cfg.confidence_floor) {
-            cls.requires_human = true;
+            if (!cls.requires_human) {
+              // Unsure, but not a real risk: stay on autopilot. Soften a harsh
+              // verdict so the reply writer keeps the tone warm and non-committal
+              // and asks a gentle question instead of asserting facts.
+              if (cls.sentiment === "NOT_INTERESTED") {
+                cls.sentiment = "MAYBE";
+                cls.interested = true;
+              }
+            }
           }
           const { error: clsErr } = await supabase.from("ai_classifications").insert({
             user_id: email.user_id, lead_id: lead.id, message_id: hits[0].id,
@@ -724,7 +738,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
             const intentGuide = cls.intent === "objection"
               ? `They raised an OBJECTION, pushed back, or sound annoyed. FIRST genuinely acknowledge their point, then answer their real concern with 1-2 concrete facts. Do NOT push, re-pitch a call/booking, or repeat anything already said. If they seem done, close warmly.`
               : cls.intent === "unclear"
-              ? `Their message was UNCLEAR or too short to determine intent. Ask a gentle clarifying question to understand what they need.`
+              ? `Their message was UNCLEAR or too short to read intent from — but they are still talking to us, and silence loses the deal. If it reads positive or appreciative, THANK them warmly for the kind words, reflect back what they said, and invite the next step with ONE easy, low-pressure question. If it reads negative, respond calmly and invite them to tell you more. Never say you did not understand, never ask them to repeat themselves, and never sound like a robot.`
               : hasSite
               ? `Answer their question clearly and helpfully using the company knowledge base. Do NOT push a call or booking — pure substance.`
               : `Answer their question from the business context above (what the owner told us). Never invent facts you weren't given. Do NOT push a booking link.`;
@@ -1025,9 +1039,16 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
               if (raw) cls = parseClassification(raw, `${subj}\n${theirWords}`);
             } catch (ce) { groqFail = groqFail || String(ce).slice(0, 160); }
           }
-          // CONFIDENCE FLOOR: low-confidence or heuristic-fallback verdicts route to a human, never to an AI send.
+          // CONFIDENCE FLOOR: same rule as the first-reply path — an ambiguous
+          // or low-confidence reply is still the AI's job unless the model itself
+          // flagged a genuine commitment. Ambiguity must never park a live thread.
           if (!cls.confidence || cls.confidence < cfg.confidence_floor) {
-            cls.requires_human = true;
+            if (!cls.requires_human) {
+              if (cls.sentiment === "NOT_INTERESTED") {
+                cls.sentiment = "MAYBE";
+                cls.interested = true;
+              }
+            }
           }
           const { error: clsErr } = await supabase.from("ai_classifications").insert({
             user_id: t.user_id, lead_id: lead.id, message_id: hits[0].id,
@@ -1193,7 +1214,7 @@ Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2
                 const convIntentGuide = cls.intent === "objection"
                   ? "They raised an OBJECTION, pushed back, or sound annoyed by something earlier in the thread. FIRST genuinely acknowledge their point, then answer their real concern with 1-2 concrete facts from the knowledge base. Do NOT pitch, re-offer a call/booking, or repeat anything already said. If they seem done, close warmly and invite them to reach out anytime."
                   : cls.intent === "unclear"
-                  ? "Their message was UNCLEAR. Ask a gentle clarifying question to understand what they need."
+                  ? "Their message was UNCLEAR or too short to read intent from — but they are still engaged, and silence loses the deal. If it reads positive or appreciative, THANK them warmly, reflect back what they said, and invite the next step with ONE easy question. If it reads negative, respond calmly and invite them to tell you more. Never say you did not understand or ask them to repeat themselves."
                   : t.ai_turns > 0 ? "You have already exchanged messages — keep full continuity with the transcript below; do not reintroduce yourself, restate the offer, or repeat any link/CTA already shared." : "";
                 const threadHistory = await fetchThreadHistory(tok, hits[0].threadId ?? null, lead.email, profile.gmail_email || profile.email);
                 aiReply = await gatedChat(supabase, {
