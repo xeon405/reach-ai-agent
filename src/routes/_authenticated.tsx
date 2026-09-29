@@ -166,9 +166,12 @@ function AuthenticatedLayout() {
         >
           <Link
             to="/dashboard"
-            className={cn("flex items-center gap-2", !collapsed && "overflow-hidden")}
+            className={cn(
+              "flex min-w-0 items-center gap-2",
+              !collapsed && "overflow-hidden"
+            )}
           >
-            <Logo className="text-sidebar-foreground" />
+            <Logo className="text-sidebar-foreground" showText={!collapsed} />
           </Link>
           <button
             onClick={toggleCollapsed}

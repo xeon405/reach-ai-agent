@@ -19,17 +19,64 @@ type AlertRow = {
   created_at: string | null;
 };
 
-function routeFor(kind: string | null, leadId: string | null): string {
+/** A navigation target: path plus optional query, kept separate so the router
+ *  never has to parse a query string out of the path itself. */
+type Target = { to: string; search?: Record<string, string> };
+
+/**
+ * Where a notification should take the owner.
+ *
+ * The lead detail page is `/lead-edit/$leadId` -- there is no `/leads/:id`
+ * route, so pointing there bounced the user to the home page. Alerts about a
+ * known lead go to that lead; alerts about the account itself (Gmail token
+ * lost, reputation degraded, a referral credit) have no lead to open, so they
+ * go to the page where the owner can actually fix them.
+ */
+function routeFor(kind: string | null, leadId: string | null): Target {
+  const lead = (): Target | null => (leadId ? { to: `/lead-edit/${leadId}` } : null);
+
   switch (kind) {
+    // Conversations the agent handled or handed to the owner. When we know the
+    // lead we deep-link to that exact thread so the owner lands on the message
+    // the notification is about, not the top of an undifferentiated inbox.
     case "first_reply":
     case "reply":
-    case "booking":
-    case "opt_out":
     case "handoff":
     case "takeover":
-      return "/emails";
+    case "review":
+    case "question":
+    case "objection":
+      return leadId ? { to: "/emails", search: { lead: leadId } } : { to: "/emails" };
+
+    // A lead-level event: open that lead's history.
+    case "booking":
+    case "opt_out":
+    case "bounce":
+    case "unsubscribe":
+    case "interested":
+    case "not_interested":
+      return lead() ?? { to: "/emails" };
+
+    // Delivery / sending health: these are about the mailbox, not a thread.
+    case "bounce_spike":
+    case "reputation":
+    case "warmup":
+    case "daily_digest":
+      return { to: "/emails" };
+
+    // Account-level events with no lead attached.
+    case "referral_reward":
+      return { to: "/settings" };
+
+    case "gmail_error":
+    case "gmail_token":
+    case "system":
+      return { to: "/settings" };
+
     default:
-      return leadId ? `/leads/${leadId}` : "/";
+      // Never silently dump the owner on the dashboard: prefer the lead, then
+      // the inbox. Home is not a useful destination for any alert.
+      return lead() ?? { to: "/emails" };
   }
 }
 
@@ -93,11 +140,13 @@ export function NotificationBell({ className = "" }: { className?: string }) {
 
   const unread = items.filter((a) => !a.read).length;
 
-  async function markRead(id: number, destination: string) {
+  async function markRead(id: number, target: Target) {
+    // Mark read first, then navigate. Persisting before the route change means
+    // the badge is correct even if the navigation is interrupted.
     setItems((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
     await supabase.from("owner_alerts").update({ read: true }).eq("id", id);
     setOpen(false);
-    navigate({ to: destination });
+    navigate({ to: target.to, search: target.search as never });
   }
 
   async function markAllRead() {

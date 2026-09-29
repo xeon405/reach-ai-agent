@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,13 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/emails")({
+  // Lets a notification deep-link straight to the thread it is about, e.g.
+  // /emails?lead=<id> or /emails?thread=<email id>, instead of dumping the
+  // owner on an undifferentiated inbox list.
+  validateSearch: (s: Record<string, unknown>) => ({
+    lead: typeof s.lead === "string" && s.lead ? s.lead : undefined,
+    thread: typeof s.thread === "string" && s.thread ? s.thread : undefined,
+  }),
   component: EmailsPage,
 });
 
@@ -70,6 +77,7 @@ const LIFECYCLE_STYLE: Record<string, string> = {
 };
 
 function EmailsPage() {
+  const { lead: leadParam, thread: threadParam } = Route.useSearch();
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [classifications, setClassifications] = useState<Classification[]>([]);
   const [alerts, setAlerts] = useState<OwnerAlert[]>([]);
@@ -115,6 +123,20 @@ function EmailsPage() {
   }
 
   const selectedEmail = useMemo(() => emails.find((e) => e.id === selected), [emails, selected]);
+
+  // Deep-link from a notification: once the inbox has loaded, open the thread
+  // the owner actually clicked on. Cleared afterwards so choosing another
+  // thread by hand is not immediately overridden on the next render.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current || loading || emails.length === 0) return;
+    if (!threadParam && !leadParam) return;
+    deepLinkHandled.current = true;
+    const target = threadParam
+      ? emails.find((e) => e.id === threadParam)
+      : emails.find((e) => e.lead_id === leadParam);
+    if (target) setSelected(target.id);
+  }, [loading, emails, leadParam, threadParam]);
 
   const selectedClassifications = useMemo(() => {
     if (!selectedEmail?.lead_id) return [];

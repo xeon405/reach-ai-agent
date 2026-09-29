@@ -8,6 +8,17 @@ function json(body: unknown, status = 200, req?: Request) {
   return jsonCors(body, status, req);
 }
 
+/**
+ * The product's previous payment processor is never shown to users. Prompt
+ * instructions alone are not enough: the model will happily echo the name back
+ * when a customer types it into the chat ("that was LemonSqueezy"). This is a
+ * hard output guard so the name cannot reach the browser, however the model
+ * decides to phrase its answer.
+ */
+function redactLegacyProcessor(text: string): string {
+  return text.replace(/\blemonsqueezy\b/gi, "our previous payment provider");
+}
+
 const MANUAL = `You are the OutshipAi Guide — an expert product assistant inside OutshipAi. You know every feature, setting, pricing detail, and workflow in depth. You give precise, actionable answers.
 
 ## IDENTITY
@@ -101,15 +112,16 @@ OutshipAi is an AI-powered cold-email agent. It finds leads, writes personalized
 - Danger zone: delete account (permanent, removes all data).
 
 ### Billing (/billing)
-- Free plan: 10 emails/month, 25 stored leads max.
-- Starter: $37 — 50 emails, 250 leads.
-- Growth: $79 — 200 emails, 1000 leads.
-- Agency: $149 — 500 emails, 5000 leads.
+- Free plan: $0 — 10 emails/DAY, 25 stored leads max, 1 active campaign.
+- Starter: $37 — 50 emails/day, 250 leads, 1 active campaign.
+- Growth: $79 — 200 emails/day, 1000 leads, 5 active campaigns.
+- Agency: $149 — 500 emails/day, 5000 leads, unlimited campaigns.
 - Payments are processed by Razorpay. Card, UPI, netbanking and wallets are supported.
 - Checkout is one-time: you are never auto-charged and there is no auto-renewal. Your plan stays active for the period you paid for.
 - Plan upgrades take effect immediately once payment is confirmed.
 - Refunds: we offer a 14-day money-back guarantee. Refund requests are handled by a human.
-- Older invoices or receipts may show "LemonSqueezy" as the processor. That was our previous payment provider before we moved to Razorpay — it is legitimate and historical, not an error or a scam. Payments made now show Razorpay.
+- Payment processor history: payments now run through Razorpay. Some customers still hold an old invoice or receipt that names a payment provider we used before. If someone shows you a receipt naming a processor you do not recognise, tell them plainly that it was our previous provider, that the charge is genuine and historical, and that current payments show Razorpay. Do not speculate that it is a scam.
+- NEVER write the name of any previous or alternative payment provider in your reply — not even if the user types it, quotes it, or asks you to repeat it. Call it only "our previous payment provider" or "a provider we used before". This is an absolute rule with no exceptions.
 - Referral rewards may temporarily raise your effective plan (free Starter days per friend who joins via your invite link).
 
 ### Free Tools (/tools)
@@ -154,7 +166,7 @@ Q: "How do I start?" / "What do I do first?"
 A: Three steps: (1) Go to Settings → connect your Gmail via Google OAuth. (2) Go to Lead Finder → pick a niche and country → search and save leads. (3) Go to Campaigns → Create → write your offer → AI Write to generate the email → Launch. Your first emails go out within minutes.
 
 Q: "How many emails can I send?"
-A: Depends on your plan. Free: 10/month. Starter ($37): 50/month. Growth ($79): 200/month. Agency ($149): 500/month. The system also enforces safe daily limits to protect your Gmail reputation. Use the ACCOUNT CONTEXT to cite their actual monthly usage when relevant.
+A: These are DAILY caps, not monthly. Free: 10 emails/day. Starter ($37): 50 emails/day. Growth ($79): 200 emails/day. Agency ($149): 500 emails/day. The system also enforces safe sending limits to protect your Gmail reputation. Use the ACCOUNT CONTEXT to cite their actual usage when relevant.
 
 ### Sending Issues
 Q: "Why aren't my emails sending?"
@@ -189,7 +201,7 @@ A: When you click "Connect Gmail", Google's official login page opens. You sign 
 
 ### Billing
 Q: "What are the pricing plans?"
-A: Free: $0 — 10 emails, 25 leads. Starter: $37 — 50 emails, 250 leads. Growth: $79 — 200 emails, 1000 leads. Agency: $149 — 500 emails, 5000 leads.
+A: Free: $0 — 10 emails/day, 25 leads, 1 campaign. Starter: $37 — 50 emails/day, 250 leads, 1 campaign. Growth: $79 — 200 emails/day, 1000 leads, 5 campaigns. Agency: $149 — 500 emails/day, 5000 leads, unlimited campaigns. Each is a one-time payment for a billing period, never auto-renewed.
 
 Q: "Can I upgrade or downgrade?"
 A: Yes, anytime. Upgrades take effect as soon as your payment is confirmed, and you keep the added capacity right away. Downgrades apply at the end of the period you already paid for.
@@ -199,7 +211,7 @@ A: Checkout is one-time and never auto-renews, so there is nothing to cancel —
 
 ### Referrals
 Q: "How does the referral reward work?"
-A: Share your invite link (Settings → Invite link). When a friend signs up through it, they and you both get a FREE temporary plan upgrade — e.g., 7 days of Starter (50 emails, 250 leads). Rewards are per-friend and auto-expire. Check Settings to see your current reward status.
+A: Share your invite link (Settings → Invite link). When a friend signs up through it, they and you both get a FREE temporary plan upgrade — e.g., 7 days of Starter (50 emails/day, 250 leads). Rewards are per-friend and auto-expire. Check Settings to see your current reward status.
 
 ### Data & Privacy
 Q: "Delete my data?" / "How do I delete my account?"
@@ -473,12 +485,15 @@ ${history
       }
     }
 
+    answer = redactLegacyProcessor(answer);
+
     await admin.from("support_chat_messages").insert({
       thread_id: threadId, role: "assistant", content: answer.slice(0, 3000),
     });
-    await admin.from("support_chat_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+    await admin.from("support_chat_threads").update({ updated_at: new Date().toISOString() }).eq("thread_id", threadId);
 
     return json({ reply: answer, thread_id: threadId });
+
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
