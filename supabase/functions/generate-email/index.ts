@@ -109,7 +109,8 @@ ${senderName || `${sanitizeForPrompt(yourCompany ?? "the team", 120)} team`}
 - NEVER use placeholders like [Your Name] or [Company] — use only real details given above
 - Ground every personalisation in the LEAD FACTS above. Use ONLY what is written there. NEVER invent a detail — not their city, not their industry, not a rating, not a problem they are known to have, not a company size or revenue, not an award or news item, and never a personal life event. If a fact is not listed above, you do not know it, so do not write it. When no LEAD FACTS block is present, personalise using only the person's name, company and job title as given, and nothing more.
 - NEVER claim to have researched, visited, reviewed, or noticed anything about them. Do not assert what they currently have, use, lack, or are missing (do not write "I noticed you don't have X", "you aren't using X", "you have no X"). You have no knowledge of their current setup beyond the facts listed, so speak about what you DO in general terms and let them tell you about themselves.
-- Write like a real person who knows only what is on this page. A vague but honest email beats a specific but invented one, always${senderSig ? `
+- Write like a real person who knows only what is on this page. A vague but honest email beats a specific but invented one, always
+- Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.${senderSig ? `
 - Append this signature block verbatim at the end:\n${senderSig}` : ""}${arabic ? `
 - WRITE IN ARABIC with a professional Gulf business tone. Keep company names in Latin script.` : ""}`,
     }], { maxTokens: 800, context: { fn: "generate-email", kind: "gen_email", user_id: userId } });

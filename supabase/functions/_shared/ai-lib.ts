@@ -108,7 +108,11 @@ export function buildLeadFacts(lead: Record<string, any>): string {
   const bits: string[] = [];
   if (lead.category) bits.push(`- Category/industry: ${sanitizeForPrompt(String(lead.category), 120)}`);
   if (lead.city) bits.push(`- City: ${sanitizeForPrompt(String(lead.city), 80)}`);
-  if (lead.rating != null && lead.rating !== "") bits.push(`- Local rating: ${String(lead.rating)} / 5`);
+  // Rating must be a real number. A free-text value here would be scraped text,
+  // not a measurement, and "Local rating: excellent / 5" is a fabrication.
+  if (lead.rating != null && lead.rating !== "" && Number.isFinite(Number(lead.rating))) {
+    bits.push(`- Local rating: ${Number(lead.rating)} / 5`);
+  }
   if (lead.website) bits.push(`- Has a website: ${sanitizeForPrompt(String(lead.website), 120)}`);
   if (lead.email_status === "valid") bits.push("- Email is verified real — write to the person, they actually read mail.");
   else if (lead.email_status === "risky") bits.push("- Email present but unverified — stay factual and professional.");

@@ -103,6 +103,20 @@ serve(async (req) => {
     if (authErr || !authData.user) return json({ error: "Invalid session" }, 401);
     const userId = authData.user.id;
 
+    // Atomic daily AI quota. This endpoint is invoked straight from the browser
+    // (src/routes/_authenticated/emails.tsx) with the user's own JWT, so without
+    // a quota any authenticated user could call it in a loop and spend our Groq
+    // credits without limit. maxTokens bounds one reply; this bounds the day.
+    const aiCap = Number(Deno.env.get("AI_DAILY_CAP") ?? 200);
+    const { data: aiAllowed, error: aiQuotaErr } = await admin.rpc("consume_ai_quota", {
+      uid: userId,
+      cap: aiCap,
+    });
+    if (aiQuotaErr) return json({ error: aiQuotaErr.message }, 500);
+    if (!aiAllowed) {
+      return json({ error: "Daily AI limit reached. Try again tomorrow or upgrade your plan." }, 429);
+    }
+
     const body = await req.json().catch(() => ({}));
     const emailId = body?.emailId;
     const customBody = typeof body?.body === "string" ? body.body.trim() : "";
