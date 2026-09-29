@@ -141,6 +141,7 @@ function CampaignReviewPage() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-email", {
         body: {
+          leadId: lead.id,
           leadName: lead.name ?? "there",
           leadCompany: lead.company ?? "your company",
           leadJobTitle: lead.job_title ?? "professional",
