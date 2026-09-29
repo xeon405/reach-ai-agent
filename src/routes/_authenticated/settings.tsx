@@ -306,7 +306,7 @@ function SettingsPage() {
         <div className="space-y-1.5">
           <Label>What should OutshipAi communicate?</Label>
           <Textarea rows={2} value={communicationStyle} onChange={(e) => setCommunicationStyle(e.target.value)}
-            placeholder="e.g. Be direct, lead with ROI, sound like a peer." />
+            placeholder="e.g. Be direct, focus on results, sound like a peer." />
         </div>
         <div className="space-y-1.5">
           <Label>What should OutshipAi NEVER claim?</Label>

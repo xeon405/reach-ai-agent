@@ -30,7 +30,7 @@ function Terms() {
           <section>
             <h2 className="text-lg font-semibold">2. The Service</h2>
             <p className="mt-2">
-              OutshipAi finds business leads, drafts personalized emails using artificial
+              OutshipAi finds business contacts, drafts personal emails using artificial
               intelligence, and sends them through your own Gmail account, including automated
               follow-ups.
             </p>
@@ -48,8 +48,8 @@ function Terms() {
           <section>
             <h2 className="text-lg font-semibold">4. AI-generated content</h2>
             <p className="mt-2">
-              Emails are generated automatically by AI. You should review content before campaigns
-              target real recipients. We disclose in each email that it was written by an AI agent.
+              Emails are generated automatically by AI. You should review content before it is sent
+              to real people. We disclose in each email that it was written by an AI agent.
             </p>
           </section>
 
@@ -73,7 +73,7 @@ function Terms() {
             <h2 className="text-lg font-semibold">7. Disclaimer</h2>
             <p className="mt-2">
               The Service is provided "as is" without warranties of any kind. We are not liable for
-              lost profits, deliverability outcomes, or damages arising from your use of the Service.
+              lost profits, whether emails reach the inbox, or damages arising from your use of the Service.
             </p>
           </section>
 

@@ -380,7 +380,7 @@ function Dashboard() {
           ))}
         </div>
         {funnel[0].value === 0 && (
-          <p className="mt-4 text-center text-sm text-muted-foreground">No leads found in this period. Start a campaign to see your funnel.</p>
+          <p className="mt-4 text-center text-sm text-muted-foreground">Nothing found in this period. Start a campaign to see your results.</p>
         )}
       </Section>
 
@@ -518,7 +518,7 @@ function Dashboard() {
                 id: String(c.id), label: `Interested (conf: ${Math.round((c.confidence ?? 0) * 100)}%)`,
                 link: "/emails", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
               }))}
-              empty="No hot leads in this period."
+              empty="No interested people in this period."
             />
             <IntelligenceGroup
               title="Booking Requests"

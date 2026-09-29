@@ -108,7 +108,7 @@ function CampaignsPage() {
   async function setDelivery(c: Campaign, delivery: "smart" | "instant") {
     const { error } = await supabase.from("campaigns").update({ delivery }).eq("id", c.id);
     if (error) toast.error(error.message);
-    else toast.success(delivery === "instant" ? "Sending instantly on launch" : "Sending at each lead's local morning");
+    else toast.success(delivery === "instant" ? "Sending instantly on launch" : "Sending at each contact's local morning");
     load();
   }
 
@@ -172,7 +172,7 @@ function CampaignsPage() {
 
   async function handleGenerateEmail() {
     if (!aiForm.leadName || !aiForm.leadCompany || !aiForm.leadJobTitle) {
-      toast.error("Please fill in all lead details");
+      toast.error("Please fill in all contact details");
       return;
     }
     setGenerating(true);
@@ -196,7 +196,7 @@ function CampaignsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Campaigns</h1>
-          <p className="text-xs text-muted-foreground">Manage your outbound campaigns.</p>
+          <p className="text-xs text-muted-foreground">Manage your email campaigns.</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={aiOpen} onOpenChange={setAiOpen}>
@@ -396,7 +396,7 @@ function CampaignsPage() {
                       type="button"
                       onClick={() => setDelivery(c, c.delivery === "instant" ? "smart" : "instant")}
                       className={`rounded-full border px-3 py-1 text-xs transition-colors ${c.delivery === "instant" ? "border-warning bg-warning/10 text-warning" : "border-border text-muted-foreground hover:text-foreground"}`}
-                      title={c.delivery === "instant" ? "Sends instantly on launch — may land in off-hours" : "Holds the send until each lead's local morning (8–11am)"}
+                      title={c.delivery === "instant" ? "Sends instantly on launch — may land in off-hours" : "Holds the send until each contact's local morning (8–11am)"}
                     >
                       {c.delivery === "instant" ? <><Zap className="mr-1 inline h-3 w-3" /> Instant send</> : <><Clock className="mr-1 inline h-3 w-3" /> Local morning</>}
                     </button>

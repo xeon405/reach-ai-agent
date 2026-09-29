@@ -187,7 +187,7 @@ function LeadFinderPage() {
       setSource(data.source ?? "");
       setNetwork((data.network ?? []) as NetworkMatch[]);
       if (leads.length === 0) {
-        toast.info(data.message ?? "No leads found. Try a different niche or country.");
+        toast.info(data.message ?? "No businesses found. Try a different niche or country.");
       } else {
         setResults(leads);
         setSelected(new Set(leads.map((_, i) => i)));
@@ -226,7 +226,7 @@ function LeadFinderPage() {
         setNewCampaignName("");
         setShowCampaignInput(false);
       } catch (e: any) {
-        toast.error(e.message ?? "Failed to create campaign");
+        toast.error(e.message ?? "Could not create campaign");
         setCreatingCampaign(false);
         return;
       }
@@ -450,13 +450,13 @@ function LeadFinderPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Number of leads</label>
+            <label className="text-sm font-medium">Number of businesses</label>
             <Select value={limit} onValueChange={setLimit}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="10">10 leads</SelectItem>
-                <SelectItem value="25">25 leads</SelectItem>
-                <SelectItem value="50">50 leads</SelectItem>
+                <SelectItem value="10">10 businesses</SelectItem>
+                <SelectItem value="25">25 businesses</SelectItem>
+                <SelectItem value="50">50 businesses</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -549,7 +549,7 @@ function LeadFinderPage() {
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
             <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
             <Input
-              placeholder="Search leads..."
+              placeholder="Search businesses..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="h-8 w-48 text-xs"
@@ -659,7 +659,7 @@ function LeadFinderPage() {
                   <button
                     onClick={(e) => { e.stopPropagation(); removeLead(i); }}
                     className="absolute right-3 top-9 text-muted-foreground/40 hover:text-destructive transition-colors"
-                    title="Remove lead"
+                    title="Remove contact"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

@@ -100,7 +100,7 @@ function LeadEditPage() {
       status: form.status,
     }).eq("id", leadId);
     setSaving(false);
-    if (error) toast.error("Could not update lead");
+    if (error) toast.error("Could not update this contact");
     else {
       toast.success("Lead updated");
       navigate({ to: "/leads" });
@@ -275,13 +275,13 @@ function LeadEditPage() {
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Forget this lead? This cannot be undone.</AlertDialogTitle>
+              <AlertDialogTitle>Remove this contact? This cannot be undone.</AlertDialogTitle>
               <AlertDialogDescription>
                 Permanently erases the lead's AI history: thread memories, AI classifications,
                 owner alerts, all emails and meetings, tracking events, spend ledger rows,
                 lead score, and any queued sends (cancelled). Threads are tombstoned and the
                 inferred saved-business email attribution is purged.{" "}
-                <span className="font-semibold">The lead row itself is kept</span> — only its
+                <span className="font-semibold">The contact record itself is kept</span> — only its
                 history goes. No suppression (PECR opt-out) is applied; that is a separate,
                 explicit action.
               </AlertDialogDescription>
@@ -318,7 +318,7 @@ function LeadEditPage() {
               </div>
             ))}
             {COUNT_LABELS.every(([k]) => (result?.row_counts?.[k] ?? 0) === 0) && (
-              <div className="text-muted-foreground">Nothing to erase — no history found for this lead.</div>
+              <div className="text-muted-foreground">Nothing to erase — no history found for this contact.</div>
             )}
           </div>
           <AlertDialogFooter>

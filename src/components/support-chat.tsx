@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const SUGGESTIONS = [
-  "How do I start my first campaign?",
+  "How do I start sending?",
   "Why aren't my emails sending?",
   "How do follow-ups work?",
   "Is my Gmail safe?",

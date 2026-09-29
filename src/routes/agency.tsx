@@ -8,12 +8,12 @@ export const Route = createFileRoute("/agency")({
 });
 
 const INCLUDED = [
-  { icon: "🎯", title: "Lead research", desc: "We build your ideal-customer list every week — country, niche, company size, you choose." },
-  { icon: "✍️", title: "AI-personalized emails", desc: "Every prospect gets an email written specifically for them. No templates that read like spam." },
+  { icon: "🎯", title: "Customer research", desc: "We build your ideal-customer list every week — country, niche, company size, you choose." },
+  { icon: "✍️", title: "AI-personalized emails", desc: "Every person gets an email written just for them. No templates that read like spam." },
   { icon: "🔁", title: "Automated follow-ups", desc: "Gentle persistence until they answer — up to 5 touches, perfectly timed." },
-  { icon: "🤖", title: "AI reply handling", desc: "Replies classified and answered instantly; hot leads surface on your radar the moment they reply." },
+  { icon: "🤖", title: "AI reply handling", desc: "Replies sorted and answered instantly; the interested ones surface on your radar the moment they reply." },
   { icon: "📊", title: "Weekly report", desc: "Emails sent, opens, replies, booking-intent conversations — one clean email every Monday." },
-  { icon: "🛡️", title: "Deliverability guard", desc: "Safe sending limits, spam-word screening, and unsubscribe handling built in." },
+  { icon: "🛡️", title: "Spam protection", desc: "Safe sending limits, spam-word screening, and unsubscribe handling built in." },
 ];
 
 function AgencyPage() {
@@ -31,13 +31,13 @@ function AgencyPage() {
           <span className="text-gradient">You close.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-          Our AI outreach team finds your ideal customers worldwide, writes them personal emails from your own address, follows up automatically, and hands you warm conversations — starting at{" "}
+          Our AI sales team finds your ideal customers worldwide, writes them personal emails from your own address, follows up automatically, and hands you warm conversations — starting at{" "}
           <strong className="text-foreground">$299/month</strong>. No ads. No cold calls.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <a href="mailto:outreachai.team@gmail.com?subject=I%20want%20more%20sales%20calls&body=Tell%20me%20about%20your%20industry%2C%20target%20country%20and%20offer.%0A%0AIndustry:%0ACountry:%0AOffer:">
             <Button size="lg" className="bg-gradient-primary px-8 text-base shadow-lg">
-              Get my first campaign 🚀
+              Start finding customers 🚀
             </Button>
           </a>
           <a href="mailto:outreachai.team@gmail.com?subject=Question%20about%20DFY%20service">
@@ -71,7 +71,7 @@ function AgencyPage() {
               <div className="mt-3 text-4xl font-extrabold">$299<span className="text-base font-medium text-muted-foreground">/mo</span></div>
               <ul className="mt-6 space-y-2.5 text-left text-sm">
                 <li>✅ 500 AI emails / month</li>
-                <li>✅ Weekly lead research</li>
+                <li>✅ Weekly customer research</li>
                 <li>✅ Automated follow-ups</li>
                 <li>✅ Weekly report</li>
               </ul>

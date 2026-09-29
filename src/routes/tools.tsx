@@ -155,7 +155,7 @@ function ToolsPage() {
         <section className="rounded-2xl border border-primary/30 bg-primary/5 p-8 text-center">
           <h2 className="text-2xl font-bold">Like these? The full agent does everything.</h2>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-            Finds leads worldwide, validates them, writes and sends personalized emails at the perfect hour, follows up three times, sorts replies — automatically.
+            Finds customers worldwide, checks them, writes and sends personalized emails at the perfect hour, follows up three times, sorts replies — automatically.
           </p>
           <Button asChild size="lg" className="mt-5 bg-gradient-primary shadow-glow">
             <Link to="/auth">Start free — no card needed</Link>

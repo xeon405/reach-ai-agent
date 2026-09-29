@@ -41,7 +41,7 @@ function AboutPage() {
       <section className="mx-auto max-w-2xl px-4 pb-10">
         <p className="text-center text-lg leading-relaxed text-muted-foreground">
           OutshipAi started with a simple observation: great products lose to louder competitors
-          because outreach is expensive, slow, and uncomfortable. We believed an AI agent — one
+          because reaching customers is expensive, slow, and uncomfortable. We believed an AI agent — one
           that finds the right people, writes like a human, and respects every rule of good
           emailing — could level that field.
         </p>

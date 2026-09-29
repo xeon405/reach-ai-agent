@@ -329,7 +329,7 @@ function CampaignReviewPage() {
             <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm">
               {stats.invalid > 0 && <p className="text-amber-700 dark:text-amber-400">{stats.invalid} invalid email{stats.invalid !== 1 ? "s" : ""} will be excluded from sending.</p>}
-              {stats.suppressed > 0 && <p className="text-amber-700 dark:text-amber-400">{stats.suppressed} suppressed/unsubscribed lead{stats.suppressed !== 1 ? "s" : ""} will be excluded.</p>}
+              {stats.suppressed > 0 && <p className="text-amber-700 dark:text-amber-400">{stats.suppressed} suppressed/unsubscribed contact{stats.suppressed !== 1 ? "s" : ""} will be excluded.</p>}
             </div>
           </div>
         </div>
@@ -456,7 +456,7 @@ function CampaignReviewPage() {
                   )}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground py-4 text-center">Click a lead's Preview button to generate an email preview.</div>
+                <div className="text-sm text-muted-foreground py-4 text-center">Click a contact's Preview button to generate an email preview.</div>
               )}
             </div>
           </div>
@@ -467,7 +467,7 @@ function CampaignReviewPage() {
       {!launchResult && (
         <div className="sticky bottom-0 flex items-center justify-between rounded-xl border border-primary/20 bg-card p-4">
           <div className="text-sm">
-            <p className="font-medium">{stats.eligible} lead{stats.eligible !== 1 ? "s" : ""} will be queued for sending</p>
+            <p className="font-medium">{stats.eligible} contact{stats.eligible !== 1 ? "s" : ""} will be queued for sending</p>
             <p className="text-muted-foreground text-xs">
               {stats.invalid > 0 && `${stats.invalid} invalid excluded. `}
               {stats.risky > 0 && `${stats.risky} risky will be sent with caution. `}

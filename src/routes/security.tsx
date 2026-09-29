@@ -25,7 +25,7 @@ const SECTIONS = [
     points: [
       "Gmail access tokens are stored in an isolated vault table protected by Row Level Security.",
       "Your regular login can NOT read this vault — not from the app, not from the API, not with any browser trickery.",
-      "Only the sending engine (server-side) can use them, and only to send YOUR campaigns.",
+      "Only the sending engine (server-side) can use them, and only to send the emails YOU ask it to send.",
       "Tokens are rotated on every send session and old values are overwritten within seconds.",
     ],
   },
@@ -33,8 +33,8 @@ const SECTIONS = [
     icon: Eye,
     title: "What we see — and what we don't",
     points: [
-      "Stored: your account email, campaign settings, lead lists you create, subjects/bodies of emails your agent sends, reply sentiment labels.",
-      "NOT stored: your Gmail password, emails from other senders in your inbox, your contacts outside outreach, browsing history.",
+      "Stored: your account email, your settings, the contact lists you create, the subject and body of every email your agent sends, and reply sentiment labels.",
+      "NOT stored: your Gmail password, emails from other senders in your inbox, your contacts outside our system, or your browsing history.",
       "We never sell, rent, or share your data with third parties. Period.",
     ],
   },
@@ -43,15 +43,15 @@ const SECTIONS = [
     title: "Your data belongs to you",
     points: [
       "Export everything as JSON: Settings → Download my data. It's a single click, no support ticket needed.",
-      "Permanent deletion: Settings → Danger zone → Delete account removes profile, campaigns, leads, email history AND token vault rows in one shot.",
-      "Unsubscribed leads are permanently suppressed across all your campaigns automatically.",
+      "Permanent deletion: Settings → Danger zone → Delete account removes your profile, contacts, email history AND token vault rows in one shot.",
+      "Anyone who unsubscribes is permanently blocked from everything you send, automatically.",
     ],
   },
   {
     icon: ShieldCheck,
     title: "Built-in compliance",
     points: [
-      "Every campaign email includes a working unsubscribe path (reply-to opt-out honored automatically).",
+      "Every email we send includes a working unsubscribe path (reply-to opt-out honored automatically).",
       "A physical sender address is included in all commercial emails (CAN-SPAM requirement).",
       "Safe daily sending caps protect your domain reputation and recipients' inboxes.",
       "MX verification ensures we never waste sends on dead addresses.",

@@ -17,17 +17,17 @@ import { useLang } from "@/lib/i18n";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "OutshipAi — AI Sales Agent That Finds Leads & Sends Cold Emails For You" },
+      { title: "OutshipAi — An AI Sales Agent That Finds Customers & Emails Them For You" },
       {
         name: "description",
         content:
-          "OutshipAi finds your ideal customers worldwide, writes personalized cold emails, follows up automatically, and sends interested leads your way.",
+          "OutshipAi finds customers for you worldwide, writes a personal email to each one, follows up automatically, and sends the interested ones straight to you.",
       },
       { property: "og:title", content: "OutshipAi — Your AI Sales Agent" },
       {
         property: "og:description",
         content:
-          "Finds leads worldwide, writes personalized cold emails, handles replies, and hands you the interested ones — automatically.",
+          "Finds customers for you worldwide, writes personal emails, handles the replies, and hands you the interested ones — automatically.",
       },
       { property: "og:image", content: "/og.png" },
       { property: "og:type", content: "website" },
@@ -36,7 +36,7 @@ export const Route = createFileRoute("/")({
       {
         name: "twitter:description",
         content:
-          "Finds leads worldwide, writes personalized cold emails, handles replies, and hands you the interested ones — automatically.",
+          "Finds customers for you worldwide, writes personal emails, handles the replies, and hands you the interested ones — automatically.",
       },
       { name: "twitter:image", content: "/og.png" },
     ],
@@ -62,7 +62,7 @@ export const Route = createFileRoute("/")({
                   name: "Is this cold email spam?",
                   acceptedAnswer: {
                     "@type": "Answer",
-                    text: "No. Every email is personalized for the lead and sent from your own real inbox at safe, low volumes, with strict deliverability checks. Spam hurts senders — our system is built to avoid it.",
+                    text: "No. Every email is written for that one person and sent from your own real inbox at safe, low volumes, with checks that keep you out of the spam folder. Spam hurts senders — our system is built to avoid it.",
                   },
                 },
                 {
@@ -70,7 +70,7 @@ export const Route = createFileRoute("/")({
                   name: "What happens when someone unsubscribes?",
                   acceptedAnswer: {
                     "@type": "Answer",
-                    text: "Every email carries a one-click unsubscribe that is honored instantly. OutshipAi keeps those addresses permanently excluded from future campaigns.",
+                    text: "Every email carries a one-click unsubscribe that is honored instantly. OutshipAi keeps those addresses permanently out of everything you send later.",
                   },
                 },
                 {
@@ -94,7 +94,7 @@ export const Route = createFileRoute("/")({
                   name: "Can it write in Arabic or other languages?",
                   acceptedAnswer: {
                     "@type": "Answer",
-                    text: "Yes. Drafts respond naturally to the lead's context and language — Arabic, English, French, and more are supported.",
+                    text: "Yes. Drafts answer naturally to what the person actually wrote, in their own language — Arabic, English, French, and more are supported.",
                   },
                 },
                 {
@@ -145,11 +145,11 @@ function FooterCol({ title, children }: { title: string; children: ReactNode }) 
 const faqs = [
   {
     q: "Is this cold email spam?",
-    a: "No. Every email is personalized for the lead and sent from your own real inbox at safe, low volumes, with strict deliverability checks. Spam hurts senders — our system is built to avoid it.",
+    a: "No. Every email is written for that one person and sent from your own real inbox at safe, low volumes, with checks that keep you out of the spam folder. Spam hurts senders — our system is built to avoid it.",
   },
   {
     q: "What happens when someone unsubscribes?",
-    a: "Every email carries a one-click unsubscribe that is honored instantly. OutshipAi keeps those addresses permanently excluded from future campaigns.",
+    a: "Every email carries a one-click unsubscribe that is honored instantly. OutshipAi keeps those addresses permanently out of everything you send later.",
   },
   {
     q: "Will this work with my existing inbox?",
@@ -161,7 +161,7 @@ const faqs = [
   },
   {
     q: "Can it write in Arabic or other languages?",
-    a: "Yes. Drafts respond naturally to the lead's context and language — Arabic, English, French, and more are supported.",
+    a: "Yes. Drafts answer naturally to what the person actually wrote, in their own language — Arabic, English, French, and more are supported.",
   },
   {
     q: "How much does it cost?",
@@ -186,7 +186,7 @@ const steps = [
     n: "03",
     icon: Send,
     title: "We send & follow up",
-    text: "Autopilot sends, re-engages non-replies, and hands interested leads to your booking link the moment they're ready.",
+    text: "Autopilot keeps sending and following up, and sends anyone who is interested straight to your booking link the moment they're ready.",
   },
 ];
 

@@ -452,7 +452,7 @@ function LeadsPage() {
                     <button
                       onClick={() => navigate({ to: "/lead-edit/$leadId", params: { leadId: l.id } })}
                       className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
-                      aria-label="Edit lead"
+                      aria-label="Edit contact"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -460,7 +460,7 @@ function LeadsPage() {
                       onClick={() => void deleteLead(l.id)}
                       disabled={deleting.has(l.id)}
                       className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
-                      aria-label="Delete lead"
+                      aria-label="Delete contact"
                     >
                       {deleting.has(l.id) ? (
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />

@@ -24,7 +24,7 @@ function Privacy() {
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li><strong>Account data:</strong> your name, email address, and company.</li>
               <li><strong>Gmail access:</strong> OAuth tokens allowing the Service to send emails on your behalf via your Google account. Tokens are stored encrypted-at-rest in our database (Supabase).</li>
-              <li><strong>Campaign data:</strong> lead contact details you import or source via the Service, and the emails sent to them.</li>
+              <li><strong>Email data:</strong> the contact details you import or find through the Service, and the emails sent to them.</li>
               <li><strong>Usage data:</strong> plan, sending counters, and product telemetry needed to operate the Service.</li>
             </ul>
           </section>
@@ -32,9 +32,9 @@ function Privacy() {
           <section>
             <h2 className="text-lg font-semibold">2. How we use it</h2>
             <p className="mt-2">
-              Data is used only to operate the Service: finding leads, generating and sending
+              Data is used only to operate the Service: finding customers, generating and sending
               emails, follow-ups, billing, and support. We do not sell your personal data or your
-              leads' data.
+              contacts' data.
             </p>
           </section>
 
@@ -43,7 +43,7 @@ function Privacy() {
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li><strong>Supabase</strong> — database, authentication, and serverless functions.</li>
               <li><strong>Google</strong> — Gmail API for sending emails from your account.</li>
-              <li><strong>Apollo</strong> — business contact database used when you search for leads.</li>
+              <li><strong>Apollo</strong> — business contact database used when you search for customers.</li>
               <li><strong>Groq</strong> — AI model provider used to draft emails, generate subject lines, and classify incoming replies (reply subject/preview only — never full message bodies).</li>
               <li>Our payment provider processes subscription payments on our behalf. We never see or store your full card details.</li>
             </ul>
@@ -56,7 +56,7 @@ function Privacy() {
           <section>
             <h2 className="text-lg font-semibold">4. Data retention &amp; deletion</h2>
             <p className="mt-2">
-              Deleting your account removes your profile, leads, campaign, and email records, and
+              Deleting your account removes your profile, contacts, and email records, and
               revokes stored Gmail tokens. Some billing records are retained as required by law.
             </p>
           </section>

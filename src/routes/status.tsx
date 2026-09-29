@@ -18,8 +18,8 @@ function StatusPage() {
   const [rows, setRows] = useState<{ name: string; detail: string; state: CheckState; ms: number | null }[]>([
     { name: "Website", detail: "Landing page & app shell", state: "checking", ms: null },
     { name: "Authentication", detail: "Supabase GoTrue login service", state: "checking", ms: null },
-    { name: "Database", detail: "Campaigns, leads, email history", state: "checking", ms: null },
-    { name: "AI Sending Engine", detail: "send-campaign edge function", state: "checking", ms: null },
+    { name: "Database", detail: "Emails, contacts, email history", state: "checking", ms: null },
+    { name: "AI Sending Engine", detail: "email sending service", state: "checking", ms: null },
     { name: "AI Reply Engine", detail: "reply classification & drafts", state: "checking", ms: null },
     { name: "Follow-up Autopilot", detail: "scheduled follow-up runner", state: "checking", ms: null },
   ]);

@@ -21,7 +21,7 @@ const PLANS = [
     id: "starter",
     name: "Starter",
     price: 37,
-    cap: "50 emails/day · 1 campaign",
+    cap: "50 emails/day · 1 campaign at a time",
     badge: null,
     features: [
       "AI Lead Finder (open directories)",
@@ -36,7 +36,7 @@ const PLANS = [
     id: "growth",
     name: "Growth",
     price: 79,
-    cap: "200 emails/day · 5 campaigns",
+    cap: "200 emails/day · 5 campaigns at a time",
     badge: "Most Popular",
     features: [
       "Everything in Starter",
