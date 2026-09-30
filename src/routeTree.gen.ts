@@ -34,6 +34,7 @@ import { Route as AuthenticatedEmailsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
+import { Route as AuthenticatedAgentRouteImport } from './routes/_authenticated/agent'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
 import { Route as AuthenticatedLeadEditLeadIdRouteImport } from './routes/_authenticated/lead-edit.$leadId'
 import { Route as AuthenticatedCampaignReviewCampaignIdRouteImport } from './routes/_authenticated/campaign-review.$campaignId'
@@ -163,6 +164,11 @@ const AuthenticatedBillingRoute = AuthenticatedBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAgentRoute = AuthenticatedAgentRouteImport.update({
+  id: '/agent',
+  path: '/agent',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   id: '/google/callback',
   path: '/google/callback',
@@ -202,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/agent': typeof AuthenticatedAgentRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -232,6 +239,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/agent': typeof AuthenticatedAgentRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/campaigns': typeof AuthenticatedCampaignsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -264,6 +272,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/_authenticated/agent': typeof AuthenticatedAgentRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -296,6 +305,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/tools'
     | '/unsubscribe'
+    | '/agent'
     | '/billing'
     | '/campaigns'
     | '/dashboard'
@@ -326,6 +336,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/tools'
     | '/unsubscribe'
+    | '/agent'
     | '/billing'
     | '/campaigns'
     | '/dashboard'
@@ -357,6 +368,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/tools'
     | '/unsubscribe'
+    | '/_authenticated/agent'
     | '/_authenticated/billing'
     | '/_authenticated/campaigns'
     | '/_authenticated/dashboard'
@@ -569,6 +581,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBillingRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/agent': {
+      id: '/_authenticated/agent'
+      path: '/agent'
+      fullPath: '/agent'
+      preLoaderRoute: typeof AuthenticatedAgentRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/auth/google/callback': {
       id: '/auth/google/callback'
       path: '/google/callback'
@@ -601,6 +620,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAgentRoute: typeof AuthenticatedAgentRoute
   AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -615,6 +635,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAgentRoute: AuthenticatedAgentRoute,
   AuthenticatedBillingRoute: AuthenticatedBillingRoute,
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,

@@ -15,6 +15,7 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  Sparkles,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/_authenticated")({
 
 const nav = [
   { tKey: "app_dash", url: "/dashboard", icon: LayoutDashboard },
+  { tKey: "app_agent", url: "/agent", icon: Sparkles },
   { tKey: "app_leads", url: "/leads", icon: Users },
   { tKey: "app_campaigns", url: "/campaigns", icon: Megaphone },
   { tKey: "app_emails", url: "/emails", icon: Mail },
@@ -41,6 +43,7 @@ const nav = [
 
 const pageTitles: Array<[string, string]> = [
   ["/dashboard", "Dashboard"],
+  ["/agent", "Agent"],
   ["/leads", "Leads"],
   ["/campaigns", "Campaigns"],
   ["/emails", "Emails"],
