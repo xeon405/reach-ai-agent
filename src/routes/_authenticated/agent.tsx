@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Sparkles, Send, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
+import { Sparkles, Send, Loader2, ShieldCheck, RefreshCw, Brain, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/lib/i18n";
@@ -32,6 +32,16 @@ const STARTERS = [
   "What is my sending reputation?",
 ];
 
+type Learned = {
+  id: number;
+  phrase: string;
+  intent: string;
+  state: string;
+  scope: string;
+  uses: number;
+  correct: number;
+};
+
 let seq = 0;
 const nid = () => `m${Date.now()}-${seq++}`;
 
@@ -43,9 +53,37 @@ function AgentPage() {
   const [convId, setConvId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
+  // What the agent has learned, so a wrong assumption is visible and fixable
+  // rather than silently steering every future answer.
+  const [showLearned, setShowLearned] = useState(false);
+  const [learned, setLearned] = useState<Learned[]>([]);
+  const [learnedBusy, setLearnedBusy] = useState(false);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles]);
+
+  async function loadLearned() {
+    setLearnedBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("agent", { body: { action: "learned_list" } });
+      if (error) throw new Error(error.message);
+      setLearned((data?.learned ?? []) as Learned[]);
+    } catch {
+      setLearned([]);
+    } finally {
+      setLearnedBusy(false);
+    }
+  }
+
+  async function forgetPhrase(id: number) {
+    setLearned((l) => l.filter((x) => x.id !== id));
+    try {
+      await supabase.functions.invoke("agent", { body: { action: "learned_forget", id } });
+    } catch {
+      await loadLearned();
+    }
+  }
 
   async function send(text: string, confirm = false) {
     const trimmed = text.trim();
@@ -105,6 +143,18 @@ function AgentPage() {
           <p className="text-sm text-muted-foreground">{t("app_agent_sub")}</p>
         </div>
         <Button
+          variant={showLearned ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => {
+            const next = !showLearned;
+            setShowLearned(next);
+            if (next) void loadLearned();
+          }}
+          title={t("app_agent_learned")}
+        >
+          <Brain className="h-4 w-4" />
+        </Button>
+        <Button
           variant="ghost"
           size="sm"
           onClick={() => { setBubbles([]); setConvId(null); }}
@@ -113,6 +163,40 @@ function AgentPage() {
           <RefreshCw className="h-4 w-4" />
         </Button>
       </header>
+
+      {showLearned && (
+        <div className="mb-3 rounded-lg border border-border bg-muted/30 p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">{t("app_agent_learned_body")}</p>
+          {learnedBusy && (
+            <p className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> {t("app_agent_working")}
+            </p>
+          )}
+          {!learnedBusy && learned.length === 0 && (
+            <p className="py-1 text-xs text-muted-foreground">{t("app_agent_learned_empty")}</p>
+          )}
+          <ul className="space-y-1.5">
+            {learned.map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-2.5 py-1.5">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium">{l.phrase}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {l.intent} · {l.scope} · {l.uses} {t("app_agent_learned_uses")}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void forgetPhrase(l.id)}
+                  title={t("app_agent_learned_forget")}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex-1 space-y-3 overflow-y-auto pb-3">
         {bubbles.length === 0 && (

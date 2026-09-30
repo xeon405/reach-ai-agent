@@ -10,51 +10,22 @@
 // run it under Node and stay honest about what ships.
 // ============================================================================
 
-export type AgentIntent =
-  | "list_campaigns"
-  | "campaign_stats"
-  | "find_contacts"
-  | "add_contacts_to_campaign"
-  | "create_campaign_draft"
-  | "pause_campaign"
-  | "compliance_check"
-  | "sender_health";
-
-/** READ intents are safe to run without asking. WRITE intents need a confirm. */
-export const READ_INTENTS: readonly AgentIntent[] = [
-  "list_campaigns",
-  "campaign_stats",
-  "find_contacts",
-  "compliance_check",
-  "sender_health",
-];
-
-export const WRITE_INTENTS: readonly AgentIntent[] = [
-  "add_contacts_to_campaign",
-  "create_campaign_draft",
-  "pause_campaign",
-];
-
-export function isWriteIntent(intent: AgentIntent): boolean {
-  return WRITE_INTENTS.includes(intent);
-}
+// The goal definitions are the single source of truth for what exists and what
+// counts as a change. The router no longer keeps its own copy of the intent
+// list: two sources of truth for "is this a write?" is how a safety property
+// quietly stops being true.
+import { GOALS, type AgentIntent, type AgentParams, isWriteIntent } from "./agent-capabilities.ts";
+export { isWriteIntent };
+export type { AgentIntent, AgentParams };
 
 export interface AgentRequest {
   intent: AgentIntent;
-  /** Extracted arguments. Absent ones stay undefined rather than guessed. */
-  params: {
-    query?: string;
-    company?: string;
-    city?: string;
-    country?: string;
-    category?: string;
-    limit?: number;
-    campaignName?: string;
-    campaignId?: string;
-  };
-  /** What the user asked, restated in plain words. Shown before a write runs. */
+  params: AgentParams;
   summary: string;
 }
+
+export const READ_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => !g.write).map((g) => g.intent);
+export const WRITE_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => g.write).map((g) => g.intent);
 
 /** Lowercase, strip accents/punctuation, collapse whitespace. */
 function norm(s: unknown): string {

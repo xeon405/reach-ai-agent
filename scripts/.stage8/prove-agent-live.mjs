@@ -59,7 +59,12 @@ try {
   {
     const r = await asUser(token, { message: "how many emails have i sent" });
     check(r.status === 200, "read intent returns 200", `HTTP ${r.status}`);
-    check(r.body.source === "router" && r.body.usedAi === false, "read resolved by router, no AI spent", `source=${r.body.source} usedAi=${r.body.usedAi}`);
+    // AI-first: the slow lane now interprets meaning before the deterministic
+    // router is consulted, so either lane may legitimately win here. What must
+    // hold is that a read resolves to a real goal and does not ask for consent.
+    check(["ai", "router", "learned"].includes(r.body.source), "a read is resolved by some lane", `source=${r.body.source}`);
+    check(r.body.source === "router" ? r.body.usedAi === false : r.body.usedAi === true, "and the AI is spent only when the model did the work", `source=${r.body.source} usedAi=${r.body.usedAi}`);
+    check(!r.body.pending, "a read never asks for confirmation", `pending=${JSON.stringify(r.body.pending)}`);
     const conv = r.body.conversationId;
     check(!!conv, "conversation id returned");
     var convId = conv;
@@ -82,13 +87,49 @@ try {
     check(rows?.[0]?.status === "paused", "and it is PAUSED, so nothing can auto-send", rows?.[0]?.status);
   }
 
-  // ---- 5. repeat the unknown phrase: the cache must pay off ------------
+  // ---- 5. repeat the unknown phrase: the learned fast lane must pay off --
   {
     const phrase = "what should i be focusing on next quarter";
     const r1 = await asUser(token, { message: phrase, conversationId: convId });
     const r2 = await asUser(token, { message: phrase, conversationId: convId });
-    check(r2.body.source === "cache", "second identical unknown phrase is served from cache", `source=${r2.body.source}`);
+    check(r2.body.source === "learned", "second identical unknown phrase is served from the learned fast lane", `source=${r2.body.source}`);
     check(r1.body.usedAi === true && r2.body.usedAi === false, "only the FIRST unknown phrase spends an AI call", `first=${r1.body.usedAi} second=${r2.body.usedAi}`);
+  }
+
+  // ---- 5b. plain conversation needs no intent and no AI-free shortcut ---
+  {
+    const r = await asUser(token, { message: "what can you do?", conversationId: convId });
+    check(r.status === 200, "a plain question is answered, not rejected", `HTTP ${r.status}`);
+    check(typeof r.body.text === "string" && r.body.text.length > 10, "and gets a real sentence back", r.body.text?.slice(0, 60));
+    check(!r.body.intent, "asking about the assistant does not execute a goal", `intent=${r.body.intent}`);
+  }
+
+  // ---- 5c. a greeting must never be learned as an intent ----------------
+  {
+    for (const g of ["hi", "thanks", "yes"]) {
+      const r = await asUser(token, { message: g, conversationId: convId });
+      check(!r.body.intent, `"${g}" never triggers an action`, `intent=${r.body.intent}`);
+    }
+    const { data: learnedRows } = await admin
+      .from("agent_learned_phrases")
+      .select("phrase")
+      .eq("user_id", userId);
+    const bad = (learnedRows ?? []).filter((r) => ["hi", "thanks", "yes", "ok"].includes(r.phrase));
+    check(bad.length === 0, "greetings and confirmations are not stored as learned phrases", `stored=${JSON.stringify((learnedRows ?? []).map((r) => r.phrase))}`);
+  }
+
+  // ---- 5d. the user can see and delete what was learned -----------------
+  {
+    const r = await asUser(token, { action: "learned_list" });
+    check(r.status === 200 && Array.isArray(r.body.learned), "the user can list what the agent learned", `HTTP ${r.status}`);
+    const row = (r.body.learned ?? [])[0];
+    check(!!row?.phrase && !!row?.scope, "each learned phrase is shown with its scope", JSON.stringify(row));
+    if (row) {
+      const d = await asUser(token, { action: "learned_forget", id: row.id });
+      check(d.status === 200, "and can forget it", `HTTP ${d.status}`);
+      const after = await asUser(token, { action: "learned_list" });
+      check(!(after.body.learned ?? []).some((x) => x.id === row.id), "the forgotten phrase is gone", JSON.stringify(after.body.learned));
+    }
   }
 
   // ---- 6. REGRESSION: asking questions must not exhaust a step budget --
@@ -157,6 +198,7 @@ try {
     await admin.from("campaigns").delete().eq("user_id", userId);
     await admin.from("agent_messages").delete().eq("user_id", userId);
     await admin.from("agent_conversations").delete().eq("user_id", userId);
+    await admin.from("agent_learned_phrases").delete().eq("user_id", userId);
     await admin.from("agent_intent_cache").delete().eq("user_id", userId);
     await admin.from("agent_action_state").delete().eq("user_id", userId);
     const { error } = await admin.auth.admin.deleteUser(userId);
