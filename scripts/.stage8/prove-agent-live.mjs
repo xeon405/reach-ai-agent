@@ -123,6 +123,44 @@ try {
     check(bad.length === 0, "greetings and confirmations are not stored as learned phrases", `stored=${JSON.stringify((learnedRows ?? []).map((r) => r.phrase))}`);
   }
 
+  // ---- 5e. chats are SAVED and can be read back -------------------------
+  // Regression: the UI never read stored messages back, so reopening the page
+  // looked like every chat had been deleted. Nothing was ever lost.
+  {
+    const list = await asUser(token, { action: "conversations" });
+    check(list.status === 200 && Array.isArray(list.body.conversations), "past chats can be listed", `HTTP ${list.status}`);
+    const convo = (list.body.conversations ?? []).find((c) => c.id === convId);
+    check(!!convo, "the current chat appears in the list", `${(list.body.conversations ?? []).length} chats`);
+    check(!!convo && typeof convo.updated_at === "string", "each chat carries a recency stamp", convo?.updated_at);
+
+    const hist = await asUser(token, { action: "history", conversationId: convId });
+    check(hist.status === 200 && Array.isArray(hist.body.messages), "a saved chat can be reopened", `HTTP ${hist.status}`);
+    check((hist.body.messages ?? []).length >= 10, "the reopened chat still has its earlier turns", `${(hist.body.messages ?? []).length} messages`);
+    check((hist.body.messages ?? []).some((m) => m.role === "user") && (hist.body.messages ?? []).some((m) => m.role === "assistant"), "both sides of the conversation are restored");
+    check(hist.body.usedAi === undefined, "reopening a chat spends no AI", `usedAi=${hist.body.usedAi}`);
+
+    // Deleting must be COMPLETE, but this is a throwaway chat so the rest of
+    // the proof can keep using convId.
+    const victim = await asUser(token, { message: "delete probe chat please", conversationId: null });
+    const victimId = victim.body.conversationId;
+    check(!!victimId, "a second, throwaway chat was created", String(victimId));
+
+    const del = await asUser(token, { action: "conversation_delete", conversationId: victimId });
+    check(del.status === 200 && del.body.ok === true, "a chat can be deleted on request", `HTTP ${del.status}`);
+    const { count: msgCount } = await admin.from("agent_messages").select("id", { count: "exact", head: true }).eq("conversation_id", victimId);
+    const { count: convCount } = await admin.from("agent_conversations").select("id", { count: "exact", head: true }).eq("id", victimId);
+    check((msgCount ?? 0) === 0, "deleting a chat removes its messages too", `${msgCount} left`);
+    check((convCount ?? 0) === 0, "and the conversation row itself", `${convCount} left`);
+    const gone = await asUser(token, { action: "history", conversationId: victimId });
+    check(gone.status === 404, "a deleted chat cannot be reopened", `HTTP ${gone.status}`);
+    const relist = await asUser(token, { action: "conversations" });
+    check(!(relist.body.conversations ?? []).some((c) => c.id === victimId), "and it is gone from the chat list");
+
+    // Deleting is never automatic: the other chat survived untouched.
+    const still = await asUser(token, { action: "history", conversationId: convId });
+    check(still.status === 200, "deleting one chat does not touch another", `HTTP ${still.status}`);
+  }
+
   // ---- 5d. the user can see and delete what was learned -----------------
   {
     const r = await asUser(token, { action: "learned_list" });

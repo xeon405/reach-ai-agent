@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Sparkles, Send, Loader2, ShieldCheck, RefreshCw, Brain, Trash2 } from "lucide-react";
+import { Sparkles, Send, Loader2, ShieldCheck, RefreshCw, Brain, Trash2, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useLang } from "@/lib/i18n";
@@ -42,6 +42,20 @@ type Learned = {
   correct: number;
 };
 
+type Conversation = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type StoredMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  usedAi: boolean;
+};
+
 let seq = 0;
 const nid = () => `m${Date.now()}-${seq++}`;
 
@@ -60,9 +74,86 @@ function AgentPage() {
   const [learnedBusy, setLearnedBusy] = useState(false);
   const [learnedError, setLearnedError] = useState(false);
 
+  // Past chats. They were always saved server-side; the UI simply never read
+  // them back, which made a refresh look like data loss.
+  const [convs, setConvs] = useState<Conversation[]>([]);
+  const [convsOpen, setConvsOpen] = useState(false);
+  const [convsBusy, setConvsBusy] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles]);
+
+  async function loadConversations(): Promise<Conversation[]> {
+    setConvsBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("agent", { body: { action: "conversations" } });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      const list = (data?.conversations ?? []) as Conversation[];
+      setConvs(list);
+      return list;
+    } catch {
+      return [];
+    } finally {
+      setConvsBusy(false);
+    }
+  }
+
+  /** Re-open a saved thread and show it exactly as it was. */
+  async function openConversation(id: string) {
+    setConvsOpen(false);
+    const { data, error } = await supabase.functions.invoke("agent", {
+      body: { action: "history", conversationId: id },
+    });
+    if (error || data?.error) return;
+    const msgs = (data?.messages ?? []) as StoredMessage[];
+    setConvId(id);
+    setBubbles(
+      msgs.map((m) => ({
+        id: m.id,
+        role: m.role,
+        text: m.content,
+        usedAi: m.usedAi,
+      })),
+    );
+  }
+
+  async function deleteConversation(id: string) {
+    const previous = convs;
+    // Remove it from the list straight away; restore if the server refuses.
+    setConvs((c) => c.filter((x) => x.id !== id));
+    setDeleting(id);
+    try {
+      const { data, error } = await supabase.functions.invoke("agent", {
+        body: { action: "conversation_delete", conversationId: id },
+      });
+      if (error || data?.error) throw new Error(data?.error ?? error?.message);
+      if (id === convId) {
+        setBubbles([]);
+        setConvId(null);
+      }
+    } catch {
+      setConvs(previous);
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  // On open: resume the most recent chat so the page is never mysteriously
+  // empty. No conversation is ever removed automatically.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const list = await loadConversations();
+      if (cancelled || convId) return;
+      const newest = list[0];
+      if (newest) await openConversation(newest.id);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadLearned() {
     setLearnedBusy(true);
@@ -109,6 +200,8 @@ function AgentPage() {
       if (data?.error) throw new Error(data.error);
 
       if (data?.conversationId) setConvId(data.conversationId);
+      // Keep the chat list fresh so a new thread shows up straight away.
+      if (!confirm) void loadConversations();
 
       setBubbles((b) => [
         ...b,
@@ -148,27 +241,92 @@ function AgentPage() {
           <h1 className="text-xl font-bold">{t("app_agent")}</h1>
           <p className="text-sm text-muted-foreground">{t("app_agent_sub")}</p>
         </div>
-        <Button
-          variant={showLearned ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => {
-            const next = !showLearned;
-            setShowLearned(next);
-            if (next) void loadLearned();
-          }}
-          title={t("app_agent_learned")}
-        >
-          <Brain className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => { setBubbles([]); setConvId(null); }}
-          title={t("app_agent_new")}
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={convsOpen ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => {
+              const next = !convsOpen;
+              setConvsOpen(next);
+              if (next) void loadConversations();
+            }}
+            title={t("app_agent_chats")}
+          >
+            <History className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={showLearned ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => {
+              const next = !showLearned;
+              setShowLearned(next);
+              if (next) void loadLearned();
+            }}
+            title={t("app_agent_learned")}
+          >
+            <Brain className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setBubbles([]); setConvId(null); setConvsOpen(false); }}
+            title={t("app_agent_new")}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </header>
+
+      {convsOpen && (
+        <div className="mx-auto w-full max-w-4xl px-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              {t("app_agent_chats_body")}
+            </p>
+            {convsBusy && (
+              <p className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> {t("app_agent_working")}
+              </p>
+            )}
+            {!convsBusy && convs.length === 0 && (
+              <p className="py-1 text-xs text-muted-foreground">{t("app_agent_chats_empty")}</p>
+            )}
+            <ul className="max-h-72 space-y-1 overflow-y-auto">
+              {convs.map((c) => (
+                <li
+                  key={c.id}
+                  className={cn(
+                    "flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5",
+                    c.id === convId ? "border border-primary/40 bg-background" : "border border-border/60 bg-background",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => void openConversation(c.id)}
+                    className="min-w-0 flex-1 text-start"
+                  >
+                    <p className="truncate text-xs font-medium">{c.title}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {new Date(c.updated_at).toLocaleString()}
+                    </p>
+                  </button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={deleting === c.id}
+                    onClick={() => void deleteConversation(c.id)}
+                    title={t("app_agent_chat_delete")}
+                  >
+                    {deleting === c.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {showLearned && (
         <div className="mx-auto w-full max-w-4xl px-4">

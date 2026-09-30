@@ -118,6 +118,13 @@ const DICT: Record<string, { en: string; ar: string }> = {
   app_agent_direct: { en: "Looked up directly", ar: "تم البحث مباشرة" },
   app_agent_working: { en: "Working…", ar: "جارٍ العمل…" },
   app_agent_placeholder: { en: "Ask something…", ar: "اسأل شيئاً…" },
+  app_agent_chats: { en: "Past chats", ar: "المحادثات السابقة" },
+  app_agent_chats_body: {
+    en: "Your chats are saved. Open any of them, or delete one you no longer want. Nothing is deleted automatically.",
+    ar: "محادثاتك محفوظة. افتح أياً منها أو احذف ما لا تريده. لا يُحذف أي شيء تلقائياً.",
+  },
+  app_agent_chats_empty: { en: "No chats yet.", ar: "لا توجد محادثات بعد." },
+  app_agent_chat_delete: { en: "Delete this chat", ar: "حذف هذه المحادثة" },
   app_agent_learned: { en: "What the agent learned", ar: "ما تعلّمه الوكيل" },
   app_agent_learned_body: {
     en: "Words you use that the agent remembers. Words used in two different chats become shared with your whole account.",

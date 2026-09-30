@@ -134,6 +134,60 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
 
+    // ---- reopen a past conversation -------------------------------------
+    // The messages were always saved; the UI just could not read them back.
+    // This returns the thread so a refresh does not look like data loss.
+    if (body.action === "history") {
+      const id = String(body.conversationId ?? "");
+      if (!id) return json({ error: "conversationId is required" }, 400, req);
+      // Scoped by user_id so one account can never read another's thread.
+      const { data: convo } = await admin
+        .from("agent_conversations").select("id, title, created_at")
+        .eq("id", id).eq("user_id", userId).maybeSingle();
+      if (!convo) return json({ error: "Conversation not found" }, 404, req);
+      const { data: msgs } = await admin
+        .from("agent_messages")
+        .select("id, role, content, intent, params, used_ai, created_at, executed_at")
+        .eq("conversation_id", id).eq("user_id", userId)
+        .order("created_at", { ascending: true })
+        .limit(500);
+      return json({
+        conversationId: id,
+        title: convo.title,
+        messages: (msgs ?? []).map((m) => ({
+          id: m.id, role: m.role, content: m.content,
+          usedAi: m.used_ai ?? false, intent: m.intent ?? null,
+        })),
+      }, 200, req);
+    }
+
+    // ---- list this user's conversations, newest first --------------------
+    if (body.action === "conversations") {
+      const { data } = await admin
+        .from("agent_conversations")
+        .select("id, title, created_at, updated_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return json({ conversations: data ?? [] }, 200, req);
+    }
+
+    // ---- delete a conversation -------------------------------------------
+    // Explicit user action only. Nothing is ever removed automatically, so
+    // storage is bounded by what the user chooses to keep.
+    if (body.action === "conversation_delete") {
+      const id = String(body.conversationId ?? "");
+      if (!id) return json({ error: "conversationId is required" }, 400, req);
+      // Messages first: they are children of the conversation.
+      await admin.from("agent_messages").delete().eq("conversation_id", id).eq("user_id", userId);
+      const { error } = await admin.from("agent_conversations")
+        .delete().eq("id", id).eq("user_id", userId);
+      if (error) return json({ error: error.message }, 500, req);
+      // Provisional phrases learned only in that chat are now meaningless.
+      await admin.from("agent_learned_phrases").delete().eq("user_id", userId).eq("scope", id);
+      return json({ ok: true }, 200, req);
+    }
+
     // ---- what the agent has learned, so the user can see and edit it ----
     if (body.action === "learned_list") {
       return json({ learned: describeLearned(await listLearned(admin, userId)) }, 200, req);

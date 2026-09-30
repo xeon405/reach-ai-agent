@@ -23,9 +23,14 @@ if (!token) { console.error("no SUPABASE_ACCESS_TOKEN in .env"); process.exit(2)
 const sql = fs.readFileSync(file, "utf8");
 
 // Refuse input that manages its own transaction — would make the wrap ambiguous.
-const offending = sql.split("\n")
+// A plpgsql function body legitimately contains its own begin/end block, so a
+// line that is BARELY "begin"/"commit"/"rollback" still counts, but only when
+// it is NOT inside a dollar-quoted function source. Strip dollar-quoted blocks
+// first, then look for a bare transaction keyword.
+const sqlNoDollar = sql.replace(/\$fn\$[\s\S]*?\$fn\$/g, "");
+const offending = sqlNoDollar.split("\n")
   .map((l) => l.trim().toLowerCase().replace(/\s*--.*$/, "").replace(/\s*\/\*[\s\S]*?\*\//g, ""))
-  .find((l) => /^(begin|commit|rollback)\b/.test(l));
+  .find((l) => /^(begin|commit|rollback)\s*;?\s*$/.test(l));
 if (offending) {
   console.error(`refusing to validate: "${offending.trim()}" — input manages its own transaction.\nWrap removed; put BEGIN/ROLLBACK only inside this tool.`);
   process.exit(3);
