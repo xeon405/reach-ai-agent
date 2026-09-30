@@ -1,5 +1,26 @@
 # Outreach — developer discipline notes
 
+## Frontend deploys on push (no token needed)
+- The Vercel GitHub integration is **already connected**: repo
+  `xeon405/reach-ai-agent`, production branch `main`, project `outreach`
+  (`prj_TjBxwmR0IkIgJd0vgTBb6smbMG2m`). Pushing to `main` auto-builds and
+  auto-promotes to production, aliased to `out-ship.com` + `www.out-ship.com`.
+- **So "the frontend cannot be deployed without a Vercel token" is wrong.** There
+  is no manual frontend deploy step. Push, then confirm. Do not go looking for
+  a token or report the frontend as blocked.
+- Confirm with `node scripts/.ops/vercel-verify-live.mjs` — it checks the
+  production deployment's `githubCommitSha` equals local `HEAD`, then fetches the
+  JS a real browser receives and greps it for the route/UI you just shipped.
+  This is the check to run after a frontend change, because the build succeeding
+  on CI is not the same as the new code being served.
+- Current team-scoped tokens cannot read `GET /teams/{id}` (403) and
+  `GET /v2/user` (404), so the `vercel` CLI fails with "User not found" /
+  "Could not retrieve Project Settings". That is a CLI/token-scope limitation,
+  not a deploy blocker. `GET /v9/projects/{id}` and `/v6/deployments` do work.
+- Tokens have been pasted into chat in past sessions. Treat every Vercel token
+  in this project's history as compromised and rotate it; `.env` is gitignored
+  (`.gitignore:65`) so storing one there is safe from a commit standpoint.
+
 ## Shared-module bundling (hard rule)
 - Edge-function bundles **freeze at deploy time**: editing any
   `supabase/functions/_shared/*.ts` does NOT propagate to already-deployed
