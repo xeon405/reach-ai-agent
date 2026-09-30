@@ -142,8 +142,8 @@ function AgentPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-4 pb-4">
-      <header className="flex items-center justify-between py-4">
+    <div className="flex h-full w-full flex-col">
+      <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-4">
         <div>
           <h1 className="text-xl font-bold">{t("app_agent")}</h1>
           <p className="text-sm text-muted-foreground">{t("app_agent_sub")}</p>
@@ -171,7 +171,8 @@ function AgentPage() {
       </header>
 
       {showLearned && (
-        <div className="mb-3 rounded-lg border border-border bg-muted/30 p-3">
+        <div className="mx-auto w-full max-w-4xl px-4">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">{t("app_agent_learned_body")}</p>
           {learnedBusy && (
             <p className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
@@ -204,10 +205,12 @@ function AgentPage() {
               </li>
             ))}
           </ul>
+          </div>
         </div>
       )}
 
-      <div className="flex-1 space-y-3 overflow-y-auto pb-3">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-4xl space-y-3 px-4 pb-3">
         {bubbles.length === 0 && (
           <div className="space-y-3 py-6">
             <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
@@ -280,10 +283,11 @@ function AgentPage() {
             </div>
           </div>
         )}
-        <div ref={endRef} />
+          <div ref={endRef} />
+        </div>
       </div>
 
-      <div className="flex items-end gap-2 border-t border-border pt-3">
+      <div className="mx-auto flex w-full max-w-4xl items-end gap-2 border-t border-border px-4 pt-3">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
