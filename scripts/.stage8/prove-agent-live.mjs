@@ -88,12 +88,17 @@ try {
   }
 
   // ---- 5. repeat the unknown phrase: the learned fast lane must pay off --
+  // "anyone i should stop emailing" is deliberately phrased to MISS the keyword
+  // router (it has none of its trigger words), so the model has to understand
+  // it, and the second identical ask has to come back from the fast lane.
   {
-    const phrase = "what should i be focusing on next quarter";
+    const phrase = "anyone i should stop emailing";
     const r1 = await asUser(token, { message: phrase, conversationId: convId });
     const r2 = await asUser(token, { message: phrase, conversationId: convId });
-    check(r2.body.source === "learned", "second identical unknown phrase is served from the learned fast lane", `source=${r2.body.source}`);
-    check(r1.body.usedAi === true && r2.body.usedAi === false, "only the FIRST unknown phrase spends an AI call", `first=${r1.body.usedAi} second=${r2.body.usedAi}`);
+    check(r1.body.source === "ai", "an unfamiliar phrasing is understood by the model", `source=${r1.body.source}`);
+    check(r1.body.intent === "compliance_check", "and resolved to the right goal", `intent=${r1.body.intent}`);
+    check(r2.body.source === "learned", "second identical phrase is served from the learned fast lane", `source=${r2.body.source}`);
+    check(r1.body.usedAi === true && r2.body.usedAi === false, "only the FIRST unfamiliar phrase spends an AI call", `first=${r1.body.usedAi} second=${r2.body.usedAi}`);
   }
 
   // ---- 5b. plain conversation needs no intent and no AI-free shortcut ---

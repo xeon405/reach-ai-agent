@@ -208,6 +208,36 @@ export async function retire(db: Db, userId: string, phrase: string, conversatio
   }
 }
 
+/**
+ * Retire the most recently used phrase in this conversation.
+ *
+ * This is the "the user got confused" signal. When the model cannot follow the
+ * user's follow-up, the likeliest explanation is that the fast lane answered
+ * the previous turn in a way the user did not recognise as their own question,
+ * so that mapping goes back to being understood from meaning.
+ *
+ * Note what is deliberately NOT a retirement signal: an empty result. A fresh
+ * account returns "you have no campaigns yet" for perfectly correct requests,
+ * so retiring on empty would throw away every phrase a new user ever learns.
+ */
+export async function retireLastUsed(db: Db, userId: string, conversationId: string): Promise<void> {
+  try {
+    const { data } = await db
+      .from("agent_learned_phrases")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("scope", conversationId)
+      .neq("state", "retired")
+      .order("last_used_at", { ascending: false })
+      .limit(1);
+    const id = (data ?? [])[0]?.id;
+    if (!id) return;
+    await db.from("agent_learned_phrases").update({ state: "retired" }).eq("id", id).eq("user_id", userId);
+  } catch (e) {
+    console.warn("[agent] learning confusion-retire skipped:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function listLearned(db: Db, userId: string) {
   const { data, error } = await db
     .from("agent_learned_phrases")

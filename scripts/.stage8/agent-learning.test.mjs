@@ -5,7 +5,7 @@
 //
 // Run: node scripts/.stage8/agent-learning.test.mjs
 import {
-  ACCOUNT_SCOPE, describeLearned, isLearnable, listLearned, phraseKey, recall, recordUse, retire,
+  ACCOUNT_SCOPE, describeLearned, isLearnable, listLearned, phraseKey, recall, recordUse, retire, retireLastUsed,
 } from "../../supabase/functions/_shared/agent-learning.ts";
 
 let passed = 0;
@@ -37,13 +37,18 @@ function makeDb() {
         eq: (k, v) => { st.filters[k] = v; return api; },
         neq: (k, v) => { st.filters.__neq = (st.filters.__neq || []).concat([[k, v]]); return api; },
         in: (k, vals) => { st.filters.__in = [k, vals]; return api; },
-        order: () => { st.ordered = true; return api; },
+        order: (_k, opts) => { st.ordered = true; st.orderKey = _k; st.asc = opts?.ascending; return api; },
         limit: (n) => { st.limit = n; return api; },
         then: (res, rej) => {
           let out = rows.filter((r) => matches(r, st.filters));
           for (const [k, v] of st.filters.__neq ?? []) out = out.filter((r) => r[k] !== v);
           if (st.filters.__in) { const [k, vals] = st.filters.__in; out = out.filter((r) => vals.includes(r[k])); }
           if (st.patch) out.forEach((r) => Object.assign(r, st.patch));
+          // ORDER DESC, matching Postgres: the NEWEST row sorts first. Both
+          // recordUse and retireLastUsed rely on this.
+          if (st.ordered && st.orderKey) {
+            out = out.sort((a, b) => (a[st.orderKey] < b[st.orderKey] ? 1 : -1));
+          }
           if (st.ordered) {
             // recall orders by scope DESC, and '*' sorts last in ASCII, so the
             // account-wide row is picked first by the real query.
@@ -187,6 +192,53 @@ check(isLearnable("show me my campaigns"), "learns a real instruction");
   threw = false;
   try { await retire(broken, U, "show me my campaigns", A); } catch { threw = true; }
   check(!threw, "a failed retire does not throw either");
+}
+
+// ---- an EMPTY answer must never retire a phrase -----------------------
+// Regression: a brand-new account answers every correct request with "you have
+// nothing yet". Retiring on an empty result threw away exactly the phrases a
+// new user was still building up. Confusion, not emptiness, is the signal.
+{
+  const db = makeDb();
+  await recordUse(db, U, "anyone i should stop emailing", "compliance_check", {}, A, null);
+  // Simulate a first-time user whose account is empty: the outcome is empty.
+  // The phrase must survive, because nothing was learned wrong here.
+  check(db.rows[0].state === "provisional", "an empty result on a new account does not retire the phrase", db.rows[0].state);
+  const r = await recall(db, U, "anyone i should stop emailing", A);
+  check(r?.intent === "compliance_check", "and the phrase is still served from the fast lane", r?.intent);
+}
+
+// ---- confusion IS a retirement signal ---------------------------------
+{
+  const db = makeDb();
+  await recordUse(db, U, "give me the rundown", "campaign_stats", {}, A, null);
+  await retireLastUsed(db, U, A);
+  check(db.rows[0].state === "retired", "a phrase the user could not follow is retired", db.rows[0].state);
+  const r = await recall(db, U, "give me the rundown", A);
+  check(r === null, "and goes back to being understood from meaning", String(r));
+}
+{
+  const db = makeDb();
+  await recordUse(db, U, "give me the rundown", "campaign_stats", {}, A, null);
+  await recordUse(db, U, "totally different words", "sender_health", {}, A, null);
+  await retireLastUsed(db, U, A);
+  check(db.rows[1].state === "retired", "confusion retires the MOST RECENT phrase", db.rows[1].state);
+  check(db.rows[0].state === "provisional", "and leaves older ones alone", db.rows[0].state);
+}
+{
+  const db = makeDb();
+  await recordUse(db, U, "shared phrase", "list_campaigns", {}, A, null);
+  await recordUse(db, U, "shared phrase", "list_campaigns", {}, B, await recall(db, U, "shared phrase", B));
+  // After promotion the row is account-scoped, so confusion inside a chat must
+  // not reach across and retire the team's shared mapping.
+  await retireLastUsed(db, U, A);
+  check(db.rows[0].state === "account", "confusion in one chat does not retire an account-wide mapping", db.rows[0].state);
+}
+{
+  const broken = { from: () => ({ select: () => { throw new Error("gone"); } }) };
+  let threw = false;
+  try { await retireLastUsed(broken, U, A); } catch { threw = true; }
+  check(!threw, "a failed confusion-retire never breaks the chat");
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

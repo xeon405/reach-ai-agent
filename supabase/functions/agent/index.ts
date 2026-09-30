@@ -30,7 +30,7 @@ import {
 import { understand, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
 import {
   ACCOUNT_SCOPE, describeLearned, forget, isLearnable, listLearned, phraseKey,
-  recall, recordUse, retire, type LearnedRow,
+  recall, recordUse, retireLastUsed, type LearnedRow,
 } from "../_shared/agent-learning.ts";
 // The keyword router is no longer the gatekeeper. It is the SAFETY NET for when
 // the model is unavailable, rate-limited, or returns something unusable.
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
         }
         const reply = "Understood — I did not change anything.";
         await persist(admin, userId, convId, message, reply, null, {}, false, { storeUserIntent: false, spent: true });
-        return json({ conversationId: convId, text: reply, intent: null, declined: true, source: "confirm" }, 200, req);
+        return json({ conversationId: convId, text: reply, intent: null, declined: true, usedAi: false, source: "confirm" }, 200, req);
       }
 
       const { data: pending } = await admin
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
       if (!pending?.intent || !isWriteIntent(pending.intent as AgentIntent)) {
         const reply = "There is nothing waiting for your confirmation. Ask me to change something and I will check with you first.";
         await persist(admin, userId, convId, message, reply, null, {}, false, { storeUserIntent: false, spent: true });
-        return json({ conversationId: convId, text: reply, intent: null, source: "confirm" }, 200, req);
+        return json({ conversationId: convId, text: reply, intent: null, usedAi: false, source: "confirm" }, 200, req);
       }
 
       const req_: AgentRequest = {
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
       if (!gate.allowed) {
         const reply = budgetPrompt(gate);
         await persist(admin, userId, convId, message, reply, null, {}, false, { storeUserIntent: false, spent: true });
-        return json({ conversationId: convId, text: reply, intent: req_.intent, limitHit: true, source: "confirm" }, 200, req);
+        return json({ conversationId: convId, text: reply, intent: req_.intent, limitHit: true, usedAi: false, source: "confirm" }, 200, req);
       }
 
       const outcome = await runOutcome(admin, userId, req_);
@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
         event: "agent_write",
         payload: { intent: req_.intent, params: req_.params, source: "confirm" },
       });
-      return json({ conversationId: convId, text: outcome.text, rows: outcome.rows, empty: outcome.empty, intent: req_.intent, source: "confirm" }, 200, req);
+      return json({ conversationId: convId, text: outcome.text, rows: outcome.rows, empty: outcome.empty, intent: req_.intent, usedAi: false, source: "confirm" }, 200, req);
     }
 
     // =====================================================================
@@ -236,6 +236,7 @@ Deno.serve(async (req) => {
     let replyText: string | null = null;
     let askOnly: { question: string; intent: AgentIntent | null } | null = null;
     let cacheIntent: AgentIntent | null = null;
+    let u: Awaited<ReturnType<typeof understand>> = null;
     let cacheParams: AgentParams = {};
 
     if (learned) {
@@ -253,7 +254,7 @@ Deno.serve(async (req) => {
         routed = fallback;
         source = "router";
       } else {
-        const u = await understand(message, history, userId);
+        u = await understand(message, history, userId);
         if (!u || !u.u) {
           // Model unusable. The keyword router is the safety net so the turn
           // still does something sensible instead of failing.
@@ -320,11 +321,15 @@ Deno.serve(async (req) => {
     // one turn, and a chat turn runs exactly one allowlisted query.
     const outcome = await runOutcome(admin, userId, routed);
 
-    // A fast-lane hit that found nothing is a mislearned phrase. Retire it so
-    // the words go back to the slow lane next time.
-    if (learned && outcome.empty) {
-      await retire(admin, userId, learned.phrase, learned.scope === ACCOUNT_SCOPE ? null : learned.scope);
+    // Confusion is the retirement signal, NOT an empty result. A brand-new
+    // account answers every correct request with "you have nothing yet", so
+    // retiring on empty would discard exactly the phrases a new user is still
+    // building up. If the model could not follow the follow-up, the previous
+    // fast-lane answer is the likely culprit.
+    if (!learned && u?.u?.kind === "unclear") {
+      await retireLastUsed(admin, userId, convId);
     }
+
     // Learn only from the model, and only when the phrase is a real instruction
     // rather than a greeting or a bare "yes".
     if (!learned && cacheIntent && isLearnable(key) && routed.intent === cacheIntent) {
