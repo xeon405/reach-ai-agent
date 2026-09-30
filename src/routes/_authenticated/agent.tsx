@@ -58,6 +58,7 @@ function AgentPage() {
   const [showLearned, setShowLearned] = useState(false);
   const [learned, setLearned] = useState<Learned[]>([]);
   const [learnedBusy, setLearnedBusy] = useState(false);
+  const [learnedError, setLearnedError] = useState(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -65,12 +66,17 @@ function AgentPage() {
 
   async function loadLearned() {
     setLearnedBusy(true);
+    setLearnedError(false);
     try {
       const { data, error } = await supabase.functions.invoke("agent", { body: { action: "learned_list" } });
       if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
       setLearned((data?.learned ?? []) as Learned[]);
     } catch {
-      setLearned([]);
+      // Do NOT fall back to an empty list. An empty list claims "the agent has
+      // learned nothing", which is a different and false statement when the
+      // request itself failed.
+      setLearnedError(true);
     } finally {
       setLearnedBusy(false);
     }
@@ -172,7 +178,10 @@ function AgentPage() {
               <Loader2 className="h-3 w-3 animate-spin" /> {t("app_agent_working")}
             </p>
           )}
-          {!learnedBusy && learned.length === 0 && (
+          {!learnedBusy && learnedError && (
+            <p className="py-1 text-xs text-muted-foreground">{t("app_agent_learned_error")}</p>
+          )}
+          {!learnedBusy && !learnedError && learned.length === 0 && (
             <p className="py-1 text-xs text-muted-foreground">{t("app_agent_learned_empty")}</p>
           )}
           <ul className="space-y-1.5">

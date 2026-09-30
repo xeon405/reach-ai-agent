@@ -124,6 +124,10 @@ const DICT: Record<string, { en: string; ar: string }> = {
     ar: "الكلمات التي تستخدمها والتي يتذكرها الوكيل. الكلمات المستخدمة في محادثتين مختلفتين تصبح مشتركة مع حسابك بالكامل.",
   },
   app_agent_learned_empty: { en: "Nothing learned yet.", ar: "لم يتعلّم شيئاً بعد." },
+  app_agent_learned_error: {
+    en: "Could not load this right now. Your chats still work normally.",
+    ar: "تعذّر التحميل الآن. محادثاتك تعمل بشكل طبيعي.",
+  },
   app_agent_learned_uses: { en: "uses", ar: "استخدام" },
   app_agent_learned_forget: { en: "Forget this", ar: "نسيان هذه" },
   dash_sub: { en: "Your AI agent activity at a glance.", ar: "نشاط وكيل الذكاء الاصطناعي بنظرة سريعة." },
