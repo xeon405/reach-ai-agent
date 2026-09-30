@@ -1,0 +1,166 @@
+// Live production proof for the agent function.
+// Creates a throwaway user, proves the auth boundary, then proves reads,
+// the confirmation gate, and the cache. Tears everything down at the end.
+import { readFileSync } from "node:fs";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+function readEnv(name) {
+  const text = readFileSync(".env", "utf8");
+  const m = text.split("\n").find((l) => l.startsWith(`${name}=`));
+  return m ? m.slice(name.length + 1).trim() : undefined;
+}
+const url = readEnv("VITE_SUPABASE_URL") || readEnv("SUPABASE_URL");
+const anon = readEnv("VITE_SUPABASE_ANON_KEY") || readEnv("SUPABASE_ANON_KEY");
+const service = readEnv("SUPABASE_SERVICE_ROLE_KEY");
+const ref = readEnv("SUPABASE_PROJECT_REF") || "zvohdvopmvzsujktrdmu";
+const fnUrl = `${url}/functions/v1/agent`;
+
+let pass = 0; const fails = [];
+const check = (ok, label, detail) => {
+  if (ok) { pass++; console.log(`  ok   ${label}${detail ? " — " + detail : ""}`); }
+  else { fails.push(label); console.log(`  FAIL ${label}${detail ? " — " + detail : ""}`); }
+};
+
+const admin = createClient(url, service, { auth: { persistSession: false } });
+const stamp = Date.now();
+const email = `agent-probe-${stamp}@example.com`;
+const password = `Pr0be-${stamp}-x`;
+let userId = null;
+
+async function asUser(token, body) {
+  const r = await fetch(fnUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+
+try {
+  // ---- 1. auth boundary -------------------------------------------------
+  {
+    const r = await fetch(fnUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "show me my campaigns" }) });
+    const b = await r.json().catch(() => ({}));
+    check(r.status === 401 || r.status === 403, "no-auth call is rejected", `HTTP ${r.status}`);
+  }
+
+  // ---- create a throwaway user -----------------------------------------
+  {
+    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    if (error) throw new Error("createUser: " + error.message);
+    userId = data.user.id;
+    check(!!userId, "throwaway user created");
+  }
+  const { data: sess, error: sErr } = await admin.auth.signInWithPassword({ email, password });
+  if (sErr) throw new Error("signin: " + sErr.message);
+  const token = sess.session.access_token;
+
+  // ---- 2. a read works and is honestly empty ----------------------------
+  {
+    const r = await asUser(token, { message: "how many emails have i sent" });
+    check(r.status === 200, "read intent returns 200", `HTTP ${r.status}`);
+    check(r.body.source === "router" && r.body.usedAi === false, "read resolved by router, no AI spent", `source=${r.body.source} usedAi=${r.body.usedAi}`);
+    const conv = r.body.conversationId;
+    check(!!conv, "conversation id returned");
+    var convId = conv;
+  }
+
+  // ---- 3. a WRITE must not execute before confirmation -------------------
+  {
+    const r = await asUser(token, { message: "create a campaign called Probe Test", conversationId: convId });
+    check(!!r.body.pending, "write returns pending instead of acting", `pending=${JSON.stringify(r.body.pending)}`);
+    const { data: rows } = await admin.from("campaigns").select("name").eq("user_id", userId).eq("name", "Probe Test");
+    check((rows ?? []).length === 0, "no campaign row was created before confirmation", `${(rows ?? []).length} rows`);
+  }
+
+  // ---- 4. confirming it DOES create the paused campaign -----------------
+  {
+    const r = await asUser(token, { message: "yes", conversationId: convId, confirm: true });
+    check(!r.body.pending, "confirm no longer reports pending");
+    const { data: rows } = await admin.from("campaigns").select("name,status").eq("user_id", userId).eq("name", "Probe Test");
+    check((rows ?? []).length === 1, "confirmed write created exactly one campaign", `${(rows ?? []).length} rows`);
+    check(rows?.[0]?.status === "paused", "and it is PAUSED, so nothing can auto-send", rows?.[0]?.status);
+  }
+
+  // ---- 5. repeat the unknown phrase: the cache must pay off ------------
+  {
+    const phrase = "what should i be focusing on next quarter";
+    const r1 = await asUser(token, { message: phrase, conversationId: convId });
+    const r2 = await asUser(token, { message: phrase, conversationId: convId });
+    check(r2.body.source === "cache", "second identical unknown phrase is served from cache", `source=${r2.body.source}`);
+    check(r1.body.usedAi === true && r2.body.usedAi === false, "only the FIRST unknown phrase spends an AI call", `first=${r1.body.usedAi} second=${r2.body.usedAi}`);
+  }
+
+  // ---- 6. REGRESSION: asking questions must not exhaust a step budget --
+  // Bug: the step budget used to be charged per chat turn, so a free user
+  // (cap 3) was cut off after 3 questions.
+  {
+    let blocked = 0;
+    for (let i = 0; i < 9; i++) {
+      const r = await asUser(token, { message: "how many emails have i sent", conversationId: convId });
+      if (r.body.limitHit) blocked++;
+    }
+    check(blocked === 0, "9 read questions in a row are never budget-blocked", `blocked=${blocked} of 9`);
+  }
+
+  // ---- 7. REGRESSION: "no" must NEVER run the write --------------------
+  // Bug: the confirm branch executed the stored intent whatever the user
+  // typed, so the UI's "No" button performed the action.
+  {
+    const r = await asUser(token, { message: "create a campaign called Decline Test", conversationId: convId });
+    check(!!r.body.pending, "decline probe armed a pending write");
+    const d = await asUser(token, { message: "no", conversationId: convId, confirm: true });
+    const { data: rows } = await admin.from("campaigns").select("name").eq("user_id", userId).eq("name", "Decline Test");
+    check((rows ?? []).length === 0, "answering NO creates nothing", `${(rows ?? []).length} rows, reply="${d.body.text}"`);
+  }
+
+  // ---- 8. REGRESSION: one "yes" authorises exactly one write -----------
+  // Uses pause_campaign, which has NO name-uniqueness backstop, so a passing
+  // result proves the single-use guard itself and not an idempotency accident.
+  {
+    const { data: c } = await admin.from("campaigns")
+      .insert({ user_id: userId, name: "Replay Probe", status: "active" })
+      .select("id, name, status").single();
+    await asUser(token, { message: "pause the campaign called Replay Probe", conversationId: convId });
+    const y1 = await asUser(token, { message: "yes", conversationId: convId, confirm: true });
+    const { data: mid } = await admin.from("campaigns").select("status").eq("id", c.id).single();
+    const y2 = await asUser(token, { message: "yes", conversationId: convId, confirm: true });
+    const { data: after } = await admin.from("campaigns").select("status").eq("id", c.id).single();
+    check(mid?.status === "paused", "confirmed pause took effect", `status=${mid?.status}`);
+    check(y1.body.usedAi === false, "replay did not spend an AI call", `usedAi=${y2.body.usedAi}`);
+    check(
+      /nothing waiting/i.test(y2.body.text ?? ""),
+      "a REPLAYED yes is refused rather than re-running the write",
+      `reply="${y2.body.text}"`,
+    );
+    check(after?.status === "paused", "replay left state unchanged", `status=${after?.status}`);
+  }
+
+  // ---- 6. tenant isolation: a second user must see none of it ----------
+  {
+    const email2 = `agent-probe2-${stamp}@example.com`;
+    const pw2 = `Pr0be2-${stamp}-x`;
+    const { data: u2, error: e2 } = await admin.auth.admin.createUser({ email: email2, password: pw2, email_confirm: true });
+    if (e2) throw new Error("createUser2: " + e2.message);
+    const { data: s2 } = await admin.auth.signInWithPassword({ email: email2, password: pw2 });
+    const r = await asUser(s2.session.access_token, { message: "show me my campaigns", conversationId: null });
+    const txt = (r.body.text ?? "").toLowerCase();
+    check(!txt.includes("probe test"), "a different user cannot see the first user's campaign", `text="${r.body.text}"`);
+    await admin.auth.admin.deleteUser(u2.user.id);
+  }
+
+  console.log(`\n${pass} passed, ${fails.length} failed`);
+  if (fails.length) { console.log("FAILURES:"); fails.forEach((f) => console.log("  - " + f)); }
+} finally {
+  // ---- teardown: no probe data survives --------------------------------
+  if (userId) {
+    await admin.from("campaigns").delete().eq("user_id", userId);
+    await admin.from("agent_messages").delete().eq("user_id", userId);
+    await admin.from("agent_conversations").delete().eq("user_id", userId);
+    await admin.from("agent_intent_cache").delete().eq("user_id", userId);
+    await admin.from("agent_action_state").delete().eq("user_id", userId);
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    console.log(`  teardown: ${error ? "ERROR " + error.message : "probe user and all rows deleted"}`);
+  }
+}
+if (fails.length) Deno.exit(1);

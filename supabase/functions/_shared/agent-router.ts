@@ -154,16 +154,31 @@ function findCategory(s: string): string | undefined {
   return undefined;
 }
 
-/** Campaign name, preferring an explicit "called X" / "named X". */
-function campaignNameFrom(s: string, ...verbs: string[]): string | undefined {
-  const named = afterPrep(s, "called ", "named ", "titled ");
-  if (named) return named.slice(0, 80);
+/**
+ * Campaign name, preferring an explicit "called X" / "named X".
+ *
+ * Matching happens on the ORIGINAL message, not the normalised one, so the name
+ * keeps the capitalisation the user typed. Ask for "Spring Sale" and the
+ * campaign is called "Spring Sale", not "spring sale".
+ */
+function campaignNameFrom(orig: string, ...verbs: string[]): string | undefined {
+  const clean = (v: string) =>
+    v.replace(/\s+/g, " ").trim().replace(/[.,!?;]+$/, "").trim();
+
+  const namedVerbs = ["called ", "named ", "titled "];
+  for (const nv of namedVerbs) {
+    const i = orig.toLowerCase().indexOf(nv);
+    if (i !== -1) {
+      const val = clean(orig.slice(i + nv.length));
+      if (val) return val.slice(0, 80);
+    }
+  }
   for (const v of verbs) {
-    const i = s.indexOf(v);
+    const i = orig.toLowerCase().indexOf(v);
     if (i === -1) continue;
-    const rest = s.slice(i + v.length).trim();
-    const stop = rest.search(/\b(?:in|for|from|with|and|but|who|that|at|as|to)\b/);
-    const val = (stop === -1 ? rest : rest.slice(0, stop)).trim();
+    const rest = orig.slice(i + v.length);
+    const stop = rest.search(/\b(?:in|for|from|with|and|but|who|that|at|as|to)\b/i);
+    const val = clean(stop === -1 ? rest : rest.slice(0, stop));
     if (val) return val.slice(0, 80);
   }
   return undefined;
@@ -189,7 +204,7 @@ export function routeIntent(message: string): AgentRequest | null {
 
   // --- pause a campaign (write)
   if (has(s, "pause") && has(s, "campaign", "campaigns")) {
-    const name = campaignNameFrom(s, "pause campaign ", "pause the campaign ", "pause ");
+    const name = campaignNameFrom(message, "pause campaign ", "pause the campaign ", "pause ");
     return {
       intent: "pause_campaign",
       params: { campaignName: name },
@@ -209,7 +224,7 @@ export function routeIntent(message: string): AgentRequest | null {
 
   // --- add existing contacts to a campaign (write)
   if (has(s, "add", "assign", "put", "move") && has(s, "campaign") && !has(s, "find", "search", "look for", "get me")) {
-    const name = campaignNameFrom(s, "to campaign called ", "to the campaign called ", "to ");
+    const name = campaignNameFrom(message, "to campaign called ", "to the campaign called ", "to ");
     const who = afterPrep(s, "add ", "assign ", "move ");
     return {
       intent: "add_contacts_to_campaign",
@@ -220,7 +235,7 @@ export function routeIntent(message: string): AgentRequest | null {
 
   // --- create a campaign draft (write)
   if (has(s, "create", "make", "new", "start", "set up", "setup") && has(s, "campaign")) {
-    const name = campaignNameFrom(s, "called ", "named ");
+    const name = campaignNameFrom(message, "called ", "named ");
     return {
       intent: "create_campaign_draft",
       params: { campaignName: name },

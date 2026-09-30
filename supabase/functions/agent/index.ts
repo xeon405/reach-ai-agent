@@ -34,6 +34,40 @@ function cacheKey(msg: string): string {
   return msg.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/** Only an explicit agreement counts. Anything else is a decline. */
+function isAffirmative(msg: string): boolean {
+  const m = msg.toLowerCase().trim().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  return ["yes", "yeah", "yep", "yup", "ok", "okay", "sure", "do it", "go ahead", "confirm", "please do", "y"]
+    .includes(m);
+}
+
+let seq = 0;
+/** Unique-per-turn id, so charging a write never collides with an earlier turn. */
+const nid = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`;
+
+// Structural client type, matching agent-executor.ts. createClient's generic
+// signature is not assignable to its own ReturnType across versions.
+type Admin = { from: (table: string) => any };
+
+/**
+ * Returns a conversation id that is proven to belong to this user, creating one
+ * if needed. A caller-supplied id belonging to someone else is rejected rather
+ * than trusted, so a forged conversationId can never read or write another
+ * tenant's history.
+ */
+async function ensureConversation(admin: Admin, userId: string, conversationId: string | null): Promise<string | null> {
+  if (conversationId) {
+    const { data: owns } = await admin
+      .from("agent_conversations").select("id").eq("id", conversationId).eq("user_id", userId).maybeSingle();
+    if (owns) return owns.id as string;
+  }
+  const { data: created } = await admin
+    .from("agent_conversations")
+    .insert({ user_id: userId, title: "New chat" })
+    .select("id").single();
+  return (created?.id as string) ?? null;
+}
+
 function parseRouted(jsonish: string): AgentRequest | null {
   try {
     const m = jsonish.match(/\{[\s\S]*\}/);
@@ -87,21 +121,56 @@ Deno.serve(async (req) => {
     // ---- 1. resolve the intent, cheapest source first -------------------
     let routed: AgentRequest | null = null;
 
-    // A confirmation always refers back to the message that produced it.
+    // A confirmation always refers back to the message that produced it, and
+    // only while that message is still unspent -- one "yes" authorises exactly
+    // one write, so replaying the same request cannot duplicate anything.
+    let pendingId: string | null = null;
     if (confirm && conversationId) {
       const { data: last } = await admin
         .from("agent_messages")
-        .select("intent, params, content")
+        .select("id, intent, params, content")
         .eq("conversation_id", conversationId)
         .eq("user_id", userId)
         .eq("role", "user")
+        .is("executed_at", null)
+        .not("intent", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (last?.intent) {
+      if (last?.intent && isWriteIntent(last.intent as AgentIntent)) {
+        const agreed = isAffirmative(message);
+        if (!agreed) {
+          // "no" must never run the write. Retire the pending intent so a
+          // later stray "yes" cannot revive it either.
+          await admin.from("agent_messages")
+            .update({ executed_at: new Date().toISOString() })
+            .eq("id", last.id as string)
+            .eq("user_id", userId);
+          return json({
+            conversationId,
+            text: "Understood — I did not change anything.",
+            intent: null,
+            declined: true,
+            usedAi: false,
+            source: "router",
+          }, 200, req);
+        }
         routed = { intent: last.intent as AgentIntent, params: (last.params ?? {}) as AgentRequest["params"], summary: last.content };
         source = "cache";
+        pendingId = last.id as string;
       }
+    }
+
+    if (!routed && confirm) {
+      // "yes" with nothing waiting for approval. Answer plainly instead of
+      // letting a bare "yes" fall through to the router (which would list
+      // campaigns and spend an AI call to do it).
+      return json({
+        text: "There is nothing waiting for your confirmation right now. Ask me to change something and I will check with you first.",
+        intent: null,
+        usedAi: false,
+        source: "router",
+      }, 200, req);
     }
 
     if (!routed) {
@@ -114,14 +183,18 @@ Deno.serve(async (req) => {
     if (!routed && key) {
       const { data: hit } = await admin
         .from("agent_intent_cache")
-        .select("intent, params")
+        .select("intent, params, hits")
         .eq("user_id", userId)
         .eq("phrase", key)
         .maybeSingle();
       if (hit?.intent && VALID_INTENTS.includes(hit.intent as AgentIntent)) {
         routed = { intent: hit.intent as AgentIntent, params: (hit.params ?? {}) as AgentRequest["params"], summary: message };
         source = "cache";
-        await admin.from("agent_intent_cache").update({ hits: (hit as any).hits + 1 }).eq("user_id", userId).eq("phrase", key);
+        await admin
+          .from("agent_intent_cache")
+          .update({ hits: Number(hit.hits ?? 0) + 1 })
+          .eq("user_id", userId)
+          .eq("phrase", key);
       }
     }
 
@@ -170,8 +243,22 @@ Request: ${sanitizeForPrompt(message, MAX_MESSAGE)}`,
     }
 
     // ---- 3. writes need an explicit, server-checked confirmation --------
+    // The conversation is resolved and the user message persisted BEFORE we
+    // return "pending", because the confirmation is a separate HTTP request and
+    // it can only find the intent it is authorising if that intent was stored.
     if (isWriteIntent(routed.intent) && !confirm) {
+      const convId = await ensureConversation(admin, userId, conversationId);
+      await admin.from("agent_messages").insert({
+        conversation_id: convId,
+        user_id: userId,
+        role: "user",
+        content: message.slice(0, MAX_MESSAGE),
+        intent: routed.intent,
+        params: routed.params,
+        used_ai: usedAi,
+      });
       return json({
+        conversationId: convId,
         text: `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`,
         intent: routed.intent,
         pending: { intent: routed.intent, params: routed.params },
@@ -182,22 +269,37 @@ Request: ${sanitizeForPrompt(message, MAX_MESSAGE)}`,
     }
 
     // ---- 4. step budget, fail-closed ------------------------------------
+    // The step budget exists to stop a single request from spinning: it caps
+    // the steps INSIDE one turn, not the number of turns a human may send.
+    // A chat turn executes exactly one allowlisted intent and cannot loop, so
+    // charging a read against it would mean a free user gets 3 questions.
+    // Reads are therefore not charged. Writes are charged once each, against
+    // the conversation, which is the runaway case worth bounding.
     const { data: prof } = await admin.from("profiles").select("plan").eq("id", userId).maybeSingle();
     const limits = actionCaps(prof?.plan ?? null);
-    const gate = await requestAction(admin as any, {
-      conversationId: conversationId ?? "adhoc",
-      messageId: key.slice(0, 120) || "msg",
-      plan: prof?.plan ?? null,
-    });
-    if (!gate.allowed) {
-      return json({
-        text: budgetPrompt(gate),
-        intent: routed.intent,
-        limitHit: true,
-        used: gate.used,
-        usedAi,
-        source,
-      }, 200, req);
+    let gate: Awaited<ReturnType<typeof requestAction>> | null = null;
+    if (isWriteIntent(routed.intent)) {
+      // A write only ever reaches here with a real conversation id: the confirm
+      // branch above requires one, so this can never fall back to a shared
+      // sentinel row. The userId fallback is a valid uuid AND unique per user,
+      // so even a hypothetical no-conversation write cannot land in a bucket
+      // another tenant also writes to (agent_action_state is keyed by
+      // conversation_id alone and has no user_id column).
+      gate = await requestAction(admin, {
+        conversationId: conversationId ?? userId,
+        messageId: `${conversationId ?? userId}:${nid()}`,
+        plan: prof?.plan ?? null,
+      });
+      if (!gate.allowed) {
+        return json({
+          text: budgetPrompt(gate),
+          intent: routed.intent,
+          limitHit: true,
+          used: gate.used,
+          usedAi,
+          source,
+        }, 200, req);
+      }
     }
 
     // ---- 5. run it ------------------------------------------------------
@@ -210,27 +312,36 @@ Request: ${sanitizeForPrompt(message, MAX_MESSAGE)}`,
     }
 
     // ---- 6. persist -----------------------------------------------------
-    let convId = conversationId;
+    const convId = await ensureConversation(admin, userId, conversationId);
     if (convId) {
-      const { data: owns } = await admin
-        .from("agent_conversations").select("id").eq("id", convId).eq("user_id", userId).maybeSingle();
-      if (!owns) convId = null;
-    }
-    if (!convId) {
-      const { data: created } = await admin
-        .from("agent_conversations")
-        .insert({ user_id: userId, title: message.slice(0, 60) })
-        .select("id").single();
-      convId = created?.id ?? null;
-    }
-    if (convId) {
+      // On a confirm turn the user typed "yes", not a new request. Recording it
+      // with the intent attached would leave an UNSPENT pending intent in the
+      // log, and a replayed "yes" would then re-run the write. The "yes" is
+      // stored already spent, so only the original message can ever authorise.
+      const spentNow = confirm ? new Date().toISOString() : null;
       await admin.from("agent_messages").insert([
-        { conversation_id: convId, user_id: userId, role: "user", content: message.slice(0, MAX_MESSAGE), intent: routed.intent, params: routed.params, used_ai: usedAi },
+        {
+          conversation_id: convId,
+          user_id: userId,
+          role: "user",
+          content: message.slice(0, MAX_MESSAGE),
+          intent: confirm ? null : routed.intent,
+          params: confirm ? {} : routed.params,
+          used_ai: usedAi,
+          executed_at: spentNow,
+        },
         { conversation_id: convId, user_id: userId, role: "assistant", content: outcome.text, intent: routed.intent, params: routed.params, used_ai: usedAi },
       ]);
     }
 
     if (isWriteIntent(routed.intent)) {
+      // Burn the authorisation so this exact confirmation cannot be replayed.
+      if (pendingId) {
+        await admin.from("agent_messages")
+          .update({ executed_at: new Date().toISOString() })
+          .eq("id", pendingId)
+          .eq("user_id", userId);
+      }
       await insertAudit(admin, {
         user_id: userId,
         event: "agent_write",
@@ -246,7 +357,7 @@ Request: ${sanitizeForPrompt(message, MAX_MESSAGE)}`,
       intent: routed.intent,
       usedAi,
       source,
-      used: gate.used,
+      used: gate?.used ?? { usedInMessage: 0, usedInConversation: 0 },
       limits,
     }, 200, req);
   } catch (err) {
