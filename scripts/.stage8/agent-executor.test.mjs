@@ -38,10 +38,13 @@ function makeDb(overrides = {}) {
       ilike: (col, val) => { rec.filters[`ilike:${col}`] = val; return api; },
       in: (col, vals) => { rec.filters[`in:${col}`] = vals; return api; },
       or: (expr) => { rec.filters.or = expr; return api; },
-      eq: (col, v) => { rec.filters[col] = v; return api; },
+      eq: (col, v) => { rec.filters[col] = v; if (col === "id") rec.where ??= {}; if (col === "id") rec.where.id = v; return api; },
       is: (col, v) => { rec.filters[`is:${col}`] = v; return api; },
       limit: () => api,
       order: () => api,
+      // resolveCampaign deletes nothing, but it does chain after a select, so
+      // the mock needs these terminals to exist and to await the same `then`.
+      delete: () => api,
       maybeSingle: async () => ({ data: overrides.single?.[table] ?? null, error: null }),
       single: async () => ({ data: { ...(overrides.single?.[table] ?? {}), id: "x" }, error: null }),
       then: (res, rej) => {
@@ -106,8 +109,10 @@ for (const intent of ["list_campaigns", "campaign_stats", "compliance_check", "s
 }
 
 {
+  // campaigns now arrives as a rows array: resolveCampaign awaits the match
+  // list so it can tell one hit from several, instead of trusting maybeSingle.
   const { calls } = await run("add_contacts_to_campaign", { campaignName: "spring" },
-    { single: { campaigns: { id: "c1", name: "spring" } }, rows: { leads: [{ id: "l1" }, { id: "l2" }] } });
+    { rows: { campaigns: [{ id: "c1", name: "spring" }], leads: [{ id: "l1" }, { id: "l2" }] } });
   const upd = calls.find((c) => c.op === "update");
   check(upd !== undefined, "adding contacts issues an update");
   check(upd && hasUserFilter(upd), "adding contacts is scoped by user_id");
@@ -138,3 +143,57 @@ if (failures.length) {
   process.exit(1);
 }
 console.log("NO FAILURES");
+
+// ---- ambiguous names must NOT be guessed ---------------------------------
+// Regression: pause_campaign used limit(1), so with two campaigns matching
+// "Q3" it silently paused the first one. On a write, guessing is the bug.
+{
+  const { out } = await run("pause_campaign", { campaignName: "Q3" },
+    { rows: { campaigns: [{ id: "a", name: "Q3 push" }, { id: "b", name: "Q3 launch" }] } });
+  check(out.choose !== undefined, "two matching campaigns produce a choice, not a guess");
+  check(
+    (out.choose?.candidates ?? []).length === 2,
+    "and both real names are offered",
+    JSON.stringify(out.choose?.candidates),
+  );
+  check(
+    /did not want to guess/.test(out.text ?? ""),
+    "the reply says it refused to guess",
+    out.text,
+  );
+}
+
+{
+  const { calls } = await run("pause_campaign", { campaignName: "Q3" },
+    { rows: { campaigns: [{ id: "a", name: "Q3 push" }, { id: "b", name: "Q3 launch" }] } });
+  check(
+    calls.every((c) => c.op !== "update"),
+    "no update is issued while the choice is ambiguous",
+  );
+}
+
+// An EXACT name wins even when other campaigns merely contain it, so
+// "pause Q3 push" is still unambiguous with a "Q3 push v2" sitting there.
+{
+  const { calls, out } = await run("pause_campaign", { campaignName: "Q3 push" },
+    { rows: { campaigns: [{ id: "a", name: "Q3 push" }, { id: "b", name: "Q3 push v2" }] } });
+  check(out.choose === undefined, "an exact name match is not treated as ambiguous", out.text);
+  const upd = calls.find((c) => c.op === "update");
+  check(upd !== undefined && upd.where.id === "a", "and it targets the exactly-named row, not the first", upd?.where?.id);
+}
+
+// "stop that campaign" with exactly one sending is NOT ambiguous.
+{
+  const { calls } = await run("pause_campaign", {},
+    { rows: { campaigns: [{ id: "only", name: "Spring Sale", status: "active" }] } });
+  const upd = calls.find((c) => c.op === "update");
+  check(upd !== undefined, "with one sending campaign, 'that one' resolves without asking");
+}
+
+// ...but two sending campaigns genuinely need the person to choose.
+{
+  const { out, calls } = await run("pause_campaign", {},
+    { rows: { campaigns: [{ id: "a", name: "Spring" }, { id: "b", name: "Summer" }] } });
+  check(out.choose !== undefined, "several sending campaigns produce a choice");
+  check(calls.every((c) => c.op !== "update"), "and nothing is paused yet");
+}

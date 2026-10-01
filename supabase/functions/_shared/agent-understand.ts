@@ -30,6 +30,9 @@ export const MAX_HISTORY = 12;
 
 export type HistoryTurn = { role: "user" | "assistant"; content: string };
 
+/** A clarification from a previous turn that this message is probably answering. */
+export type Carried = { intent: AgentIntent | null; params: AgentParams };
+
 export type Understanding =
   | { kind: "chat"; reply: string }
   | { kind: "read"; req: AgentRequest }
@@ -37,7 +40,9 @@ export type Understanding =
   | { kind: "ask"; question: string; intent: AgentIntent; params: AgentParams }
   | { kind: "unclear"; question: string; guess?: AgentIntent };
 
-const PARAM_KEYS = new Set<keyof AgentParams>(["city", "company", "category", "campaignName", "query", "limit"]);
+import { mergeParams } from "./agent-capabilities.ts";
+
+const PARAM_KEYS = new Set<keyof AgentParams>(["city", "country", "company", "category", "campaignName", "query", "limit"]);
 const NUMERIC = new Set<keyof AgentParams>(["limit"]);
 
 /** Coerce model params into the exact shape the executor accepts. */
@@ -118,7 +123,9 @@ export function parseUnderstanding(
       typeof o.question === "string" && o.question.trim()
         ? o.question.trim().slice(0, 400)
         : slotQuestion(intent, slots.length ? slots : goal.needs);
-    return { u: { kind: "ask", question, intent, params }, cachedIntent: intent, cachedParams: {} };
+    // Keep the slots on the ask branch. Returning {} here used to drop "London"
+    // on the floor, and the person's next message then had nothing to complete.
+    return { u: { kind: "ask", question, intent, params }, cachedIntent: intent, cachedParams: params };
   }
 
   if (kind === "ask" || kind === "unclear") return null;
@@ -132,8 +139,8 @@ export function parseUnderstanding(
   if (gaps.length) {
     return {
       u: { kind: "ask", question: slotQuestion(intent, gaps), intent, params },
-      cachedIntent: null,
-      cachedParams: {},
+      cachedIntent: intent,
+      cachedParams: params,
     };
   }
 
@@ -145,7 +152,11 @@ export function parseUnderstanding(
   };
 }
 
-function buildPrompt(message: string, history: HistoryTurn[]): string {
+function buildPrompt(
+  message: string,
+  history: HistoryTurn[],
+  carried?: Carried,
+): string {
   const goals = GOALS.map((g) => {
     const needs = g.needs.length ? `needs: ${g.needs.join(", ")}` : "needs: nothing";
     return [
@@ -159,6 +170,20 @@ function buildPrompt(message: string, history: HistoryTurn[]): string {
   const convo = history.length
     ? history.map((h) => `${h.role === "user" ? "Them" : "Assistant"}: ${sanitizeForPrompt(h.content, 400)}`).join("\n")
     : "(first message)";
+
+  // What we were in the middle of, if we asked something last turn. Without
+  // this the model sees "Q3 push" with no idea it was answering a question,
+  // and re-guesses from scratch.
+  const resume = carried?.intent
+    ? [
+        `intent: ${carried.intent}`,
+        `already known: ${JSON.stringify(carried.params ?? {})}`,
+        "This person is answering your previous question, not starting over. Fill in the "
+          + "missing slot. Keep the details you already know - do NOT discard them, and do "
+          + "NOT ask again for something already listed as known. If their answer fills the "
+          + "last gap, return read/write for that intent using ALL of the known params.",
+      ].join("\n")
+    : "";
 
   return `You are the assistant inside a small cold-email tool. You read what the person MEANS, not which words they used. Phrasings vary wildly - "I need more people to email", "get me leads" and "I'm running dry" can all mean the same goal.
 
@@ -174,7 +199,8 @@ Reply with one of:
 - "write" is ONLY for changing their account. Never label a read as a write to seem helpful, and never the reverse.
 
 ## If a required slot is missing
-Reply {"kind":"ask","intent":"...","params":{},"question":"..."} naming the goal and asking ONLY for the missing part. The "intent" is REQUIRED here so we remember what you were trying to do once they answer. Do not invent a value for the missing part.
+Reply {"kind":"ask","intent":"...","params":{...},"question":"..."} naming the goal and asking ONLY for the missing part. The "intent" is REQUIRED here so we remember what you were trying to do once they answer. Do not invent a value for the missing part.
+"params" must repeat EVERY slot you already learned from this same message (for example city:"London" if they said London). Leave out only the slot you are asking about. Returning an empty "params" here loses everything they already told you.
 
 ## If you genuinely cannot tell
 Reply {"kind":"unclear","question":"...","guess":"...optional intent"}
@@ -185,9 +211,14 @@ city, company, category, campaignName, query, limit (1-200). Include a slot only
 
 ## Recent conversation
 ${convo}
-
+${carried ? `\n## Answering a question I just asked\n${resume}\n` : ""}
 ## Now handle this message
 Person: ${sanitizeForPrompt(message, 2000)}
+
+## Referencing things with words like "it", "that one", "the same"
+When they point back at something already on screen, resolve the reference using the
+conversation above and put the real name into params (e.g. campaignName). Never leave a
+reference like "that" as a literal value - look up what it means first.
 
 Reply with JSON only. No preamble, no markdown fences.
 
@@ -203,14 +234,22 @@ export async function understand(
   message: string,
   history: HistoryTurn[],
   userId: string,
+  carried?: Carried | null,
 ): Promise<{ u: Understanding | null; cachedIntent: AgentIntent | null; cachedParams: AgentParams } | null> {
   try {
     const { groqChat } = await import("./groq.ts");
     const out = await groqChat(
-      [{ role: "user", content: buildPrompt(message, history) }],
+      [{ role: "user", content: buildPrompt(message, history, carried ?? undefined) }],
       { maxTokens: 400, temperature: 0.2, context: { fn: "agent", kind: "understand", user_id: userId } },
     );
-    return parseUnderstanding(out ?? "");
+    const parsed = parseUnderstanding(out ?? "");
+    if (!parsed) return null;
+    // Carry slots forward so a one-word answer COMPLETES the earlier request
+    // instead of wiping it. The intent is only inherited when this turn picked
+    // none of its own, because "actually pause it" legitimately changes goal.
+    const inheritIntent = parsed.cachedIntent ?? carried?.intent ?? null;
+    const freshParams = mergeParams(carried?.params ?? {}, parsed.cachedParams);
+    return { ...parsed, cachedIntent: inheritIntent, cachedParams: freshParams };
   } catch (err) {
     console.error("agent understand failed", err);
     return null;

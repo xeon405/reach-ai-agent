@@ -10,9 +10,64 @@
 //     agent never duplicates or bypasses the reviewed send path.
 // ============================================================================
 
-import type { AgentIntent, AgentRequest } from "./agent-router.ts";
+import type { AgentIntent, AgentParams, AgentRequest } from "./agent-router.ts";
 
 type Db = { from: (t: string) => any };
+
+/**
+ * Resolve a campaign name to exactly one row, or explain why we cannot.
+ *
+ * This exists because the two obvious implementations are quietly wrong:
+ *   maybeSingle()  ERRORS outright when two campaigns share a name.
+ *   limit(1)       silently takes the first - so "pause Q3" could halt the
+ *                  WRONG campaign. On a write, guessing is worse than asking.
+ * So: an exact name wins outright, one partial match wins, and several
+ * partial matches are handed back as a choice for the person to settle.
+ */
+async function resolveCampaign(
+  db: Db,
+  userId: string,
+  name: string,
+  intent: AgentIntent,
+  params: AgentParams,
+  opts: { activeOnly?: boolean; excludeName?: boolean } = {},
+): Promise<{ ok: true; row: any } | { ok: false; outcome: AgentOutcome }> {
+  let q = db.from("campaigns").select("id, name, status").eq("user_id", userId);
+  if (opts.activeOnly) q = q.eq("status", "active");
+  q = q.ilike("name", opts.excludeName ? name : `%${name}%`).limit(5);
+
+  const { data, error } = await q;
+  if (error) return { ok: false, outcome: { text: "I could not look up your campaigns just now." } };
+
+  const rows: any[] = data ?? [];
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      outcome: {
+        text: opts.excludeName
+          ? `You do not have a campaign called "${name}".`
+          : `I could not find a campaign called "${name}".`,
+        empty: true,
+      },
+    };
+  }
+
+  // An exact name is unambiguous even when other campaigns merely CONTAIN the
+  // phrase, so prefer it over partial hits.
+  const exact = rows.find((r) => String(r.name ?? "").trim().toLowerCase() === name.trim().toLowerCase());
+  if (exact) return { ok: true, row: exact };
+  if (rows.length === 1) return { ok: true, row: rows[0] };
+
+  return {
+    ok: false,
+    outcome: {
+      text:
+        `More than one campaign matches "${name}", so I did not want to guess. `
+        + `Which one did you mean: ${rows.slice(0, 5).map((r) => r.name).join(", ")}?`,
+      choose: { intent, candidates: rows.slice(0, 5).map((r) => r.name), params: { ...params, campaignName: undefined } },
+    },
+  };
+}
 
 export interface AgentOutcome {
   /** Plain-language result shown in the chat bubble. */
@@ -21,9 +76,23 @@ export interface AgentOutcome {
   rows?: { label: string; value: string }[];
   /** Set when nothing was found, so the UI can suggest what to do instead. */
   empty?: boolean;
+  /**
+   * A SLOT is missing, not the whole goal. The caller remembers it and folds
+   * the person's next answer into the same request.
+   */
+  need?: { intent: AgentIntent; params: AgentParams };
+  /**
+   * Ambiguity that no amount of remembering can fix - two campaigns genuinely
+   * share a name, so only the person can choose. We list the options instead
+   * of guessing, which matters most on writes.
+   */
+  choose?: { intent: AgentIntent; candidates: string[]; params: AgentParams };
 }
 
 const MAX_ROWS = 200;
+
+/** How long a clarification stays live before it is treated as abandoned. */
+export const PENDING_TTL_MINUTES = 15;
 
 export async function executeIntent(
   db: Db,
@@ -163,15 +232,23 @@ async function senderHealth(db: Db, userId: string): Promise<AgentOutcome> {
 async function createCampaignDraft(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
   const name = req.params.campaignName?.trim();
   if (!name) {
-    return { text: "What should the campaign be called?", empty: true };
+    // The goal is known even though the name is not, so this is a SLOT the
+    // next message can fill, not a dead end.
+    return {
+      text: "What should the campaign be called?",
+      need: { intent: "create_campaign_draft", params: { ...req.params, campaignName: undefined } },
+    };
   }
+  // existsAs is an exact-name check (not a substring search) so "Spring Sale"
+  // does not collide with "Spring Sale v2". maybeSingle is safe here: the
+  // equality filter can return at most one row.
   const { data: existing } = await db
     .from("campaigns")
     .select("id")
     .eq("user_id", userId)
     .ilike("name", name)
-    .maybeSingle();
-  if (existing) {
+    .limit(1);
+  if (existing && existing.length > 0) {
     return { text: `You already have a campaign called "${name}".`, empty: true };
   }
   const { data, error } = await db
@@ -186,32 +263,115 @@ async function createCampaignDraft(db: Db, userId: string, req: AgentRequest): P
   };
 }
 
-async function pauseCampaign(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
+/**
+ * Work out WHICH campaign a pause request means, without changing anything.
+ *
+ * Split out from pauseCampaign so the same logic can run as a preflight,
+ * before the confirmation prompt. Both callers share it, so "can we even name
+ * a target?" and "execute it" can never disagree about what the user meant.
+ */
+async function resolvePauseTarget(
+  db: Db,
+  userId: string,
+  req: AgentRequest,
+): Promise<{ ok: true; row: any } | { ok: false; outcome: AgentOutcome }> {
   const name = req.params.campaignName?.trim();
-  let q = db.from("campaigns").select("id, name, status").eq("user_id", userId).eq("status", "active");
-  if (name) q = q.ilike("name", `%${name}%`);
-  const { data, error } = await q.limit(1);
-  if (error) return { text: "I could not update your campaigns." };
-  if (!data || data.length === 0) {
-    return { text: name ? `No sending campaign called "${name}" was found.` : "You have no campaigns currently sending.", empty: true };
+  if (!name) {
+    // "stop that campaign" with nothing to go on: ask, and remember we were
+    // heading for this goal so the answer completes it.
+    const { data: active } = await db
+      .from("campaigns")
+      .select("id, name")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .limit(10);
+    const names = (active ?? []).map((c: any) => c.name).filter(Boolean);
+    if (names.length === 1) {
+      // Exactly one is sending, so "that one" is not ambiguous.
+      return { ok: true, row: (active as any[])[0] };
+    }
+    if (names.length > 1) {
+      return {
+        ok: false,
+        outcome: {
+          text: `You have ${names.length} campaigns sending: ${names.join(", ")}. Which should I pause?`,
+          choose: { intent: "pause_campaign", candidates: names, params: { ...req.params, campaignName: undefined } },
+        },
+      };
+    }
+    return { ok: false, outcome: { text: "You have no campaigns currently sending.", empty: true } };
   }
-  const target = data[0];
-  const { error: upErr } = await db.from("campaigns").update({ status: "paused" }).eq("id", target.id).eq("user_id", userId);
+
+  // activeOnly matters: pausing must never target something already paused.
+  return resolveCampaign(db, userId, name, "pause_campaign", req.params, { activeOnly: true });
+}
+
+async function pauseCampaign(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
+  const target = await resolvePauseTarget(db, userId, req);
+  if (!target.ok) return target.outcome;
+  return pauseRow(db, userId, target.row);
+}
+
+async function pauseRow(db: Db, userId: string, target: any): Promise<AgentOutcome> {
+  const { error: upErr } = await db
+    .from("campaigns")
+    .update({ status: "paused" })
+    .eq("id", target.id)
+    .eq("user_id", userId);
   if (upErr) return { text: "I could not pause that campaign." };
   return { text: `Paused "${target.name}". It will stop sending.` };
 }
 
-async function addContactsToCampaign(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
+/** Work out WHICH campaign the contacts belong to, without changing anything. */
+async function resolveAddTarget(
+  db: Db,
+  userId: string,
+  req: AgentRequest,
+): Promise<{ ok: true; row: any } | { ok: false; outcome: AgentOutcome }> {
   const campName = req.params.campaignName?.trim();
-  if (!campName) return { text: "Which campaign should I add them to?", empty: true };
+  if (!campName) {
+    // Missing only the campaign: remember the contacts filter (city/company/
+    // query) that came with the original request so the answer can complete it.
+    return {
+      ok: false,
+      outcome: {
+        text: "Which campaign should I add them to?",
+        need: { intent: "add_contacts_to_campaign", params: { ...req.params, campaignName: undefined } },
+      },
+    };
+  }
+  const resolved = await resolveCampaign(db, userId, campName, "add_contacts_to_campaign", req.params);
+  if (resolved.ok) return resolved;
 
-  const { data: camp } = await db
-    .from("campaigns")
-    .select("id, name")
-    .eq("user_id", userId)
-    .ilike("name", `%${campName}%`)
-    .maybeSingle();
-  if (!camp) return { text: `I could not find a campaign called "${campName}".`, empty: true };
+  // Name the contacts back so the reply is about THEIR request, not just a
+  // missing campaign. "I could not find a campaign called Spring Sale" on its
+  // own reads like the agent forgot they were talking about London dentists.
+  if (resolved.outcome.empty) {
+    return {
+      ok: false,
+      outcome: {
+        ...resolved.outcome,
+        text: `${resolved.outcome.text} I did not add ${describeContacts(req.params)}.`,
+      },
+    };
+  }
+  return resolved;
+}
+
+/** Render a contact filter back to the person who typed it. */
+function describeContacts(p: AgentParams): string {
+  if (p.city && p.category) return `the ${p.city} ${p.category}`;
+  if (p.city) return `contacts in ${p.city}`;
+  if (p.category) return `${p.category} contacts`;
+  if (p.company) return `contacts at ${p.company}`;
+  if (p.query) return `contacts matching "${p.query}"`;
+  return "any contacts";
+}
+
+async function addContactsToCampaign(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
+  const target = await resolveAddTarget(db, userId, req);
+  if (!target.ok) return target.outcome;
+  const camp = target.row;
 
   const p = req.params;
   let q = db.from("leads").select("id").eq("user_id", userId).is("campaign_id", null);
@@ -229,4 +389,84 @@ async function addContactsToCampaign(db: Db, userId: string, req: AgentRequest):
     .eq("user_id", userId);
   if (upErr) return { text: "I could not add those contacts." };
   return { text: `Added ${ids.length} contact${ids.length === 1 ? "" : "s"} to "${camp.name}". Nothing is sending until you start it.` };
+}
+
+/**
+ * Read-only safety check for a write that has NOT been confirmed yet.
+ *
+ * Returns null when the request names exactly one real target, so the caller
+ * can go ahead and ask for confirmation.
+ *
+ * Returns an outcome when asking for confirmation would be wrong or useless:
+ *   - need   -> a required slot is missing, so ask a question instead
+ *   - choose -> the name matched more than one campaign, so only the person can
+ *               pick; listing the options is the honest move
+ *   - empty  -> there is nothing to act on at all
+ *
+ * This matters because confirmation happens BEFORE execution. Without this,
+ * "pause Q3" would first ask "Can I pause Q3?" and only afterwards discover
+ * that two campaigns match - making the user confirm a write that then refuses
+ * to run. Resolve first, confirm second.
+ */
+export async function preflightWrite(
+  db: Db,
+  userId: string,
+  req: AgentRequest,
+): Promise<AgentOutcome | null> {
+  if (req.intent === "pause_campaign") {
+    const target = await resolvePauseTarget(db, userId, req);
+    return target.ok ? null : target.outcome;
+  }
+  if (req.intent === "add_contacts_to_campaign") {
+    const target = await resolveAddTarget(db, userId, req);
+    return target.ok ? null : target.outcome;
+  }
+  return null;
+}
+
+/**
+ * Fill in campaignName from the user's REAL campaigns when the model left it
+ * out. Runs before preflight, so it can only ever name a campaign that exists.
+ *
+ * The model is good at "pause my campaign" but inconsistent at "pause Q3 push"
+ * - it sometimes hands back no name at all, which used to look like "no name
+ * given" and produced "which of your 3 campaigns should I pause?". Matching
+ * against actual rows is deterministic and cannot invent a target.
+ *
+ * Longest name first, so "Q3 push" wins over a shorter campaign that happens
+ * to be a substring. Requires the name to appear as whole words.
+ */
+export async function hydrateCampaignName(
+  db: Db,
+  userId: string,
+  intent: AgentIntent,
+  params: AgentParams,
+  message: string,
+): Promise<AgentParams> {
+  if (params.campaignName?.trim()) return params;
+  if (intent !== "pause_campaign" && intent !== "add_contacts_to_campaign") return params;
+
+  const { data } = await db
+    .from("campaigns")
+    .select("name")
+    .eq("user_id", userId)
+    .limit(200);
+  const names = (data ?? []).map((c: any) => c.name).filter(Boolean) as string[];
+  if (!names.length) return params;
+
+  const hay = message.toLowerCase();
+  const hit = names
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .find((n) => {
+      const needle = n.toLowerCase().trim();
+      if (!needle) return false;
+      const at = hay.indexOf(needle);
+      if (at < 0) return false;
+      const before = hay[at - 1];
+      const after = hay[at + needle.length];
+      const boundary = (c: string | undefined) => c === undefined || /[^a-z0-9]/.test(c);
+      return boundary(before) && boundary(after);
+    });
+  return hit ? { ...params, campaignName: hit } : params;
 }

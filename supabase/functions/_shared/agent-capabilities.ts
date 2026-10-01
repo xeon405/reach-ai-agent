@@ -31,6 +31,23 @@ export type AgentParams = {
   limit?: number;
 };
 
+/**
+ * Merge newly-learned params over carried-forward ones.
+ *
+ * A follow-up answer ("Q3 push") supplies ONE slot but should not erase the
+ * ones we already had ("city: London"). Later values win, EXCEPT limit, where
+ * an explicit new number should replace a default but an absent one must not
+ * clobber an earlier explicit choice.
+ */
+export function mergeParams(carried: AgentParams, fresh: AgentParams): AgentParams {
+  const out: AgentParams = { ...carried };
+  for (const [k, v] of Object.entries(fresh) as [keyof AgentParams, unknown][]) {
+    if (v === undefined || v === null || v === "") continue;
+    (out as Record<string, unknown>)[k] = v;
+  }
+  return out;
+}
+
 export type AgentRequest = {
   intent: AgentIntent;
   params: AgentParams;

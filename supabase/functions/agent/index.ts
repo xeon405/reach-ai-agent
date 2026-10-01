@@ -23,9 +23,12 @@ import { createClient } from "npm:@supabase/supabase-js";
 import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { actionCaps, budgetPrompt, requestAction } from "../_shared/action-budget.ts";
-import { executeIntent, type AgentOutcome } from "../_shared/agent-executor.ts";
+import { executeIntent, preflightWrite, hydrateCampaignName, type AgentOutcome } from "../_shared/agent-executor.ts";
 import {
-  GOALS, isWriteIntent, type AgentIntent, type AgentParams, type AgentRequest,
+  loadPendingState, savePendingState, clearPendingState, mergePendingParams,
+} from "../_shared/agent-pending.ts";
+import {
+  GOALS, isWriteIntent, mergeParams, missingSlots, type AgentIntent, type AgentParams, type AgentRequest,
 } from "../_shared/agent-capabilities.ts";
 import { understand, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
 import {
@@ -284,11 +287,16 @@ Deno.serve(async (req) => {
     const learned: LearnedRow | null = await recall(admin, userId, key, convId);
     const history = await loadHistory(admin, userId, convId);
 
+    // What were we in the middle of? If the last turn ended in a question,
+    // this message is probably the ANSWER, not a new request. Carrying the
+    // intent + partial params forward is what makes follow-ups work at all.
+    const carried = await loadPendingState(admin, userId, convId);
+
     let usedAi = false;
     let source: "learned" | "ai" | "router" = "learned";
     let routed: AgentRequest | null = null;
     let replyText: string | null = null;
-    let askOnly: { question: string; intent: AgentIntent | null } | null = null;
+    let askOnly: { question: string; intent: AgentIntent | null; params?: AgentParams } | null = null;
     let cacheIntent: AgentIntent | null = null;
     let u: Awaited<ReturnType<typeof understand>> = null;
     let cacheParams: AgentParams = {};
@@ -308,7 +316,7 @@ Deno.serve(async (req) => {
         routed = fallback;
         source = "router";
       } else {
-        u = await understand(message, history, userId);
+        u = await understand(message, history, userId, carried);
         if (!u || !u.u) {
           // Model unusable. The keyword router is the safety net so the turn
           // still does something sensible instead of failing.
@@ -329,7 +337,9 @@ Deno.serve(async (req) => {
           if (u.u.kind === "chat") {
             replyText = u.u.reply;
           } else if (u.u.kind === "ask") {
-            askOnly = { question: u.u.question, intent: u.u.intent };
+            // cachedParams, not u.u.params: it is already the merge of what the
+            // model said this turn and what we were holding from last turn.
+            askOnly = { question: u.u.question, intent: u.u.intent, params: u.cachedParams };
           } else if (u.u.kind === "unclear") {
             askOnly = { question: u.u.question, intent: null };
           } else {
@@ -347,6 +357,12 @@ Deno.serve(async (req) => {
 
     // Missing a required slot, or genuinely ambiguous: ask, do not guess.
     if (askOnly) {
+      // REMEMBER what we were heading for. Without this the person's answer
+      // to our own question looks like an unrelated new message.
+      //
+      // mergePendingParams (not savePendingState) because a SECOND question
+      // must not erase what the first one already collected.
+      await mergePendingParams(admin, userId, convId, askOnly.params ?? {}, askOnly.intent);
       await persist(admin, userId, convId, message, askOnly.question, null, {}, usedAi);
       return json({ conversationId: convId, text: askOnly.question, intent: null, asked: true, usedAi, source }, 200, req);
     }
@@ -357,12 +373,80 @@ Deno.serve(async (req) => {
       return json({ conversationId: convId, text: reply, intent: null, usedAi, source }, 200, req);
     }
 
-    // A write always stops here and asks, even when the fast lane recognised it.
+    // A reply that COMPLETES our own question belongs to the goal we asked
+    // about, not to whatever new intent the model reads into it.
+    //
+    // Without this, "add my London dentists to a campaign" -> we ask "which
+    // campaign?" -> they answer "Spring Sale", and the model would start a
+    // brand new "create campaign draft" instead of finishing the original
+    // request. The pending row already told us the goal, so honour it whenever
+    // the answer genuinely satisfies the slot we were missing.
+    if (carried?.intent && routed && routed.intent !== carried.intent) {
+      const carriedGoal = GOALS.find((g) => g.intent === carried.intent);
+      const merged = mergeParams(carried.params ?? {}, routed.params);
+      const gaps = carriedGoal ? missingSlots(carriedGoal, merged) : [];
+      if (carriedGoal && gaps.length === 0) {
+        routed = { intent: carried.intent, params: merged, summary: carriedGoal.goal };
+      }
+    }
+
+    // Name the campaign from the user's own rows if the model did not. Doing it
+    // here, ahead of preflight, means "pause Q3 push" reaches the resolver as an
+    // exact target instead of looking like a nameless request.
+    routed = {
+      ...routed,
+      params: await hydrateCampaignName(admin, userId, routed.intent, routed.params, message),
+    };
+
+    // Resolve the target BEFORE asking anyone to confirm anything.
+    //
+    // Confirmation used to come first, which meant "pause Q3" would ask "Can I
+    // pause Q3?" and only then discover that two campaigns match. The user
+    // confirmed a write that could not run. Cheaper to ask the question that
+    // actually decides the outcome.
     if (isWriteIntent(routed.intent)) {
-      await persist(admin, userId, convId, message, `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`, routed.intent, routed.params, usedAi);
+      const pre = await preflightWrite(admin, userId, routed);
+
+      if (pre?.need) {
+        await savePendingState(admin, userId, convId, pre.need.intent, pre.need.params);
+        await persist(admin, userId, convId, message, pre.text, null, {}, usedAi);
+        return json({
+          conversationId: convId, text: pre.text, intent: null, asked: true,
+          rows: pre.rows, usedAi, source,
+        }, 200, req);
+      }
+
+      if (pre?.choose) {
+        await savePendingState(admin, userId, convId, pre.choose.intent, pre.choose.params);
+        await persist(admin, userId, convId, message, pre.text, null, {}, usedAi);
+        return json({
+          conversationId: convId, text: pre.text, intent: null, asked: true,
+          rows: pre.choose.candidates.map((name) => ({ label: name, value: "Say the name to pick this one" })),
+          usedAi, source,
+        }, 200, req);
+      }
+
+      if (pre?.empty) {
+        // Nothing left to clarify: the turn is over, so do not leave the goal
+        // parked for the next message to inherit.
+        await clearPendingState(admin, userId, convId);
+        await persist(admin, userId, convId, message, pre.text, null, {}, usedAi);
+        return json({
+          conversationId: convId, text: pre.text, intent: null, empty: true,
+          rows: [], usedAi, source,
+        }, 200, req);
+      }
+
+      // Unambiguous: now it is safe to ask.
+      //
+      // Clear the clarification first. A write supersedes it: leaving the old
+      // goal parked would let a later, unrelated message inherit it.
+      await clearPendingState(admin, userId, convId);
+      const ask = `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`;
+      await persist(admin, userId, convId, message, ask, routed.intent, routed.params, usedAi);
       return json({
         conversationId: convId,
-        text: `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`,
+        text: ask,
         intent: routed.intent,
         pending: { intent: routed.intent, params: routed.params },
         rows: [{ label: "This will change your account", value: "Reply yes to confirm" }],
@@ -371,9 +455,38 @@ Deno.serve(async (req) => {
       }, 200, req);
     }
 
+    // The request completed (or was abandoned), so the clarification is spent.
+    // A stale entry here is what would make an unrelated message two turns
+    // later silently inherit a campaign name nobody mentioned.
+    await clearPendingState(admin, userId, convId);
+
     // A read. Not charged against the step budget: the budget caps steps INSIDE
     // one turn, and a chat turn runs exactly one allowlisted query.
     const outcome = await runOutcome(admin, userId, routed);
+
+    // A read can still be missing a slot the PROMPT thought it had. Re-ask and
+    // remember, rather than reporting a misleading empty result.
+    if (outcome.need) {
+      await savePendingState(admin, userId, convId, outcome.need.intent, outcome.need.params);
+      await persist(admin, userId, convId, message, outcome.text, null, {}, usedAi);
+      return json({
+        conversationId: convId, text: outcome.text, intent: null, asked: true,
+        rows: outcome.rows, usedAi, source,
+      }, 200, req);
+    }
+
+    // Two campaigns share a name: refuse to guess and offer the real options.
+    // On a write this is the difference between pausing the right thing and
+    // pausing the wrong one.
+    if (outcome.choose) {
+      await savePendingState(admin, userId, convId, outcome.choose.intent, outcome.choose.params);
+      await persist(admin, userId, convId, message, outcome.text, null, {}, usedAi);
+      return json({
+        conversationId: convId, text: outcome.text, intent: null, asked: true,
+        rows: outcome.choose.candidates.map((name) => ({ label: name, value: "Say the name to pick this one" })),
+        usedAi, source,
+      }, 200, req);
+    }
 
     // Confusion is the retirement signal, NOT an empty result. A brand-new
     // account answers every correct request with "you have nothing yet", so

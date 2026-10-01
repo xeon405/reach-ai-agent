@@ -21,7 +21,16 @@ const check = (ok, label, detail) => {
   else { fails.push(label); console.log(`  FAIL ${label}${detail ? " — " + detail : ""}`); }
 };
 
+// TWO clients, deliberately.
+//
+// `admin` keeps the service-role key for assertions. `signIn` exists only to
+// mint a user token. Sharing one client means signInWithPassword installs the
+// USER's access token as the auth header, and every later `admin.from()` call
+// quietly runs as `authenticated` instead of `service_role`. That silently
+// broke assertions against tables with no client RLS policy - they returned
+// empty rather than erroring, which reads as "the product is broken".
 const admin = createClient(url, service, { auth: { persistSession: false } });
+const signIn = createClient(url, service, { auth: { persistSession: false } });
 const stamp = Date.now();
 const email = `agent-probe-${stamp}@example.com`;
 const password = `Pr0be-${stamp}-x`;
@@ -51,7 +60,7 @@ try {
     userId = data.user.id;
     check(!!userId, "throwaway user created");
   }
-  const { data: sess, error: sErr } = await admin.auth.signInWithPassword({ email, password });
+  const { data: sess, error: sErr } = await signIn.auth.signInWithPassword({ email, password });
   if (sErr) throw new Error("signin: " + sErr.message);
   const token = sess.session.access_token;
 
@@ -161,6 +170,83 @@ try {
     check(still.status === 200, "deleting one chat does not touch another", `HTTP ${still.status}`);
   }
 
+  // ---- 5f. it REMEMBERS: a follow-up completes the original request -------
+  // The behaviour that made this feel like a dumb form rather than an
+  // assistant. "add my London dentists to a campaign" -> "which campaign?" ->
+  // "Spring Sale" must still know about London dentists.
+  {
+    const first = await asUser(token, { message: "add my London dentists to a campaign", conversationId: null });
+    check(first.body.asked === true, "a request missing its campaign asks instead of guessing", first.body.text);
+
+    const { data: pend } = await admin
+      .from("agent_pending_state").select("intent, params")
+      .eq("user_id", userId).eq("conversation_id", first.body.conversationId).maybeSingle();
+    check(pend?.intent === "add_contacts_to_campaign", "the pending goal is remembered server-side", pend?.intent);
+    check(pend?.params?.city === "London", "and so is the slot already given", JSON.stringify(pend?.params));
+
+    const second = await asUser(token, { message: "Spring Sale", conversationId: first.body.conversationId });
+    check(!/which campaign/i.test(second.body.text ?? ""), "the follow-up is not asked the same question again", second.body.text);
+    check(
+      /london|dentist/i.test(second.body.text ?? "") || second.body.asked === true,
+      "the answer still refers to the original request, not just the new words",
+      second.body.text,
+    );
+    // It must NOT have invented a campaign called "Spring Sale".
+    const { count: springCount } = await admin
+      .from("campaigns").select("id", { count: "exact", head: true })
+      .eq("user_id", userId).ilike("name", "Spring Sale");
+    check((springCount ?? 0) === 0, "and it did not invent the campaign just because it was named", `${springCount} created`);
+
+    const { data: stillPending } = await admin
+      .from("agent_pending_state").select("intent").eq("user_id", userId).maybeSingle();
+    check(!stillPending, "a completed turn clears the memory so it cannot hijack the next message");
+  }
+
+  // ---- 5g. two campaigns with the same name must not be guessed ----------
+  // The dangerous case: "pause Q3" used limit(1) and could halt the wrong one.
+  {
+    const { error: e1 } = await admin.from("campaigns").insert([
+      { user_id: userId, name: "Q3 push", status: "active" },
+      { user_id: userId, name: "Q3 launch", status: "active" },
+    ]);
+    check(!e1, "two similarly-named campaigns exist for the probe user", e1?.message);
+
+    const amb = await asUser(token, { message: "pause Q3", conversationId: null });
+    check(amb.body.asked === true, "an ambiguous name asks instead of acting", amb.body.text);
+    check(/did not want to guess|more than one/i.test(amb.body.text ?? ""), "and says why", amb.body.text);
+    check(Array.isArray(amb.body.rows) && amb.body.rows.length === 2, "both real names are offered", JSON.stringify(amb.body.rows));
+
+    const { data: stillActive } = await admin
+      .from("campaigns").select("name, status").eq("user_id", userId)
+      .ilike("name", "Q3%").eq("status", "active");
+    check((stillActive ?? []).length === 2, "neither campaign was paused", `${(stillActive ?? []).length} still active`);
+
+    // An EXACT name is unambiguous even with "Q3 push v2" present.
+    await admin.from("campaigns").insert({ user_id: userId, name: "Q3 push v2", status: "active" });
+    const exact = await asUser(token, { message: "pause Q3 push", conversationId: null });
+    check(/can i/i.test(exact.body.text ?? ""), "an exact name goes straight to confirmation", exact.body.text);
+    // Asking must still not act. Checked before confirming, on purpose.
+    const { data: afterAsk } = await admin
+      .from("campaigns").select("status").eq("user_id", userId).eq("name", "Q3 push").maybeSingle();
+    check(afterAsk?.status === "active", "asking alone pauses nothing", String(afterAsk?.status));
+
+    await asUser(token, { message: "yes", conversationId: exact.body.conversationId, confirm: true });
+    const { data: pausedNow } = await admin
+      .from("campaigns").select("status").eq("user_id", userId).eq("name", "Q3 push").maybeSingle();
+    check(pausedNow?.status === "paused", "and confirming pauses exactly the named one", String(pausedNow?.status));
+    const { data: v2 } = await admin
+      .from("campaigns").select("status").eq("user_id", userId).eq("name", "Q3 push v2").maybeSingle();
+    check(v2?.status === "active", "leaving 'Q3 push v2' untouched", String(v2?.status));
+
+    // Clean up after ourselves. These three live campaigns would otherwise
+    // still be "active" when section 8 runs, and the pause regression there
+    // depends on the fixture it sets up for itself.
+    await admin.from("campaigns").delete()
+      .eq("user_id", userId).in("name", ["Q3 push", "Q3 launch", "Q3 push v2"]);
+    await admin.from("agent_pending_state").delete()
+      .eq("user_id", userId).in("conversation_id", [amb.body.conversationId, exact.body.conversationId]);
+  }
+
   // ---- 5d. the user can see and delete what was learned -----------------
   {
     const r = await asUser(token, { action: "learned_list" });
@@ -226,7 +312,7 @@ try {
     const pw2 = `Pr0be2-${stamp}-x`;
     const { data: u2, error: e2 } = await admin.auth.admin.createUser({ email: email2, password: pw2, email_confirm: true });
     if (e2) throw new Error("createUser2: " + e2.message);
-    const { data: s2 } = await admin.auth.signInWithPassword({ email: email2, password: pw2 });
+    const { data: s2 } = await signIn.auth.signInWithPassword({ email: email2, password: pw2 });
     const r = await asUser(s2.session.access_token, { message: "show me my campaigns", conversationId: null });
     const txt = (r.body.text ?? "").toLowerCase();
     check(!txt.includes("probe test"), "a different user cannot see the first user's campaign", `text="${r.body.text}"`);
@@ -244,6 +330,7 @@ try {
     await admin.from("agent_learned_phrases").delete().eq("user_id", userId);
     await admin.from("agent_intent_cache").delete().eq("user_id", userId);
     await admin.from("agent_action_state").delete().eq("user_id", userId);
+    await admin.from("agent_pending_state").delete().eq("user_id", userId);
     const { error } = await admin.auth.admin.deleteUser(userId);
     console.log(`  teardown: ${error ? "ERROR " + error.message : "probe user and all rows deleted"}`);
   }
