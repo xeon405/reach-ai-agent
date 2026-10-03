@@ -247,6 +247,7 @@ function describeFind(company?: string, city?: string, country?: string): string
 export const INTENT_DESCRIPTIONS: Record<AgentIntent, string> = {
   list_campaigns: "List the user's existing campaigns with status and counts",
   campaign_stats: "Report how many emails were sent, opened, and replied to",
+  suggest_targeting: "Recommend who to email next, from the segments already in their contacts",
   find_contacts: "Search the user's saved contacts by company, city, country, or category",
   add_contacts_to_campaign: "Attach matching saved contacts to an existing campaign",
   create_campaign_draft: "Create a new campaign in DRAFT status, ready for the user to review and launch",

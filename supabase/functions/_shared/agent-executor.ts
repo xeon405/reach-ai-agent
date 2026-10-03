@@ -104,6 +104,8 @@ export async function executeIntent(
       return listCampaigns(db, userId);
     case "campaign_stats":
       return campaignStats(db, userId);
+    case "suggest_targeting":
+      return suggestTargeting(db, userId, req);
     case "find_contacts":
       return findContacts(db, userId, req);
     case "compliance_check":
@@ -144,19 +146,41 @@ async function listCampaigns(db: Db, userId: string): Promise<AgentOutcome> {
 
 async function campaignStats(db: Db, userId: string): Promise<AgentOutcome> {
   // Each count is scoped by user_id; none of these may fall back to global.
-  const [sent, replies, contacts, active] = await Promise.all([
+  //
+  // "Replies received" counts emails_sent.replied, NOT ai_classifications. The
+  // classifications table only holds rows for sends the AI actually triaged,
+  // so counting it reported a fraction of real replies and looked like data
+  // loss. "Interested" comes from reply_sentiment, the same INTERESTED value
+  // daily-digest treats as hot.
+  const [sent, replies, interested, contacts, active] = await Promise.all([
     db.from("emails_sent").select("id", { count: "exact", head: true }).eq("user_id", userId),
-    db.from("ai_classifications").select("id", { count: "exact", head: true }).eq("user_id", userId),
+    db.from("emails_sent").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("replied", true),
+    db.from("emails_sent").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("reply_sentiment", "INTERESTED"),
     db.from("leads").select("id", { count: "exact", head: true }).eq("user_id", userId),
     db.from("campaigns").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "active"),
   ]);
+
+  const n = (r: any) => Number(r.count ?? 0);
+  const sentN = n(sent), repliedN = n(replies), interestedN = n(interested);
+
+  // The numbers belong in the sentence too. Rows are a summary panel, but the
+  // chat itself is what people read, and "Here is where you are:" on its own
+  // says nothing at all.
+  const rate = sentN > 0 ? ` (${Math.round((repliedN / sentN) * 100)}%)` : "";
+  const text = sentN === 0
+    ? "Nothing has been sent yet, so there are no numbers to report. Want me to find contacts or draft a campaign first?"
+    : `You have sent ${sentN} email${sentN === 1 ? "" : "s"}, got ${repliedN} repl${repliedN === 1 ? "y" : "ies"}${rate}`
+      + `, and ${interestedN} of those replied interested.`
+      + ` ${n(contacts)} contact${n(contacts) === 1 ? "" : "s"} saved, ${n(active)} campaign${n(active) === 1 ? "" : "s"} sending.`;
+
   return {
-    text: "Here is where you are:",
+    text,
     rows: [
-      { label: "Emails sent", value: String(sent.count ?? 0) },
-      { label: "Replies received", value: String(replies.count ?? 0) },
-      { label: "Contacts saved", value: String(contacts.count ?? 0) },
-      { label: "Campaigns sending", value: String(active.count ?? 0) },
+      { label: "Emails sent", value: String(sentN) },
+      { label: "Replies received", value: String(repliedN) },
+      { label: "Interested", value: String(interestedN) },
+      { label: "Contacts saved", value: String(n(contacts)) },
+      { label: "Campaigns sending", value: String(n(active)) },
     ],
   };
 }
@@ -469,4 +493,100 @@ export async function hydrateCampaignName(
       return boundary(before) && boundary(after);
     });
   return hit ? { ...params, campaignName: hit } : params;
+}
+
+/**
+ * Recommend a target segment from the user's OWN data.
+ *
+ * "Who should I target?" used to be answered with advice in the abstract,
+ * which helps nobody. This counts the segments that actually exist in their
+ * contacts, cross-references which of those segments have actually replied,
+ * and returns the real ones with counts. If they have no contacts yet it says
+ * so plainly instead of inventing a persona.
+ */
+async function suggestTargeting(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
+  const p = req.params;
+
+  let pool = db
+    .from("leads")
+    .select("id, category, company, city, country, job_title, email_status")
+    .eq("user_id", userId);
+  if (p.category) pool = pool.ilike("category", `%${p.category}%`);
+  if (p.city) pool = pool.ilike("city", `%${p.city}%`);
+  if (p.company) pool = pool.ilike("company", `%${p.company}%`);
+  if (p.query) {
+    pool = pool.or(`company.ilike.%${p.query}%,category.ilike.%${p.query}%,city.ilike.%${p.query}%`);
+  }
+  const { data, error } = await pool.limit(1000);
+  if (error) return { text: "I could not look at your contacts just now." };
+
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) {
+    return {
+      text: p.query || p.category || p.city
+        ? "I could not find contacts matching that. Want me to widen the search?"
+        : "You have no contacts saved yet, so I cannot recommend a segment from real data. "
+          + "Give me a category, company or city and I will find who to target.",
+      empty: true,
+    };
+  }
+
+  const tally = (key: (r: any) => string | null | undefined) => {
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      const v = key(r);
+      if (!v) continue;
+      const s = String(v).trim();
+      if (!s) continue;
+      m.set(s, (m.get(s) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  };
+
+  const categories = tally((r) => r.category);
+  const cities = tally((r) => r.city);
+  const titles = tally((r) => r.job_title);
+
+  // Which segments actually get replies? Only meaningful if we have sent.
+  const { data: sent } = await db
+    .from("emails_sent")
+    .select("lead_id, replied")
+    .eq("user_id", userId)
+    .eq("replied", true)
+    .limit(1000);
+  const repliedLeadIds = new Set((sent ?? []).map((r: any) => r.lead_id).filter(Boolean));
+  const hotCategories = tally(
+    (r) => (repliedLeadIds.has(r.id) ? r.category : null),
+  ).filter(([, n]) => n > 0);
+
+  // Prefer a segment that has produced replies; fall back to raw volume.
+  const winner = hotCategories[0]?.[0];
+  const best = winner ?? categories[0]?.[0] ?? cities[0]?.[0] ?? null;
+  if (!best) {
+    return {
+      text: `You have ${rows.length} contact${rows.length === 1 ? "" : "s"} but they are not `
+        + "segmented yet. Tell me the kind of company you want and I will filter them.",
+      empty: true,
+    };
+  }
+
+  const rowsOut = categories.slice(0, 5).map(([name, n]) => ({
+    label: name,
+    value: `${n} contact${n === 1 ? "" : "s"}${hotCategories.some(([h]) => h === name) ? " - has replied" : ""}`,
+  }));
+
+  const where = categories[0]?.[0] === best && cities.length
+    ? ` (mostly ${cities.slice(0, 3).map(([c]) => c).join(", ")})`
+    : "";
+  const proof = winner
+    ? `That one has actually replied, which is why I am suggesting it.`
+    : "You have not had replies from any segment yet, so this is the largest group you already own.";
+
+  return {
+    text: `Start with ${best}${where} - ${categories.find(([n]) => n === best)?.[1] ?? 0} of your `
+      + `${rows.length} contacts. ${proof} Top segments: `
+      + `${categories.slice(0, 5).map(([n, c]) => `${n} (${c})`).join(", ")}.`
+      + (titles[0] ? ` Typical titles there: ${titles.slice(0, 3).map(([t]) => t).join(", ")}.` : ""),
+    rows: rowsOut,
+  };
 }

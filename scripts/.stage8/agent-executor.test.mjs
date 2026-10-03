@@ -136,6 +136,76 @@ for (const intent of ["list_campaigns", "campaign_stats", "compliance_check", "s
   check(!/\bdelete\(/.test(src) && !/\.delete\(\)/.test(src), "the executor has no delete path at all");
 }
 
+// ---- campaign_stats must count replies from where replies actually live ---
+// Regression: "Replies received" was counted from ai_classifications, which
+// only holds rows the AI triaged. Real replies live on emails_sent.replied, so
+// the old count reported a fraction of the truth and looked like data loss.
+{
+  const { calls, out } = await run("campaign_stats");
+  const reads = calls.filter((c) => c.op === "select" && c.headMode);
+  check(
+    !calls.some((c) => c.table === "ai_classifications"),
+    "stats never counts ai_classifications as replies",
+    calls.some((c) => c.table === "ai_classifications") ? "still querying it" : "",
+  );
+  check(
+    reads.some((c) => c.table === "emails_sent" && "replied" in c.filters),
+    "replies come from emails_sent.replied",
+  );
+  check(
+    reads.some((c) => c.table === "emails_sent" && c.filters.reply_sentiment === "INTERESTED"),
+    "interested comes from emails_sent.reply_sentiment",
+  );
+  // The numbers have to be in the sentence, not only in the rows panel.
+  // "Here is where you are:" on its own tells the reader nothing.
+  check(
+    !/where you are:?\s*$/i.test(out.text ?? ""),
+    "stats text is not a bare lead-in with no numbers",
+    out.text,
+  );
+}
+
+// ---- suggest_targeting recommends from THEIR data, not generic advice -----
+const LEADS = [
+  { id: 1, category: "Dentists", city: "London", country: "UK", job_title: "Practice Manager" },
+  { id: 2, category: "Dentists", city: "Leeds", country: "UK", job_title: "Practice Manager" },
+  { id: 3, category: "Plumbers", city: "Leeds", country: "UK", job_title: "Owner" },
+];
+
+{
+  const { calls } = await run("suggest_targeting");
+  const reads = calls.filter((c) => c.op === "select");
+  check(reads.length > 0, "suggest_targeting actually queries the database");
+  check(
+    reads.every(hasUserFilter),
+    "suggest_targeting scopes EVERY read by user_id",
+    reads.every(hasUserFilter) ? "all scoped" : "UNSCOPED READ FOUND",
+  );
+}
+
+{
+  // No contacts: it must say so, not invent a persona.
+  const { out } = await run("suggest_targeting", {}, { rows: { leads: [] } });
+  check(out.empty === true, "no contacts means an empty result");
+  check(/no contacts saved/i.test(out.text ?? ""), "and it says why", out.text);
+}
+
+{
+  // Nothing has replied yet, so fall back to the largest segment they own.
+  const { out } = await run("suggest_targeting", {}, { rows: { leads: LEADS, emails_sent: [] } });
+  check(/Dentists/.test(out.text ?? ""), "recommends the biggest real segment", out.text);
+  check(/largest group/i.test(out.text ?? ""), "and admits no segment has replied yet", out.text);
+}
+
+{
+  // A smaller segment that HAS replied beats a bigger one that has not.
+  const { out } = await run("suggest_targeting", {}, {
+    rows: { leads: LEADS, emails_sent: [{ lead_id: 3, replied: true }] },
+  });
+  check(/Plumbers/.test(out.text ?? ""), "prefers the segment that actually replied", out.text);
+  check(/has actually replied/i.test(out.text ?? ""), "and explains the reasoning", out.text);
+}
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log("FAILURES:");

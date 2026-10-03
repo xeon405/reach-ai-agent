@@ -13,6 +13,7 @@
 export type AgentIntent =
   | "list_campaigns"
   | "campaign_stats"
+  | "suggest_targeting"
   | "find_contacts"
   | "add_contacts_to_campaign"
   | "create_campaign_draft"
@@ -68,6 +69,20 @@ export type Goal = {
 };
 
 export const GOALS: Goal[] = [
+  {
+    intent: "suggest_targeting",
+    goal: "Recommend who they should actually email, based on the segments already in their own contact data and on who has replied before.",
+    needs: [],
+    examples: [
+      "who should i target",
+      "who do i target",
+      "what kind of companies should i email",
+      "help me pick my audience",
+      "which niche is best for me",
+      "what should my next campaign target",
+    ],
+    write: false,
+  },
   {
     intent: "list_campaigns",
     goal: "See what campaigns exist and which ones are currently sending.",
@@ -204,6 +219,7 @@ export function slotQuestion(intent: AgentIntent, slots: (keyof AgentParams)[]):
   return {
     list_campaigns: "Which campaign do you mean?",
     campaign_stats: "Do you want the overall numbers, or for one campaign?",
+    suggest_targeting: "Which segment should I look at - a category, city or company?",
     find_contacts: `Sure - ${label}?`,
     add_contacts_to_campaign: `Which campaign should I add them to?`,
     create_campaign_draft: "What should I call the new campaign?",

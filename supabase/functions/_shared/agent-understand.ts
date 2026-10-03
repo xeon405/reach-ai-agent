@@ -38,9 +38,15 @@ export type Understanding =
   | { kind: "read"; req: AgentRequest }
   | { kind: "write"; req: AgentRequest }
   | { kind: "ask"; question: string; intent: AgentIntent; params: AgentParams }
-  | { kind: "unclear"; question: string; guess?: AgentIntent };
+  | { kind: "unclear"; question: string; guess?: AgentIntent }
+  /**
+   * They told us something about themselves or their business. Reply
+   * naturally AND return the facts, so one call both answers and remembers.
+   */
+  | { kind: "profile"; reply: string; facts: ProfileFacts };
 
 import { mergeParams } from "./agent-capabilities.ts";
+import { cleanFacts, renderProfile, type Profile, type ProfileFacts } from "./agent-profile.ts";
 
 const PARAM_KEYS = new Set<keyof AgentParams>(["city", "country", "company", "category", "campaignName", "query", "limit"]);
 const NUMERIC = new Set<keyof AgentParams>(["limit"]);
@@ -106,6 +112,19 @@ export function parseUnderstanding(
     };
   }
 
+  if (kind === "profile") {
+    // A reply is required - without one this turn would answer nothing. Facts
+    // are best-effort: losing a field is survivable, losing the reply is not.
+    const reply = typeof o.reply === "string" ? o.reply.trim().slice(0, 400) : "";
+    const facts = cleanFacts(o.facts);
+    if (!reply) return null;
+    return {
+      u: { kind: "profile", reply, facts },
+      cachedIntent: null,
+      cachedParams: {},
+    };
+  }
+
   if (kind === "ask") {
     // A clarifying question is still useful even if the model forgot to name
     // the intent, so don't throw the whole turn away over a missing field.
@@ -156,6 +175,7 @@ function buildPrompt(
   message: string,
   history: HistoryTurn[],
   carried?: Carried,
+  profile?: Profile | null,
 ): string {
   const goals = GOALS.map((g) => {
     const needs = g.needs.length ? `needs: ${g.needs.join(", ")}` : "needs: nothing";
@@ -185,7 +205,24 @@ function buildPrompt(
       ].join("\n")
     : "";
 
-  return `You are the assistant inside a small cold-email tool. You read what the person MEANS, not which words they used. Phrasings vary wildly - "I need more people to email", "get me leads" and "I'm running dry" can all mean the same goal.
+  const profileBlock = renderProfile(profile);
+
+  return `You are Reach, the assistant built into Reach, the cold-email platform at out-ship.com. If someone asks your name, you are Reach. If they ask what you are or why they should use you, say plainly that you help them run cold-email campaigns and that you work with their real data - campaigns, contacts, replies - not guesswork.
+
+You read what the person MEANS, not which words they used. Phrasings vary wildly - "I need more people to email", "get me leads" and "I'm running dry" can all mean the same goal.
+${profileBlock ? "\n" + profileBlock + "\n" : ""}
+## When they tell you about themselves or their business
+This is the most important thing to get right. People open with who they are, what they sell and who they want to reach. Treat that as information to KEEP, not as a task.
+
+Reply with:
+{"kind":"profile","reply":"...","facts":{"business_name":"...","website":"...","product":"...","audience":"...","goals":"...","notes":"..."}}
+
+Copy their facts into "facts" in their own words, using only the keys you can actually fill. "out-ship.com is my platform and I want to email clients to prove it works" is product + goals, not a request to build a campaign.
+
+Then reply in 1-3 short sentences: acknowledge what they told you, then ask ONE useful follow-up - usually who they are trying to reach. Never answer a self-description with a question about naming a campaign. If they described their business and also clearly asked for something to be done, do the task normally with read/write instead and do not use this kind.
+
+## When they ask who should they target
+Recommend a real segment from their actual contacts, not generic advice. Use the suggest_targeting goal so the numbers come from their data.
 
 ## Most messages need NO goal
 The majority of messages are just conversation or questions ABOUT you. For those, reply with:
@@ -235,11 +272,12 @@ export async function understand(
   history: HistoryTurn[],
   userId: string,
   carried?: Carried | null,
+  profile?: Profile | null,
 ): Promise<{ u: Understanding | null; cachedIntent: AgentIntent | null; cachedParams: AgentParams } | null> {
   try {
     const { groqChat } = await import("./groq.ts");
     const out = await groqChat(
-      [{ role: "user", content: buildPrompt(message, history, carried ?? undefined) }],
+      [{ role: "user", content: buildPrompt(message, history, carried ?? undefined, profile ?? null) }],
       { maxTokens: 400, temperature: 0.2, context: { fn: "agent", kind: "understand", user_id: userId } },
     );
     const parsed = parseUnderstanding(out ?? "");

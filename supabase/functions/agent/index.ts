@@ -28,6 +28,10 @@ import {
   loadPendingState, savePendingState, clearPendingState, mergePendingParams,
 } from "../_shared/agent-pending.ts";
 import {
+  loadProfile, saveProfileFacts, clearProfile, hasFacts,
+  type Profile, type ProfileFacts,
+} from "../_shared/agent-profile.ts";
+import {
   GOALS, isWriteIntent, mergeParams, missingSlots, type AgentIntent, type AgentParams, type AgentRequest,
 } from "../_shared/agent-capabilities.ts";
 import { understand, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
@@ -200,6 +204,17 @@ Deno.serve(async (req) => {
       return json({ ok: true }, 200, req);
     }
 
+    // ---- what the agent remembers about their business ------------------
+    // Stored memory the user can read and wipe. Keeping it invisible would
+    // just be a more polite version of the problem we are fixing.
+    if (body.action === "profile") {
+      return json({ profile: publicProfile(await loadProfile(admin, userId)) }, 200, req);
+    }
+    if (body.action === "profile_forget") {
+      await clearProfile(admin, userId);
+      return json({ ok: true }, 200, req);
+    }
+
     const message = String(body.message ?? "").slice(0, MAX_MESSAGE).trim();
     if (!message) return json({ error: "Message is empty" }, 400, req);
     const confirm = body.confirm === true;
@@ -291,12 +306,15 @@ Deno.serve(async (req) => {
     // this message is probably the ANSWER, not a new request. Carrying the
     // intent + partial params forward is what makes follow-ups work at all.
     const carried = await loadPendingState(admin, userId, convId);
+    let profile: Profile | null = await loadProfile(admin, userId);
 
     let usedAi = false;
     let source: "learned" | "ai" | "router" = "learned";
     let routed: AgentRequest | null = null;
     let replyText: string | null = null;
     let askOnly: { question: string; intent: AgentIntent | null; params?: AgentParams } | null = null;
+    let profileReply: string | null = null;
+    let profileFacts: ProfileFacts = {};
     let cacheIntent: AgentIntent | null = null;
     let u: Awaited<ReturnType<typeof understand>> = null;
     let cacheParams: AgentParams = {};
@@ -316,7 +334,7 @@ Deno.serve(async (req) => {
         routed = fallback;
         source = "router";
       } else {
-        u = await understand(message, history, userId, carried);
+        u = await understand(message, history, userId, carried, profile);
         if (!u || !u.u) {
           // Model unusable. The keyword router is the safety net so the turn
           // still does something sensible instead of failing.
@@ -336,6 +354,12 @@ Deno.serve(async (req) => {
           cacheParams = u.cachedParams;
           if (u.u.kind === "chat") {
             replyText = u.u.reply;
+          } else if (u.u.kind === "profile") {
+            // They told us something about their business. Remember it, then
+            // answer normally. This is the turn that used to be swallowed and
+            // answered with "what would you like to name the campaign?".
+            profileReply = u.u.reply;
+            profileFacts = u.u.facts;
           } else if (u.u.kind === "ask") {
             // cachedParams, not u.u.params: it is already the merge of what the
             // model said this turn and what we were holding from last turn.
@@ -347,6 +371,26 @@ Deno.serve(async (req) => {
           }
         }
       }
+    }
+
+    // They shared something about themselves. Persist it so the next visit, and
+    // the next suggestion, can actually use it - then clear any stale
+    // clarification, because this turn answered everything, not a slot.
+    if (profileReply !== null) {
+      if (hasFacts(profileFacts)) {
+        profile = await saveProfileFacts(admin, userId, profileFacts);
+      }
+      await clearPendingState(admin, userId, convId);
+      await persist(admin, userId, convId, message, profileReply, null, {}, usedAi);
+      return json({
+        conversationId: convId,
+        text: profileReply,
+        intent: null,
+        remembered: hasFacts(profileFacts),
+        profile: publicProfile(profile),
+        usedAi,
+        source,
+      }, 200, req);
     }
 
     // Pure conversation: no data touched, nothing to execute.
@@ -529,4 +573,11 @@ async function runOutcome(admin: Admin, userId: string, r: AgentRequest): Promis
     console.error("agent execute failed", err);
     return { text: "Something went wrong on my side. Nothing was changed." };
   }
+}
+
+/** Only the human-meaningful fields; updated_at is never worth sending back. */
+function publicProfile(p: Profile | null): ProfileFacts | null {
+  if (!p) return null;
+  const { business_name, website, product, audience, goals, notes } = p;
+  return { business_name, website, product, audience, goals, notes };
 }
