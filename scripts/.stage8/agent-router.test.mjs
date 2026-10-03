@@ -99,7 +99,7 @@ for (const m of [
 
 // ---- safety properties ---------------------------------------------------
 {
-  check(READ_INTENTS.length + WRITE_INTENTS.length === 8, "every intent is classified as read or write");
+  check(READ_INTENTS.length + WRITE_INTENTS.length === 9, "every intent is classified as read or write");
   for (const i of READ_INTENTS) check(!isWriteIntent(i), `${i} is not a write`);
   for (const i of WRITE_INTENTS) check(isWriteIntent(i), `${i} is a write`);
   for (const i of Object.keys(INTENT_DESCRIPTIONS)) {
