@@ -47,6 +47,7 @@ export type Understanding =
 
 import { mergeParams } from "./agent-capabilities.ts";
 import { cleanFacts, renderProfile, type Profile, type ProfileFacts } from "./agent-profile.ts";
+import { backfillSlots } from "./agent-slots.ts";
 
 const PARAM_KEYS = new Set<keyof AgentParams>(["city", "country", "company", "category", "campaignName", "query", "limit"]);
 const NUMERIC = new Set<keyof AgentParams>(["limit"]);
@@ -76,6 +77,7 @@ function sanitizeParams(raw: unknown): AgentParams {
  */
 export function parseUnderstanding(
   raw: string,
+  message = "",
 ): { u: Understanding | null; cachedIntent: AgentIntent | null; cachedParams: AgentParams } | null {
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return null;
@@ -154,20 +156,23 @@ export function parseUnderstanding(
   const goal = GOAL_BY_INTENT.get(intent)!;
 
   // A goal with a required slot still unfilled becomes a question, not a guess.
-  const gaps = missingSlots(goal, params);
+  // Backfill first: if the person DID say the city and only the model dropped
+  // it, there is nothing left to ask about.
+  const params2 = backfillSlots(message, params);
+  const gaps = missingSlots(goal, params2);
   if (gaps.length) {
     return {
-      u: { kind: "ask", question: slotQuestion(intent, gaps), intent, params },
+      u: { kind: "ask", question: slotQuestion(intent, gaps), intent, params: params2 },
       cachedIntent: intent,
-      cachedParams: params,
+      cachedParams: params2,
     };
   }
 
-  const req: AgentRequest = { intent, params, summary: summary || goal.goal };
+  const req: AgentRequest = { intent, params: params2, summary: summary || goal.goal };
   return {
     u: { kind: isWriteIntent(intent) ? "write" : "read", req },
     cachedIntent: intent,
-    cachedParams: params,
+    cachedParams: params2,
   };
 }
 
@@ -207,58 +212,38 @@ function buildPrompt(
 
   const profileBlock = renderProfile(profile);
 
-  return `You are Reach, the assistant built into Reach, the cold-email platform at out-ship.com. If someone asks your name, you are Reach. If they ask what you are or why they should use you, say plainly that you help them run cold-email campaigns and that you work with their real data - campaigns, contacts, replies - not guesswork.
+  return `You are Reach, the assistant built into the Reach cold-email platform (out-ship.com). Answer questions about yourself from this: you help run cold-email campaigns using the account's real data, your name is Reach.
 
-You read what the person MEANS, not which words they used. Phrasings vary wildly - "I need more people to email", "get me leads" and "I'm running dry" can all mean the same goal.
+Read what the person MEANS, not which words they used. Phrasings vary wildly - "I need more people to email", "get me leads" and "I'm running dry" can all mean the same goal.
 ${profileBlock ? "\n" + profileBlock + "\n" : ""}
-## When they tell you about themselves or their business
-This is the most important thing. If they say "I own...", "my business is...", "this website is mine", "we sell...", "I want to use cold email to...", "our ICP is..." or similar - you MUST reply with kind "profile", not chat.
+## kind:"chat"
+Use this for greetings, thanks, small talk, questions about you or your capabilities, and general cold-email advice. Reply in their language, 1-3 short sentences, plain words, no markdown or bullet lists. Never invent numbers about their account - if they want a figure, use a goal or say you need to look it up.
 
-Reply with:
-{"kind":"profile","reply":"...","facts":{"business_name":"...","website":"...","product":"...","audience":"...","goals":"...","notes":"..."}}
+## kind:"profile"
+Use this the moment they describe themselves or their business - ownership, website, product, customer, or goals ("I own...", "my business is...", "we sell...", "our customers are...", "I want to use cold email to..."). Describe yourself or your business and you MUST use this kind, not chat.
 
-Extract as much as you can into facts in their own words. For "i am the owner of you i mean out-ship.com this website is mine so this is my business and i want to send cold emails to clients for marketing my platform which proofs that how useful my platform is  in short use my own platform to sell my platform" this means business_name: "out-ship.com", website: "out-ship.com", product: "out-ship.com (cold-email outreach platform)", audience: "potential clients who need cold email/outreach", goals: "market out-ship.com by emailing clients to demonstrate its value; use the platform to sell the platform", notes: "owner of out-ship.com".
+Reply {"kind":"profile","reply":"...","facts":{"business_name":"...","website":"...","product":"...","audience":"...","goals":"...","notes":"..."}}
 
-Reply in 1-3 short, friendly sentences. Acknowledge the business, restate what it does in your own words, and ask ONE useful follow-up about their ideal customer (role, industry, location) or pain point. Do NOT ask them to name a campaign. Do NOT answer with "what you can do" generic lists here. Only use "profile" here. If they ALSO explicitly asked to pause/create something at the same time, still prefer "profile" unless the action is unavoidable - but usually the business description comes first.
+Copy every fact they gave into "facts" in their own words; omit keys you have nothing for. Then reply in 1-3 sentences: acknowledge their business in your own words and ask ONE useful follow-up about their ideal customer or their main obstacle. Do NOT ask them to name a campaign. If they also explicitly asked for an action, do the action with read/write instead.
 
-## When they ask who should they target
-Recommend a real segment from their actual contacts, not generic advice. Use the suggest_targeting goal so the numbers come from their data. If they have told you about their business already, use that context and give a concrete answer.
-
-## Most messages need NO goal
-The majority of messages are just conversation or questions ABOUT you. For those, reply with:
-{"kind":"chat","reply":"..."}
-This includes: what you can do, how you work, greetings, thanks, small talk, advice about cold email in general, and anything you cannot actually look up. Answer in the same language they used, in 1-3 short sentences, plain words, no markdown, no bullet lists.
-
-When asked "what can you do", list real capabilities: "I can list campaigns, see stats (sent/replies/interested), suggest who to target from your actual contacts, find or add contacts, create or pause campaigns, and check compliance or sender health."
-
-When asked "why do I use you", answer: "To run cold‑email campaigns using your actual Reach data (campaigns, contacts, and replies), so suggestions are grounded in what you already have - not guesses."
-
-When asked "what is your name", answer: "I'm Reach, the assistant built into Reach at out-ship.com."
-
-When asked if you're smart, answer directly: "Yes - I work with your real account data, remember what you tell me about your business, and give grounded answers instead of guessing."
-
-Never invent numbers about their account - if they ask for a figure, use a goal (campaign_stats) or say you need to look it up.
-
-## When there IS a goal
-Reply with one of:
+## kind:"read" / kind:"write"
 {"kind":"read","intent":"...","params":{}}
 {"kind":"write","intent":"...","params":{},"summary":"what you will do, in plain words"}
-- "write" is ONLY for changing their account. Never label a read as a write to seem helpful, and never the reverse.
+"write" is ONLY for changing their account. Never label a read as a write to seem helpful, and never the reverse. Use suggest_targeting ONLY when they are choosing an audience or asking who to email next - not for any question that merely mentions people or emails.
 
 ## If a required slot is missing
-Reply {"kind":"ask","intent":"...","params":{...},"question":"..."} naming the goal and asking ONLY for the missing part. The "intent" is REQUIRED here so we remember what you were trying to do once they answer. Do not invent a value for the missing part.
-"params" must repeat EVERY slot you already learned from this same message (for example city:"London" if they said London). Leave out only the slot you are asking about. Returning an empty "params" here loses everything they already told you.
+Reply {"kind":"ask","intent":"...","params":{...},"question":"..."} naming the goal and asking ONLY for the missing part. "intent" is REQUIRED so we remember the goal once they answer. "params" must repeat EVERY slot you already learned from this same message (for example city:"London" if they said London) - leave out only what you are asking about. Returning empty "params" loses everything they already told you.
 
 ## If you genuinely cannot tell
 Reply {"kind":"unclear","question":"...","guess":"...optional intent"}
 Prefer asking over guessing. A wrong guess either annoys them or, worse, acts on the wrong account.
 
 ## Allowed params
-city, company, category, campaignName, query, limit (1-200). Include a slot only if the person actually said it or clearly implied it.
+city, country, company, category, campaignName, query, limit (1-200). Include a slot only if the person actually said it or clearly implied it.
 
 ## Recent conversation
 ${convo}
-${carried ? `\n## Answering a question I just asked\n${resume}\n` : ""}
+${carried ? "\n## Answering a question I just asked\n" + resume + "\n" : ""}
 ## Now handle this message
 Person: ${sanitizeForPrompt(message, 2000)}
 
@@ -286,11 +271,23 @@ export async function understand(
 ): Promise<{ u: Understanding | null; cachedIntent: AgentIntent | null; cachedParams: AgentParams } | null> {
   try {
     const { groqChat } = await import("./groq.ts");
+    const prompt = buildPrompt(message, history, carried ?? undefined, profile ?? null);
+
+    // A single unparseable reply must not decide the turn. The model is
+    // non-deterministic and occasionally returns prose, truncated JSON, or
+    // empty content when a key is cooling down; without a retry that silently
+    // degraded into the keyword router and lost every goal the router cannot
+    // see. One extra call on the failure path only - the happy path is
+    // unchanged and still spends a single AI call.
+    // groqChat already retries up to 16x across every key x model pair, so a
+    // failure here means the provider genuinely refused the call. Adding a
+    // second retry loop on top doubled the request volume and made the
+    // rate-limiting WORSE (live failures went 3 -> 11), so this stays single.
     const out = await groqChat(
-      [{ role: "user", content: buildPrompt(message, history, carried ?? undefined, profile ?? null) }],
-      { maxTokens: 400, temperature: 0.2, context: { fn: "agent", kind: "understand", user_id: userId } },
+      [{ role: "user", content: prompt }],
+      { maxTokens: 700, temperature: 0.2, context: { fn: "agent", kind: "understand", user_id: userId } },
     );
-    const parsed = parseUnderstanding(out ?? "");
+    const parsed = parseUnderstanding(out ?? "", message);
     if (!parsed) return null;
     // Carry slots forward so a one-word answer COMPLETES the earlier request
     // instead of wiping it. The intent is only inherited when this turn picked

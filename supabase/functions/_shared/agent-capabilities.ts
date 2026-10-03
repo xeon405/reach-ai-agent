@@ -195,9 +195,30 @@ export function isWriteIntent(intent: string): boolean {
 }
 
 /** The slots a goal still needs, given what we already know. */
+// Words people use as PLACEHOLDERS for a slot they have not actually named.
+// The model sometimes copies them verbatim as the value: "add my London
+// dentists to a campaign" became campaignName:"a campaign", which then passed
+// the empty check and failed a literal database search with "I could not find
+// a campaign called \"a campaign\"" - technically honest, completely useless.
+// A slot holding one of these is treated as NOT filled, so the person is asked.
+const PLACEHOLDER_SLOTS = new Set([
+  "a", "an", "the", "my", "our", "some", "any", "it", "that", "this",
+  "campaign", "new", "one", "name", "something", "anything", "next",
+]);
+
+export function isPlaceholderSlot(key: keyof AgentParams, v: unknown): boolean {
+  if (typeof v !== "string") return false;
+  const words = v.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  // Only filler counts as a placeholder - a real name must contain a word that
+  // is NOT filler, so "Spring Sale" and "my campaign 2024" both survive.
+  return words.every((w) => PLACEHOLDER_SLOTS.has(w));
+}
+
 export function missingSlots(goal: Goal, params: AgentParams): (keyof AgentParams)[] {
   return goal.needs.filter((k) => {
     const v = params[k];
+    if (isPlaceholderSlot(k, v)) return true;
     return v === undefined || v === null || v === "" || (k === "limit" && typeof v !== "number");
   });
 }

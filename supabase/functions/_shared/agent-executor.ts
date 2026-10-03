@@ -318,7 +318,7 @@ async function resolvePauseTarget(
       return {
         ok: false,
         outcome: {
-          text: `You have ${names.length} campaigns sending: ${names.join(", ")}. Which should I pause?`,
+          text: `You have ${names.length} campaigns sending: ${names.join(", ")}, so I did not want to guess which one to stop. Which should I pause?`,
           choose: { intent: "pause_campaign", candidates: names, params: { ...req.params, campaignName: undefined } },
         },
       };
@@ -479,20 +479,24 @@ export async function hydrateCampaignName(
   if (!names.length) return params;
 
   const hay = message.toLowerCase();
-  const hit = names
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .find((n) => {
-      const needle = n.toLowerCase().trim();
-      if (!needle) return false;
-      const at = hay.indexOf(needle);
-      if (at < 0) return false;
-      const before = hay[at - 1];
-      const after = hay[at + needle.length];
-      const boundary = (c: string | undefined) => c === undefined || /[^a-z0-9]/.test(c);
-      return boundary(before) && boundary(after);
-    });
-  return hit ? { ...params, campaignName: hit } : params;
+  const matches: string[] = [];
+  for (const n of names) {
+    const needle = n.toLowerCase().trim();
+    if (!needle) continue;
+    const at = hay.indexOf(needle);
+    if (at < 0) continue;
+    const before = hay[at - 1];
+    const after = hay[at + needle.length];
+    const boundary = (c: string | undefined) => c === undefined || /[^a-z0-9]/.test(c);
+    if (boundary(before) && boundary(after)) matches.push(n);
+  }
+  // Longest first to be deterministic
+  matches.sort((a, b) => b.length - a.length);
+  // Only hydrate if there's exactly one unambiguous match. If multiple match
+  // (e.g. "Q3" matches "Q3 push" and "Q3 launch"), we MUST leave it ambiguous
+  // so the resolver can ask the person which one they meant.
+  if (matches.length === 1) return { ...params, campaignName: matches[0] };
+  return params;
 }
 
 /**

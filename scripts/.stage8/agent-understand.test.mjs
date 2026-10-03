@@ -7,7 +7,7 @@
 //
 // Run: node scripts/.stage8/agent-understand.test.mjs
 import { parseUnderstanding } from "../../supabase/functions/_shared/agent-understand.ts";
-import { isWriteIntent, missingSlots, GOAL_BY_INTENT } from "../../supabase/functions/_shared/agent-capabilities.ts";
+import { isWriteIntent, missingSlots, isPlaceholderSlot, GOAL_BY_INTENT } from "../../supabase/functions/_shared/agent-capabilities.ts";
 
 let passed = 0;
 const failures = [];
@@ -151,6 +151,28 @@ const P = (s) => parseUnderstanding(s);
   const { GOALS } = await import("../../supabase/functions/_shared/agent-capabilities.ts");
   check(GOALS.every((g) => g.examples.length >= 3), "every goal carries several example phrasings");
   check(GOALS.some((g) => g.write) && GOALS.some((g) => !g.write), "the goal set mixes reads and writes");
+}
+
+// ---- placeholder slots are NOT filled slots -------------------------------
+// The model sometimes copies a placeholder verbatim as the value, which then
+// passes the empty check and fails a literal database search. "add my London
+// dentists to a campaign" became campaignName:"a campaign".
+{
+  const ask = (msg, params) =>
+    parseUnderstanding(`{"kind":"goal","intent":"add_contacts_to_campaign","params":${JSON.stringify(params)},"summary":"test"}`, msg);
+
+  check('campaignName "a campaign" counts as missing',
+    ask("add my London dentists to a campaign", { city: "London", campaignName: "a campaign" }).u.kind === "ask");
+  check('campaignName "my campaign" counts as missing',
+    ask("add them", { campaignName: "my campaign" }).u.kind === "ask");
+  check('a real name is still filled',
+    ask("add them", { campaignName: "Spring Sale" }).u.kind === "write");
+  check('a partly-real name survives',
+    ask("add them", { campaignName: "my campaign 2024" }).u.kind === "write");
+  check('"a campaign" is flagged as a placeholder',
+    isPlaceholderSlot("campaignName", "a campaign") === true);
+  check('"Spring Sale" is not a placeholder',
+    isPlaceholderSlot("campaignName", "Spring Sale") === false);
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

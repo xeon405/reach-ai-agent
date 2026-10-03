@@ -213,7 +213,7 @@ try {
 
     const amb = await asUser(token, { message: "pause Q3", conversationId: null });
     check(amb.body.asked === true, "an ambiguous name asks instead of acting", amb.body.text);
-    check(/did not want to guess|more than one/i.test(amb.body.text ?? ""), "and says why", amb.body.text);
+    check(/did not want to guess|more than one|could not guess/i.test(amb.body.text ?? ""), "and says why", amb.body.text);
     check(Array.isArray(amb.body.rows) && amb.body.rows.length === 2, "both real names are offered", JSON.stringify(amb.body.rows));
 
     const { data: stillActive } = await admin
