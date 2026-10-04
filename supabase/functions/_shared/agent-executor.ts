@@ -540,6 +540,74 @@ export async function hydrateCampaignName(
  * and returns the real ones with counts. If they have no contacts yet it says
  * so plainly instead of inventing a persona.
  */
+/**
+ * Build a concrete "who should I target" answer out of the owner's own
+ * Settings, so the agent proposes instead of asking them to name a category
+ * they have already admitted they do not know.
+ *
+ * Returns null when the profile genuinely says nothing, so the caller can fall
+ * back rather than invent a persona.
+ */
+async function proposeSegmentsFromProfile(db: Db, userId: string): Promise<string | null> {
+  const { data } = await db
+    .from("profiles")
+    .select("business_description, offer, target_customer, cities, website_url")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!data) return null;
+
+  const brief = (v: unknown): string | null => {
+    const s = typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "";
+    if (!s) return null;
+    // First sentence is usually the actual summary; the rest is usually detail.
+    const first = s.split(/(?<=[.!?])\s/)[0] ?? s;
+    const text = first.length >= 12 ? first : s;
+    if (text.length <= 110) return text.replace(/[.,;]+$/, "");
+    // Too long to read mid-answer: cut back to the last natural break so we
+    // never end on a dangling fragment like "that need a steady flow".
+    const head = text.slice(0, 110);
+    const cut = Math.max(head.lastIndexOf(","), head.lastIndexOf(" and "), head.lastIndexOf(" that "));
+    const trimmed = cut > 40 ? head.slice(0, cut) : head;
+    return trimmed.replace(/[.,;]+$/, "").trim();
+  };
+
+  // "Our ideal customers are agencies and consultants" is a whole sentence
+  // describing WHO, not something you can prefix with "You sell". Strip the
+  // leading clause so the phrase can be dropped into a sentence.
+  const asNounPhrase = (s: string): string => s
+    .replace(/^(our|my|the)\s+(ideal\s+|target\s+|primary\s+|core\s+)?(customers?|audience|clients?|market|buyers?|niche|segment)\s+(are|is|include[sd]?|includes?)\s+/i, "")
+    .replace(/^(we|our business)\s+(sell to|serves?|targets?|sells? to)\s+/i, "")
+    .replace(/^(our customers?|our clients?)\s+(are|is)\s+/i, "")
+    .replace(/[.,;]+$/, "")
+    .trim();
+
+  const raw = brief(data.target_customer) ?? brief(data.offer) ?? brief(data.business_description);
+  if (!raw) return null;
+  const who = asNounPhrase(raw);
+  if (!who) return null;
+
+  const CITY_SPLIT = /[,;\n]/;
+  const CITY_PREFIX = /(?:^|\s)(?:[A-Z]{2,3}|[A-Z][a-z]{2,11}):\s*/g;
+  const cities = Array.isArray(data.cities)
+    ? data.cities
+        .flatMap((c: unknown) => String(c).split(CITY_SPLIT))
+        .map((c: string) => c.replace(CITY_PREFIX, " ").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 4)
+    : [];
+
+  const where = cities.length ? ` Start with ${cities.slice(0, 3).join(", ")}.` : "";
+  // The audience phrase appears exactly once. The earlier template printed it
+  // twice ("You sell X ... the X") and read as broken.
+  return `From your Settings, the people you already sell to are ${lowerFirst(who)}. Those are the safest group to email first, because they are the customers you already know work.${where} Tell me which of those to pull, or name a different type of company and I will find that instead.`;
+}
+
+function lowerFirst(s: string): string {
+  // Leave acronyms and proper nouns alone; only soften an opening capital.
+  if (/^[A-Z]{2,}/.test(s)) return s;
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
+
 async function suggestTargeting(db: Db, userId: string, req: AgentRequest): Promise<AgentOutcome> {
   const p = req.params;
 
@@ -558,11 +626,21 @@ async function suggestTargeting(db: Db, userId: string, req: AgentRequest): Prom
 
   const rows = (data ?? []) as any[];
   if (rows.length === 0) {
+    if (p.query || p.category || p.city) {
+      return {
+        text: "I could not find contacts matching that. Want me to widen the search?",
+        empty: true,
+      };
+    }
+    // No contacts AND they did not name a segment. The old reply was a pure
+    // deflection - "give me a category, company or city" - which repeated
+    // verbatim every time they said they did not know who to target. Their own
+    // Settings already answers this: propose from what they sell and where.
+    const proposal = await proposeSegmentsFromProfile(db, userId);
     return {
-      text: p.query || p.category || p.city
-        ? "I could not find contacts matching that. Want me to widen the search?"
-        : "You have no contacts saved yet, so I cannot recommend a segment from real data. "
-          + "Give me a category, company or city and I will find who to target.",
+      text: proposal
+        ?? "You have no contacts saved yet, so I cannot recommend a segment from real data. "
+          + "Tell me what kind of company you sell to and I will find them for you.",
       empty: true,
     };
   }

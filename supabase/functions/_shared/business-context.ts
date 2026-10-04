@@ -46,25 +46,68 @@ const clean = (v: unknown, max: number): string | null => {
  * Moved verbatim from inbox-agent/send-worker so behaviour cannot drift.
  * Returns "" when the owner has filled in nothing (handled, not invented).
  */
+/**
+ * Split a free-text city list into clean entries.
+ *
+ * Two separate defects live here:
+ *
+ * 1. Settings splits the box on "," only, so a list typed as one line round-trips
+ *    as N entries but loses the line structure, and rows already in the database
+ *    have neighbouring cities glued together with a country label stuck in the
+ *    middle: "Miami UK: London", "Manchester Canada: Toronto".
+ * 2. Those glued rows reached the prompt verbatim, wasting attention on noise.
+ *
+ * So: split on separators, then split again on a "Country:" prefix, dedupe
+ * case-insensitively, and cap. A country label alone carries no city, so it is
+ * dropped rather than rendered as if it were a place.
+ */
+function normaliseCities(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  // "UK: London", "US: New York", "UAE: Dubai"
+  const countryPrefix = /(?:^|\s)(?:[A-Z]{2,3}|[A-Z][a-z]{2,11}):\s*/g;
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const entry of raw) {
+    // The country label is the only thing separating two glued cities in the
+    // stored rows ("Miami UK: London"), so it must become a BREAK, not a space.
+    const marked = String(entry).replace(countryPrefix, "\n");
+    for (const part of marked.split(/[,;\n]/)) {
+      const v = sanitizeForPrompt(part, 40).trim().replace(/\s+/g, " ");
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+      if (out.length >= 12) return out;
+    }
+  }
+  return out;
+}
+
 export function buildBIContext(profile: Record<string, unknown>): string {
   const parts: string[] = [];
-  if (profile.business_description) parts.push(`Business: ${sanitizeForPrompt(String(profile.business_description), 300)}`);
-  if (profile.offer) parts.push(`Product/Service: ${sanitizeForPrompt(String(profile.offer), 300)}`);
-  if (profile.problem_solved) parts.push(`Problem we solve: ${sanitizeForPrompt(String(profile.problem_solved), 300)}`);
-  if (profile.target_customer) parts.push(`Ideal customer: ${sanitizeForPrompt(String(profile.target_customer), 300)}`);
-  if (profile.communication_style) parts.push(`Tone & style: ${sanitizeForPrompt(String(profile.communication_style), 200)}`);
-  if (Array.isArray(profile.cities) && profile.cities.length > 0) {
-    const list = profile.cities
-      .map((c) => sanitizeForPrompt(String(c), 60))
-      .filter(Boolean)
-      .slice(0, 12);
-    if (list.length > 0) parts.push(`Cities they sell in: ${list.join(", ")}`);
+  // Deliberately terse. This block competes for the model's attention with the
+  // shorter conversation-derived profile, and at full length the model kept
+  // reaching for that tidier block instead and answering from stale memory.
+  if (profile.business_description) parts.push(`Business: ${clean(profile.business_description, 220)}`);
+  if (profile.offer) parts.push(`Product/Service: ${clean(profile.offer, 220)}`);
+  if (profile.target_customer) parts.push(`Ideal customer: ${clean(profile.target_customer, 240)}`);
+  if (profile.problem_solved) parts.push(`Problem we solve: ${clean(profile.problem_solved, 200)}`);
+  const cities = normaliseCities(profile.cities);
+  if (cities.length) parts.push(`Cities they sell in: ${cities.join(", ")}`);
+  if (profile.website_url) parts.push(`Their website: ${clean(profile.website_url, 100)}`);
+  if (profile.autopilot_niche) parts.push(`Chosen niche: ${clean(profile.autopilot_niche, 70)}`);
+  if (profile.communication_style) parts.push(`Tone & style: ${clean(profile.communication_style, 160)}`);
+  // A hard rule the model can skim past is worse than a short one it obeys, so
+  // this keeps the leading rules and the owner's own summary line.
+  if (profile.dont_claim) {
+    const rules = clean(profile.dont_claim, 420);
+    if (rules) parts.push(`HARD RULES — never say or promise: ${rules}`);
   }
-  if (profile.website_url) parts.push(`Their website: ${sanitizeForPrompt(String(profile.website_url), 120)}`);
-  if (profile.autopilot_niche) parts.push(`Chosen niche: ${sanitizeForPrompt(String(profile.autopilot_niche), 80)}`);
-  if (profile.dont_claim) parts.push(`HARD RULES — never say or promise: ${sanitizeForPrompt(String(profile.dont_claim), 300)}`);
-  if (parts.length === 0) return "";
-  return `BUSINESS CONTEXT:\n${parts.join("\n")}\n\n`;
+  const usable = parts.filter((p): p is string => typeof p === "string" && p.length > 0);
+  if (usable.length === 0) return "";
+  return `BUSINESS CONTEXT (saved by the owner in Settings — this is the source of truth about their business):\n${usable.join("\n")}\n\n`;
 }
 
 // ---------------------------------------------------------------------------

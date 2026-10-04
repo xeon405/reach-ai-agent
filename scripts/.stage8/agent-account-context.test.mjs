@@ -42,6 +42,26 @@ const check = (label, ok, detail) => {
   check("missing website and niche are omitted cleanly", !n.includes("undefined") && !n.includes("Their website"));
 }
 
+// ---- cities: Settings split on "," only and corrupted the stored array ----
+{
+  // Real rows already in the database, glued together by a country label.
+  const glued = ["US: New York", "Miami UK: London", "Manchester Canada: Toronto", "Singapore: Singapore", "UAE: Dubai, Abu Dhabi"];
+  const out = buildBIContext({ business_description: "X", cities: glued });
+  const line = (out.match(/Cities they sell in: (.*)/) || [null, ""])[1];
+  check("glued cities are split apart", line === "New York, Miami, London, Manchester, Toronto, Singapore, Dubai, Abu Dhabi", line);
+  check("country labels are not rendered as cities", !/(UK|Canada|US|UAE)/.test(line), line);
+}
+{
+  const out = buildBIContext({ business_description: "X", cities: ["London", "london", " LONDON ", "Leeds"] });
+  const line = (out.match(/Cities they sell in: (.*)/) || [null, ""])[1];
+  check("duplicate cities collapse", line === "London, Leeds", line);
+}
+{
+  const many = buildBIContext({ business_description: "X", cities: Array.from({ length: 40 }, (_, i) => `City${i}`) });
+  const line = (many.match(/Cities they sell in: (.*)/) || [null, ""])[1];
+  check("city list is capped", line.split(",").length === 12, `n=${line.split(",").length}`);
+}
+
 // ---- buildBIContext: moved verbatim, behaviour must not drift -------------
 {
   const full = buildBIContext({
@@ -52,7 +72,7 @@ const check = (label, ok, detail) => {
     communication_style: "Plain, no jargon",
     dont_claim: "Never claim we are Gas Safe registered",
   });
-  check("business block is produced", full.startsWith("BUSINESS CONTEXT:"), full.slice(0, 40));
+  check("business block is produced", full.startsWith("BUSINESS CONTEXT (saved by the owner"), full.slice(0, 40));
   check("business name is carried", full.includes("Bolt Plumbing Ltd"));
   check("product is carried", full.includes("Emergency boiler repair"));
   check("ideal customer is carried", full.includes("Homeowners and letting agents"));

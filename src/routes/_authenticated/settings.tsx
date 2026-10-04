@@ -35,6 +35,32 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Turn the cities textarea into a clean string[].
+ *
+ * It was split on "," alone, so a list typed across lines kept its line
+ * structure as literal newlines inside single entries, and re-saving repeatedly
+ * grew one row into many. Split on newlines and commas, dedupe
+ * case-insensitively, and keep any "Country:" prefix on its own entry rather
+ * than gluing it onto the neighbouring city.
+ */
+function parseCityList(raw: string): string[] | null {
+  const countryPrefix = /(?:^|\s)(?:[A-Z]{2,3}|[A-Z][a-z]{2,11}):\s*/g;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(countryPrefix)) {
+    for (const piece of part.split(/[,;\n]/)) {
+      const value = piece.replace(/\s+/g, " ").trim();
+      if (!value) continue;
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(value);
+    }
+  }
+  return out.length ? out : null;
+}
+
 function SettingsPage() {
   const navigate = useNavigate();
   const push = usePushNotifications();
@@ -203,7 +229,7 @@ function SettingsPage() {
         problem_solved: problemSolved.trim() || null,
         target_customer: targetCustomer.trim() || null,
         icp: { jobTitle: jobTitles || null, industry: industries || null, companySize, countries },
-        cities: cities.split(",").map((c) => c.trim()).filter(Boolean) || null,
+        cities: parseCityList(cities),
         communication_style: communicationStyle.trim() || null,
         dont_claim: dontClaim.trim() || null,
         phone: phone.trim() || null,

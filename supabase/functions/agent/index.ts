@@ -34,7 +34,7 @@ import {
 import {
   GOALS, isWriteIntent, mergeParams, missingSlots, type AgentIntent, type AgentParams, type AgentRequest,
 } from "../_shared/agent-capabilities.ts";
-import { understand, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
+import { understand, answerFromContext, repeatCount, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
 import { loadAgentAccountContext } from "../_shared/agent-account-context.ts";
 import {
   ACCOUNT_SCOPE, describeLearned, forget, isLearnable, listLearned, phraseKey,
@@ -348,12 +348,23 @@ Deno.serve(async (req) => {
             routed = fallback;
             source = "router";
           } else {
-            const reply = "I could not work that out just now. Try asking me to find contacts, list your campaigns, or show your numbers.";
-            await persist(admin, userId, convId, message, reply, null, {}, false);
-            // "router", not "ai": the model did NOT answer this turn. Reporting
-            // "ai" here hid a total provider outage behind a normal-looking
-            // success, which is how a broken AI lane looks like flaky prompts.
-            return json({ conversationId: convId, text: reply, intent: null, source: "router", usedAi: false }, 200, req);
+            // Nothing usable came back. Before falling back to a dead end,
+            // try to answer from the account/business context - "what do you
+            // know about my business" is precisely a question that context can
+            // answer, and it used to return "I could not work that out".
+            const contextual = await answerFromContext(message, history, userId, accountCtx);
+            if (contextual) {
+              usedAi = true;
+              source = "ai";
+              replyText = contextual;
+            } else {
+              const reply = "I could not work that out just now. Try asking me to find contacts, list your campaigns, or show your numbers.";
+              await persist(admin, userId, convId, message, reply, null, {}, false);
+              // "router", not "ai": the model did NOT answer this turn. Reporting
+              // "ai" here hid a total provider outage behind a normal-looking
+              // success, which is how a broken AI lane looks like flaky prompts.
+              return json({ conversationId: convId, text: reply, intent: null, source: "router", usedAi: false }, 200, req);
+            }
           }
         } else {
           usedAi = true;
@@ -362,6 +373,18 @@ Deno.serve(async (req) => {
           cacheParams = u.cachedParams;
           if (u.u.kind === "chat") {
             replyText = u.u.reply;
+            // A bot that says the same sentence four times looks broken even
+            // when every individual reply is "correct". If this repeats what
+            // we already said, force a fresh, more specific answer instead.
+            if (repeatCount(replyText, history) >= 1) {
+              const fresh = await answerFromContext(
+                `${message}\n\n(Your last reply repeated an earlier answer. Answer differently and more specifically this time.)`,
+                history,
+                userId,
+                accountCtx,
+              );
+              if (fresh) replyText = fresh;
+            }
           } else if (u.u.kind === "profile") {
             // They told us something about their business. Remember it, then
             // answer normally. This is the turn that used to be swallowed and
@@ -555,6 +578,19 @@ Deno.serve(async (req) => {
       await recordUse(admin, userId, key, cacheIntent, cacheParams, convId, null);
     } else if (learned) {
       await recordUse(admin, userId, learned.phrase, learned.intent, learned.params, convId, learned);
+    }
+
+    // A read can repeat itself too. The guard used to sit only on the chat path,
+// so a deterministic executor line ("You have no contacts saved yet...") came
+// back four times in a row untouched. Repeat detection has to cover every path
+// that produces user-visible text.
+if (repeatCount(outcome.text, history) >= 2) {
+      const fresh = await answerFromContext(message, history, userId, accountCtx);
+      if (fresh) {
+        outcome.text = fresh;
+        usedAi = true;
+        source = "ai";
+      }
     }
 
     await persist(admin, userId, convId, message, outcome.text, routed.intent, routed.params, usedAi);

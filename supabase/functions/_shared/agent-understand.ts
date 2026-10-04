@@ -226,12 +226,23 @@ ${accountCtx?.account ? "\n" + accountCtx.account + "\n" : ""}
 ${accountCtx?.business ? "\n" + accountCtx.business + "\n" : ""}
 ${profileBlock ? "\n" + profileBlock + "\n" : ""}
 ## kind:"chat"
-Use this for greetings, thanks, small talk, questions about you or your capabilities, and general cold-email advice. Reply in their language, 1-3 short sentences, plain words, no markdown or bullet lists.
+Use this for greetings, thanks, small talk, questions about you or your capabilities, general cold-email advice, AND any strategy or growth question ("how do I grow", "how do I get more clients", "what should I do next"). Reply in their language, 1-3 short sentences, plain words, no markdown or bullet lists.
 
 FACTS YOU ALREADY HAVE - answer from these instead of choosing a goal. If THEIR ACCOUNT or BUSINESS CONTEXT above already contains the answer, reply with it directly as chat. Choosing a goal here makes the agent run a lookup for something it already holds, and produces wrong or evasive replies.
 - "who am I", "what's my name", "what do I do", "what do I sell", "who do I target" -> the BUSINESS CONTEXT and WHO THEY ARE lines
 - "how many leads/campaigns do I have", "how much have I sent", "am I on plan X" -> the THEIR ACCOUNT numbers
-- If a number they want is genuinely NOT in those blocks, use the matching goal to look it up. Never estimate, and never answer a number that is not there.
+- Anything about their business, offer, market or limits -> BUSINESS CONTEXT. Summarise it in their own words.
+- Only use a goal when they want you to actually DO something (find, add, create, send, pause, show a list).
+
+## Never ask them something you can work out yourself
+This is the single most common failure. Repeating the same question, or asking for a slot they have already told you they do not have, makes the agent useless.
+- They said "I don't know", "not sure", "help me", "you tell me", "I have no idea" -> DO NOT ask the same question again. PROPOSE. Name 2 or 3 specific things from THEIR BUSINESS CONTEXT that would work for a business like theirs, in plain words, then ask which one they want. Example for a cold-email tool: "Your buyers are usually agencies, consultants and small sales teams. Want me to find agencies in London, or consultants in Manchester?"
+- Never end a reply with the same sentence you said last turn. If you notice yourself repeating, say something different and more specific.
+- If you already asked something and they moved on, answer the NEW thing instead of re-asking.
+
+## If you genuinely cannot tell
+Reply {"kind":"unclear","question":"...","guess":"...optional intent"}
+Prefer asking over guessing about an ACTION that changes their account. Never guess a business fact you were given in BUSINESS CONTEXT, and never ask for information already shown to you above.
 
 ## kind:"profile"
 Use this the moment they describe themselves or their business - ownership, website, product, customer, or goals ("I own...", "my business is...", "we sell...", "our customers are...", "I want to use cold email to..."). Describe yourself or your business and you MUST use this kind, not chat.
@@ -247,10 +258,7 @@ Copy every fact they gave into "facts" in their own words; omit keys you have no
 
 ## If a required slot is missing
 Reply {"kind":"ask","intent":"...","params":{...},"question":"..."} naming the goal and asking ONLY for the missing part. "intent" is REQUIRED so we remember the goal once they answer. "params" must repeat EVERY slot you already learned from this same message (for example city:"London" if they said London) - leave out only what you are asking about. Returning empty "params" loses everything they already told you.
-
-## If you genuinely cannot tell
-Reply {"kind":"unclear","question":"...","guess":"...optional intent"}
-Prefer asking over guessing. A wrong guess either annoys them or, worse, acts on the wrong account.
+Before you ask, check BUSINESS CONTEXT - if their cities, ideal customer or niche can fill the gap, fill it yourself and do not ask. Only ask when the value is genuinely nowhere in the context above.
 
 ## Allowed params
 city, country, company, category, campaignName, query, limit (1-200). Include a slot only if the person actually said it or clearly implied it.
@@ -312,6 +320,79 @@ export async function understand(
     return { ...parsed, cachedIntent: inheritIntent, cachedParams: freshParams };
   } catch (err) {
     console.error("agent understand failed", err);
+    return null;
+  }
+}
+
+/**
+ * Normalise a reply so two wordings of the same sentence compare equal.
+ * Punctuation, case and filler words are what actually differ between the
+ * repeated replies, not the meaning.
+ */
+function replyFingerprint(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !["the", "and", "you", "your", "that", "this", "have", "are", "for", "but", "not", "can", "will"].includes(w))
+    .join(" ")
+    .trim();
+}
+
+/**
+ * How many of the last replies are essentially this same reply.
+ * A reply repeated twice in a row reads as a broken bot, which is exactly what
+ * happened: the same "not segmented yet" line came back four times.
+ */
+export function repeatCount(text: string, history: HistoryTurn[], lookback = 4): number {
+  const fp = replyFingerprint(text);
+  if (!fp) return 0;
+  const recent = history.filter((h) => h.role === "assistant").slice(-lookback);
+  let count = 0;
+  for (const h of recent) {
+    const prev = replyFingerprint(h.content);
+    if (!prev) continue;
+    // Full containment either way: a near-identical longer reply counts.
+    if (prev === fp || prev.includes(fp) || fp.includes(prev)) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Last-resort answer built from the account and business context.
+ *
+ * The old fallback was a fixed "I could not work that out just now", which is
+ * how "what do you know about my business tell me in detail" - the exact
+ * question this context exists to answer - produced a dead end.
+ */
+export async function answerFromContext(
+  message: string,
+  history: HistoryTurn[],
+  userId: string,
+  accountCtx?: AgentAccountContext | null,
+): Promise<string | null> {
+  const facts = [accountCtx?.account, accountCtx?.business].filter(Boolean).join("\n");
+  if (!facts.trim()) return null;
+  try {
+    const { groqChat } = await import("./groq.ts");
+    const convo = history.slice(-6).map((h) => `${h.role === "user" ? "Them" : "Assistant"}: ${sanitizeForPrompt(h.content, 200)}`).join("\n");
+    const out = await groqChat(
+      [{
+        role: "user",
+        content: `You are Reach, the assistant inside a cold-email platform (out-ship.com).
+Answer using ONLY the facts below. Reply in the person's language, 1-3 short sentences, plain words, no markdown or lists. Be concrete and specific. If the facts do not cover it, say so in one sentence and name what you DO know.
+
+${facts}
+
+${convo ? "Recent conversation:\n" + convo + "\n" : ""}
+Their question: ${sanitizeForPrompt(message, 500)}`,
+      }],
+      { maxTokens: 220, temperature: 0.3, context: { fn: "agent", kind: "context-answer", user_id: userId } },
+    );
+    const text = (out ?? "").trim();
+    return text.length > 0 ? text : null;
+  } catch (err) {
+    console.error("agent context answer failed", err);
     return null;
   }
 }
