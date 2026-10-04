@@ -138,15 +138,20 @@ export function parseUnderstanding(
         cachedParams: {},
       };
     }
+    // Backfill here too, not only on the goal branch. When the model asks its
+    // own clarifying question it hands us the slots it already read, and that
+    // is exactly where "London" was being dropped - the ask was saved with no
+    // city, so the follow-up ("Spring Sale") lost the original request.
+    const askParams = backfillSlots(message, params);
     const goal = GOAL_BY_INTENT.get(intent)!;
-    const slots = missingSlots(goal, params);
+    const slots = missingSlots(goal, askParams);
     const question =
       typeof o.question === "string" && o.question.trim()
         ? o.question.trim().slice(0, 400)
         : slotQuestion(intent, slots.length ? slots : goal.needs);
     // Keep the slots on the ask branch. Returning {} here used to drop "London"
     // on the floor, and the person's next message then had nothing to complete.
-    return { u: { kind: "ask", question, intent, params }, cachedIntent: intent, cachedParams: params };
+    return { u: { kind: "ask", question, intent, params: askParams }, cachedIntent: intent, cachedParams: askParams };
   }
 
   if (kind === "ask" || kind === "unclear") return null;

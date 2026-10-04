@@ -59,20 +59,27 @@ const COUNTRIES = new Set([
  * model supplied neither.
  */
 export function backfillSlots(message: string, params: AgentParams): AgentParams {
-  if (params.city || params.country || params.category) return params;
+  // Per-slot, NOT all-or-nothing. Bailing out because the model already set
+  // category:"dentists" threw away the city in the very case this exists for
+  // ("add my London dentists to a campaign") - the model reliably captures the
+  // trade and misses the place, so those two arrive independently.
+  if (params.city && params.country) return params;
 
   const nouns = extractProperNouns(message);
   if (!nouns.length) return params;
 
-  const country = nouns.find((n) => COUNTRIES.has(n.toLowerCase()));
-  if (country) {
-    return { ...params, country, city: params.city };
+  const rest = nouns.filter((n) => !COUNTRIES.has(n.toLowerCase()));
+
+  if (!params.country) {
+    const country = nouns.find((n) => COUNTRIES.has(n.toLowerCase()));
+    if (country) return { ...params, country };
   }
 
-  // One proper noun and nothing else: most likely a place. Two or more: could
-  // be a category plus a city, and guessing wrong is worse than asking.
-  if (nouns.length === 1) {
-    return { ...params, city: nouns[0] };
+  // Only guess a city when the model gave none AND exactly one non-country
+  // proper noun is left. Two or more could be a city plus a company name,
+  // and guessing wrong is worse than asking.
+  if (!params.city && rest.length === 1) {
+    return { ...params, city: rest[0] };
   }
   return params;
 }

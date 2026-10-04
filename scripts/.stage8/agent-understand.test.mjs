@@ -161,18 +161,28 @@ const P = (s) => parseUnderstanding(s);
   const ask = (msg, params) =>
     parseUnderstanding(`{"kind":"goal","intent":"add_contacts_to_campaign","params":${JSON.stringify(params)},"summary":"test"}`, msg);
 
-  check('campaignName "a campaign" counts as missing',
-    ask("add my London dentists to a campaign", { city: "London", campaignName: "a campaign" }).u.kind === "ask");
-  check('campaignName "my campaign" counts as missing',
-    ask("add them", { campaignName: "my campaign" }).u.kind === "ask");
-  check('a real name is still filled',
-    ask("add them", { campaignName: "Spring Sale" }).u.kind === "write");
-  check('a partly-real name survives',
-    ask("add them", { campaignName: "my campaign 2024" }).u.kind === "write");
-  check('"a campaign" is flagged as a placeholder',
-    isPlaceholderSlot("campaignName", "a campaign") === true);
-  check('"Spring Sale" is not a placeholder',
-    isPlaceholderSlot("campaignName", "Spring Sale") === false);
+  check(ask("add my London dentists to a campaign", { city: "London", campaignName: "a campaign" }).u.kind === "ask",
+    'campaignName "a campaign" counts as missing');
+  check(ask("add them", { campaignName: "my campaign" }).u.kind === "ask",
+    'campaignName "my campaign" counts as missing');
+  check(ask("add them", { campaignName: "Spring Sale" }).u.kind === "write", "a real name is still filled");
+  check(ask("add them", { campaignName: "my campaign 2024" }).u.kind === "write", "a partly-real name survives");
+  check(isPlaceholderSlot("campaignName", "a campaign") === true, '"a campaign" is flagged as a placeholder');
+  check(isPlaceholderSlot("campaignName", "Spring Sale") === false, '"Spring Sale" is not a placeholder');
+}
+
+// ---- the ASK branch must backfill too --------------------------------------
+// The model usually asks its own clarifying question, and that branch used to
+// skip backfill - so "add my London dentists to a campaign" was saved with no
+// city and the follow-up "Spring Sale" lost the original request entirely.
+{
+  const ask = parseUnderstanding(
+    '{"kind":"ask","intent":"add_contacts_to_campaign","question":"Which campaign?","params":{"campaignName":"a campaign","category":"dentists"}}',
+    "add my London dentists to a campaign",
+  );
+  check(ask.u.params.city === "London", "ask branch keeps the city the model dropped", JSON.stringify(ask.u.params));
+  check(ask.cachedParams.city === "London", "ask branch caches the backfilled params", JSON.stringify(ask.cachedParams));
+  check(/campaign/i.test(ask.u.question), "ask branch still asks about the campaign", ask.u.question);
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

@@ -47,4 +47,17 @@ check("two proper nouns fill nothing", Object.keys(backfillSlots("my London and 
 check("a single non-place word fills nothing", Object.keys(backfillSlots("thanks", {})).length === 0);
 check("no nouns fills nothing", Object.keys(backfillSlots("pause it", {})).length === 0);
 
+// ---- city and category arrive INDEPENDENTLY -------------------------------
+// The model reliably captures the trade and misses the place. An all-or-nothing
+// guard ("if category is set, give up") threw the city away in exactly the case
+// backfill exists for: category:"dentists" + no city, message says London.
+check("city is backfilled even when category is already set",
+  backfillSlots("add my London dentists to a campaign", { category: "dentists" }).city === "London");
+check("country is backfilled even when category is already set",
+  backfillSlots("find dentists in Germany", { category: "dentists" }).country === "Germany");
+check("both fill when both are missing",
+  backfillSlots("find London plumbers", {}).city === "London");
+check("a country plus a category leaves the city alone",
+  backfillSlots("find London dentists in Germany", { category: "dentists" }).country === "Germany");
+
 console.log(`\n${checks} slot-backfill checks passed.`);

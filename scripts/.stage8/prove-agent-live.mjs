@@ -104,7 +104,14 @@ try {
     const phrase = "anyone i should stop emailing";
     const r1 = await asUser(token, { message: phrase, conversationId: convId });
     const r2 = await asUser(token, { message: phrase, conversationId: convId });
-    check(r1.body.source === "ai", "an unfamiliar phrasing is understood by the model", `source=${r1.body.source}`);
+    // A provider outage returns source:"router" with a canned apology. Without
+    // this guard the whole AI block below fails with misleading messages and
+    // reads like a prompt regression.
+    check(r1.body.source === "ai", "the AI lane is actually reachable", `source=${r1.body.source} text=${r1.body.text}`);
+    if (r1.body.source !== "ai") {
+      console.log("\n  AI PROVIDER UNAVAILABLE - skipping AI-dependent checks. Outage, not a prompt regression.\n");
+      throw new Error("AI_LANE_DOWN");
+    }
     check(r1.body.intent === "compliance_check", "and resolved to the right goal", `intent=${r1.body.intent}`);
     check(r2.body.source === "learned", "second identical phrase is served from the learned fast lane", `source=${r2.body.source}`);
     check(r1.body.usedAi === true && r2.body.usedAi === false, "only the FIRST unfamiliar phrase spends an AI call", `first=${r1.body.usedAi} second=${r2.body.usedAi}`);
@@ -197,9 +204,13 @@ try {
       .eq("user_id", userId).ilike("name", "Spring Sale");
     check((springCount ?? 0) === 0, "and it did not invent the campaign just because it was named", `${springCount} created`);
 
+    // Scoped to THIS conversation. An un-scoped user-wide lookup also trips on
+    // a legitimately parked goal from an earlier step (list_campaigns), which
+    // made this look like a leak when it was a test-scoping bug.
     const { data: stillPending } = await admin
-      .from("agent_pending_state").select("intent").eq("user_id", userId).maybeSingle();
-    check(!stillPending, "a completed turn clears the memory so it cannot hijack the next message");
+      .from("agent_pending_state").select("intent,params")
+      .eq("user_id", userId).eq("conversation_id", first.body.conversationId).maybeSingle();
+    check(!stillPending, "a completed turn clears the memory so it cannot hijack the next message", JSON.stringify(stillPending));
   }
 
   // ---- 5g. two campaigns with the same name must not be guessed ----------

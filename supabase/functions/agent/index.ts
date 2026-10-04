@@ -345,7 +345,10 @@ Deno.serve(async (req) => {
           } else {
             const reply = "I could not work that out just now. Try asking me to find contacts, list your campaigns, or show your numbers.";
             await persist(admin, userId, convId, message, reply, null, {}, false);
-            return json({ conversationId: convId, text: reply, intent: null, source: "ai" }, 200, req);
+            // "router", not "ai": the model did NOT answer this turn. Reporting
+            // "ai" here hid a total provider outage behind a normal-looking
+            // success, which is how a broken AI lane looks like flaky prompts.
+            return json({ conversationId: convId, text: reply, intent: null, source: "router", usedAi: false }, 200, req);
           }
         } else {
           usedAi = true;
