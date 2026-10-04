@@ -34,7 +34,7 @@ import {
 import {
   GOALS, isWriteIntent, mergeParams, missingSlots, type AgentIntent, type AgentParams, type AgentRequest,
 } from "../_shared/agent-capabilities.ts";
-import { understand, answerFromContext, repeatCount, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
+import { understand, answerFromContext, repeatCount, trimTruncatedReply, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
 import { loadAgentAccountContext } from "../_shared/agent-account-context.ts";
 import {
   ACCOUNT_SCOPE, describeLearned, forget, isLearnable, listLearned, phraseKey,
@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
             if (contextual) {
               usedAi = true;
               source = "ai";
-              replyText = contextual;
+              replyText = trimTruncatedReply(contextual);
             } else {
               const reply = "I could not work that out just now. Try asking me to find contacts, list your campaigns, or show your numbers.";
               await persist(admin, userId, convId, message, reply, null, {}, false);
@@ -385,6 +385,10 @@ Deno.serve(async (req) => {
               );
               if (fresh) replyText = fresh;
             }
+            // Final safety net: reasoning tokens share the max_tokens budget, so
+            // a detailed answer can still come back severed mid-word. Never ship
+            // half a word to the person.
+            replyText = trimTruncatedReply(replyText);
           } else if (u.u.kind === "profile") {
             // They told us something about their business. Remember it, then
             // answer normally. This is the turn that used to be swallowed and
@@ -407,6 +411,11 @@ Deno.serve(async (req) => {
     // They shared something about themselves. Persist it so the next visit, and
     // the next suggestion, can actually use it - then clear any stale
     // clarification, because this turn answered everything, not a slot.
+    // The profile branch ships user-visible text too, and it was the path still
+    // emitting severed replies ("...Vancouver, Sydney, Me") after the chat path
+    // had been guarded.
+    if (profileReply !== null) profileReply = trimTruncatedReply(profileReply);
+
     if (profileReply !== null) {
       if (hasFacts(profileFacts)) {
         profile = await saveProfileFacts(admin, userId, profileFacts);
@@ -438,8 +447,9 @@ Deno.serve(async (req) => {
       // mergePendingParams (not savePendingState) because a SECOND question
       // must not erase what the first one already collected.
       await mergePendingParams(admin, userId, convId, askOnly.params ?? {}, askOnly.intent);
-      await persist(admin, userId, convId, message, askOnly.question, null, {}, usedAi);
-      return json({ conversationId: convId, text: askOnly.question, intent: null, asked: true, usedAi, source }, 200, req);
+      const safeQuestion = trimTruncatedReply(askOnly.question);
+      await persist(admin, userId, convId, message, safeQuestion, null, {}, usedAi);
+      return json({ conversationId: convId, text: safeQuestion, intent: null, asked: true, usedAi, source }, 200, req);
     }
 
     if (!routed) {
@@ -538,6 +548,9 @@ Deno.serve(async (req) => {
     // A read. Not charged against the step budget: the budget caps steps INSIDE
     // one turn, and a chat turn runs exactly one allowlisted query.
     const outcome = await runOutcome(admin, userId, routed);
+    // Executor text is user-visible too, and it can be severed by the same
+    // shared max_tokens budget. Trim once, here, so no path can ship half a word.
+    outcome.text = trimTruncatedReply(outcome.text);
 
     // A read can still be missing a slot the PROMPT thought it had. Re-ask and
     // remember, rather than reporting a misleading empty result.
@@ -581,10 +594,16 @@ Deno.serve(async (req) => {
     }
 
     // A read can repeat itself too. The guard used to sit only on the chat path,
-// so a deterministic executor line ("You have no contacts saved yet...") came
-// back four times in a row untouched. Repeat detection has to cover every path
-// that produces user-visible text.
-if (repeatCount(outcome.text, history) >= 2) {
+// so a deterministic executor line came back four times in a row untouched.
+//
+// Two exclusions, both deliberate:
+// - the learned fast lane REPEATS on purpose; serving a cached phrase again is
+//   the whole point, and re-asking the model would spend an AI call to say the
+//   same thing
+// - a write confirmation is not ours to rewrite; it must match what the person
+//   is confirming
+const isWriteGoal = GOALS.find((g) => g.intent === routed.intent)?.write === true;
+if (!learned && !isWriteGoal && repeatCount(outcome.text, history) >= 1) {
       const fresh = await answerFromContext(message, history, userId, accountCtx);
       if (fresh) {
         outcome.text = fresh;

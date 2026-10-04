@@ -677,9 +677,19 @@ async function suggestTargeting(db: Db, userId: string, req: AgentRequest): Prom
   const winner = hotCategories[0]?.[0];
   const best = winner ?? categories[0]?.[0] ?? cities[0]?.[0] ?? null;
   if (!best) {
+    // They have contacts, but none carry a category or city, so there is no
+    // segment to recommend. This used to emit "not segmented yet. Tell me the
+    // kind of company you want" - which repeated verbatim every time they said
+    // they did not know who to target, and was the single most complained-about
+    // reply. Their Settings can answer it instead.
+    const proposal = await proposeSegmentsFromProfile(db, userId);
+    const leadNote = `Your ${rows.length} saved contact${rows.length === 1 ? "" : "s"} `
+      + `${rows.length === 1 ? "has" : "have"} no category or city on ${rows.length === 1 ? "it" : "them"}, `
+      + "so there is no segment to compare yet. ";
     return {
-      text: `You have ${rows.length} contact${rows.length === 1 ? "" : "s"} but they are not `
-        + "segmented yet. Tell me the kind of company you want and I will filter them.",
+      text: proposal
+        ? `${leadNote}${proposal}`
+        : `${leadNote}Tell me what kind of company you sell to and I will find them for you.`,
       empty: true,
     };
   }

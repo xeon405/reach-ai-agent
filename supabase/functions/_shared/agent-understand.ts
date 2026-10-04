@@ -308,7 +308,7 @@ export async function understand(
     // rate-limiting WORSE (live failures went 3 -> 11), so this stays single.
     const out = await groqChat(
       [{ role: "user", content: prompt }],
-      { maxTokens: 700, temperature: 0.2, context: { fn: "agent", kind: "understand", user_id: userId } },
+          { maxTokens: 700, temperature: 0.2, context: { fn: "agent", kind: "understand", user_id: userId } },
     );
     const parsed = parseUnderstanding(out ?? "", message);
     if (!parsed) return null;
@@ -359,6 +359,45 @@ export function repeatCount(text: string, history: HistoryTurn[], lookback = 4):
 }
 
 /**
+ * True when a reply most likely ran into the token cap.
+ *
+ * A reply that ends on terminal punctuation is complete. One that does not is
+ * far more often severed than intentional, and the severed fragment can be a
+ * 2-character stub ("Sydney, Me" from "Melbourne") that no length rule can
+ * catch - so this is used to trigger a RETRY rather than to guess a cut point.
+ */
+function looksTruncated(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return !/[.!?)\]"']$/.test(t);
+}
+
+/**
+ * Last-resort answer cut back to the last finished sentence.
+ *
+ * Only used after a retry has already failed, so it has to be safe on its own:
+ * an incomplete tail is worse than a shorter complete sentence.
+ */
+export function trimTruncatedReply(text: string): string {
+  if (!text) return "";
+  if (!looksTruncated(text)) return text.trim();
+
+  const lastStop = Math.max(
+    text.lastIndexOf(". "),
+    text.lastIndexOf("! "),
+    text.lastIndexOf("? "),
+    text.lastIndexOf(".\n"),
+  );
+  if (lastStop > 40) return text.slice(0, lastStop + 1).trim();
+
+  // No sentence boundary at all: drop the trailing token, which is the part
+  // most likely to be the severed one.
+  const lastSpace = text.lastIndexOf(" ");
+  if (lastSpace > 0) return text.slice(0, lastSpace).replace(/[,;:\-]$/, "").trim();
+  return text.replace(/[,;:\-]$/, "").trim();
+}
+
+/**
  * Last-resort answer built from the account and business context.
  *
  * The old fallback was a fixed "I could not work that out just now", which is
@@ -376,21 +415,29 @@ export async function answerFromContext(
   try {
     const { groqChat } = await import("./groq.ts");
     const convo = history.slice(-6).map((h) => `${h.role === "user" ? "Them" : "Assistant"}: ${sanitizeForPrompt(h.content, 200)}`).join("\n");
-    const out = await groqChat(
-      [{
-        role: "user",
-        content: `You are Reach, the assistant inside a cold-email platform (out-ship.com).
+    const ask = async (): Promise<string> => {
+      const out = await groqChat(
+        [{
+          role: "user",
+          content: `You are Reach, the assistant inside a cold-email platform (out-ship.com).
 Answer using ONLY the facts below. Reply in the person's language, 1-3 short sentences, plain words, no markdown or lists. Be concrete and specific. If the facts do not cover it, say so in one sentence and name what you DO know.
 
 ${facts}
 
 ${convo ? "Recent conversation:\n" + convo + "\n" : ""}
 Their question: ${sanitizeForPrompt(message, 500)}`,
-      }],
-      { maxTokens: 220, temperature: 0.3, context: { fn: "agent", kind: "context-answer", user_id: userId } },
-    );
-    const text = (out ?? "").trim();
-    return text.length > 0 ? text : null;
+        }],
+        { maxTokens: 420, temperature: 0.3, context: { fn: "agent", kind: "context-answer", user_id: userId } },
+      );
+      return (out ?? "").trim();
+    };
+
+    // No retry here. groqChat already retries across every key x model pair, and
+    // a second call on the failure path made live rate-limiting measurably worse
+    // (same lesson as the understand retry). trimTruncatedReply ships a complete
+    // sentence instead of a severed word, at no extra cost.
+    const trimmed = trimTruncatedReply(await ask());
+    return trimmed.length > 0 ? trimmed : null;
   } catch (err) {
     console.error("agent context answer failed", err);
     return null;
