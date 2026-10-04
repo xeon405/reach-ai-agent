@@ -42,8 +42,26 @@ export type AgentParams = {
  */
 export function mergeParams(carried: AgentParams, fresh: AgentParams): AgentParams {
   const out: AgentParams = { ...carried };
+
+  // A fresh audience slot whose every word comes from the campaign name is the
+  // model echoing the campaign back, not a new choice. Left alone it would
+  // overwrite a good carried value ("London") with "Sale", losing the audience
+  // the person already gave us.
+  const campWords = new Set(
+    String(fresh.campaignName ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean),
+  );
+  const echoesCampaign = (v: unknown): boolean => {
+    if (typeof v !== "string" || campWords.size === 0) return false;
+    const words = v.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    return words.length > 0 && words.every((w) => campWords.has(w));
+  };
+
   for (const [k, v] of Object.entries(fresh) as [keyof AgentParams, unknown][]) {
     if (v === undefined || v === null || v === "") continue;
+    if ((k === "city" || k === "category" || k === "query") && echoesCampaign(v)) continue;
     (out as Record<string, unknown>)[k] = v;
   }
   return out;

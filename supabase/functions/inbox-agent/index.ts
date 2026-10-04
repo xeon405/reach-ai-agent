@@ -9,6 +9,7 @@ import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
 import { groqChat, groqKeys, sanitizeForPrompt } from "../_shared/groq.ts";
+import { buildBIContext } from "../_shared/business-context.ts";
 import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import {
   classificationSystemPrompt,
@@ -41,18 +42,6 @@ const corsHeaders = {
 };
 const SITE = APP_BASE_URL;
 
-/** Build structured business intelligence context for AI prompts. */
-function buildBIContext(profile: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (profile.business_description) parts.push(`Business: ${sanitizeForPrompt(String(profile.business_description), 300)}`);
-  if (profile.offer) parts.push(`Product/Service: ${sanitizeForPrompt(String(profile.offer), 300)}`);
-  if (profile.problem_solved) parts.push(`Problem we solve: ${sanitizeForPrompt(String(profile.problem_solved), 300)}`);
-  if (profile.target_customer) parts.push(`Ideal customer: ${sanitizeForPrompt(String(profile.target_customer), 300)}`);
-  if (profile.communication_style) parts.push(`Tone & style: ${sanitizeForPrompt(String(profile.communication_style), 200)}`);
-  if (profile.dont_claim) parts.push(`HARD RULES — never say or promise: ${sanitizeForPrompt(String(profile.dont_claim), 300)}`);
-  if (parts.length === 0) return "";
-  return `BUSINESS CONTEXT:\n${parts.join("\n")}\n\n`;
-}
 const MAX_TURN_BUDGET_CEILING = 10; // hard SQL scan bound; the real budget is config-driven (agent_config)
 
 // Per-invocation config cache. Judgment knobs are read once per (user, campaign).

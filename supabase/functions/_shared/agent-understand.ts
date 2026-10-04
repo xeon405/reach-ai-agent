@@ -48,6 +48,7 @@ export type Understanding =
 import { mergeParams } from "./agent-capabilities.ts";
 import { cleanFacts, renderProfile, type Profile, type ProfileFacts } from "./agent-profile.ts";
 import { backfillSlots } from "./agent-slots.ts";
+import type { AgentAccountContext } from "./agent-account-context.ts";
 
 const PARAM_KEYS = new Set<keyof AgentParams>(["city", "country", "company", "category", "campaignName", "query", "limit"]);
 const NUMERIC = new Set<keyof AgentParams>(["limit"]);
@@ -186,6 +187,7 @@ function buildPrompt(
   history: HistoryTurn[],
   carried?: Carried,
   profile?: Profile | null,
+  accountCtx?: AgentAccountContext | null,
 ): string {
   const goals = GOALS.map((g) => {
     const needs = g.needs.length ? `needs: ${g.needs.join(", ")}` : "needs: nothing";
@@ -220,9 +222,16 @@ function buildPrompt(
   return `You are Reach, the assistant built into the Reach cold-email platform (out-ship.com). Answer questions about yourself from this: you help run cold-email campaigns using the account's real data, your name is Reach.
 
 Read what the person MEANS, not which words they used. Phrasings vary wildly - "I need more people to email", "get me leads" and "I'm running dry" can all mean the same goal.
+${accountCtx?.account ? "\n" + accountCtx.account + "\n" : ""}
+${accountCtx?.business ? "\n" + accountCtx.business + "\n" : ""}
 ${profileBlock ? "\n" + profileBlock + "\n" : ""}
 ## kind:"chat"
-Use this for greetings, thanks, small talk, questions about you or your capabilities, and general cold-email advice. Reply in their language, 1-3 short sentences, plain words, no markdown or bullet lists. Never invent numbers about their account - if they want a figure, use a goal or say you need to look it up.
+Use this for greetings, thanks, small talk, questions about you or your capabilities, and general cold-email advice. Reply in their language, 1-3 short sentences, plain words, no markdown or bullet lists.
+
+FACTS YOU ALREADY HAVE - answer from these instead of choosing a goal. If THEIR ACCOUNT or BUSINESS CONTEXT above already contains the answer, reply with it directly as chat. Choosing a goal here makes the agent run a lookup for something it already holds, and produces wrong or evasive replies.
+- "who am I", "what's my name", "what do I do", "what do I sell", "who do I target" -> the BUSINESS CONTEXT and WHO THEY ARE lines
+- "how many leads/campaigns do I have", "how much have I sent", "am I on plan X" -> the THEIR ACCOUNT numbers
+- If a number they want is genuinely NOT in those blocks, use the matching goal to look it up. Never estimate, and never answer a number that is not there.
 
 ## kind:"profile"
 Use this the moment they describe themselves or their business - ownership, website, product, customer, or goals ("I own...", "my business is...", "we sell...", "our customers are...", "I want to use cold email to..."). Describe yourself or your business and you MUST use this kind, not chat.
@@ -273,10 +282,11 @@ export async function understand(
   userId: string,
   carried?: Carried | null,
   profile?: Profile | null,
+  accountCtx?: AgentAccountContext | null,
 ): Promise<{ u: Understanding | null; cachedIntent: AgentIntent | null; cachedParams: AgentParams } | null> {
   try {
     const { groqChat } = await import("./groq.ts");
-    const prompt = buildPrompt(message, history, carried ?? undefined, profile ?? null);
+    const prompt = buildPrompt(message, history, carried ?? undefined, profile ?? null, accountCtx ?? null);
 
     // A single unparseable reply must not decide the turn. The model is
     // non-deterministic and occasionally returns prose, truncated JSON, or

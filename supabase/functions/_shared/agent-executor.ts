@@ -383,7 +383,39 @@ async function resolveAddTarget(
 }
 
 /** Render a contact filter back to the person who typed it. */
-function describeContacts(p: AgentParams): string {
+/**
+ * Drop audience slots that were clearly lifted out of the campaign name.
+ *
+ * "Spring Sale" was answering "which campaign?", but the model also copied
+ * "Sale" into an audience slot - so the agent reported "contacts in Sale" (or
+ * "the Sale dentists") instead of the London dentists actually asked for. The
+ * model is non-deterministic about WHICH slot it leaks into, so every
+ * audience-identifying slot is checked, not just category.
+ *
+ * A slot whose words all come from the campaign name is describing the
+ * campaign, not the audience.
+ */
+function withoutCampaignNameLeak(p: AgentParams): AgentParams {
+  const camp = (p.campaignName ?? "").toLowerCase().trim();
+  if (!camp) return p;
+  const campWords = new Set(camp.split(/[^a-z0-9]+/).filter(Boolean));
+  if (campWords.size === 0) return p;
+
+  const leaked = (value: unknown): boolean => {
+    if (typeof value !== "string") return false;
+    const words = value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    return words.length > 0 && words.every((w) => campWords.has(w));
+  };
+
+  const out: AgentParams = { ...p };
+  for (const slot of ["city", "category", "query"] as const) {
+    if (leaked(out[slot])) delete out[slot];
+  }
+  return out;
+}
+
+function describeContacts(raw: AgentParams): string {
+  const p = withoutCampaignNameLeak(raw);
   if (p.city && p.category) return `the ${p.city} ${p.category}`;
   if (p.city) return `contacts in ${p.city}`;
   if (p.category) return `${p.category} contacts`;
@@ -397,7 +429,7 @@ async function addContactsToCampaign(db: Db, userId: string, req: AgentRequest):
   if (!target.ok) return target.outcome;
   const camp = target.row;
 
-  const p = req.params;
+  const p = withoutCampaignNameLeak(req.params);
   let q = db.from("leads").select("id").eq("user_id", userId).is("campaign_id", null);
   if (p.query) q = q.or(`company.ilike.%${p.query}%,category.ilike.%${p.query}%,city.ilike.%${p.query}%`);
   const { data: contacts, error } = await q.limit(200);

@@ -35,6 +35,7 @@ import {
   GOALS, isWriteIntent, mergeParams, missingSlots, type AgentIntent, type AgentParams, type AgentRequest,
 } from "../_shared/agent-capabilities.ts";
 import { understand, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
+import { loadAgentAccountContext } from "../_shared/agent-account-context.ts";
 import {
   ACCOUNT_SCOPE, describeLearned, forget, isLearnable, listLearned, phraseKey,
   recall, recordUse, retireLastUsed, type LearnedRow,
@@ -307,6 +308,10 @@ Deno.serve(async (req) => {
     // intent + partial params forward is what makes follow-ups work at all.
     const carried = await loadPendingState(admin, userId, convId);
     let profile: Profile | null = await loadProfile(admin, userId);
+    // Owner + account facts, read fresh each turn so the agent never has to
+    // guess something Settings/Profiles already knows. Runs in parallel with the
+    // other per-turn reads and degrades to empty rather than failing the turn.
+    const accountCtx = await loadAgentAccountContext(admin, userId);
 
     let usedAi = false;
     let source: "learned" | "ai" | "router" = "learned";
@@ -334,7 +339,7 @@ Deno.serve(async (req) => {
         routed = fallback;
         source = "router";
       } else {
-        u = await understand(message, history, userId, carried, profile);
+        u = await understand(message, history, userId, carried, profile, accountCtx);
         if (!u || !u.u) {
           // Model unusable. The keyword router is the safety net so the turn
           // still does something sensible instead of failing.
