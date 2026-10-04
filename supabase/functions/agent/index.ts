@@ -36,6 +36,7 @@ import {
 } from "../_shared/agent-capabilities.ts";
 import { understand, answerFromContext, repeatCount, trimTruncatedReply, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
 import { loadAgentAccountContext } from "../_shared/agent-account-context.ts";
+import { degradedReply } from "../_shared/business-context.ts";
 import {
   ACCOUNT_SCOPE, describeLearned, forget, isLearnable, listLearned, phraseKey,
   recall, recordUse, retireLastUsed, type LearnedRow,
@@ -358,7 +359,12 @@ Deno.serve(async (req) => {
               source = "ai";
               replyText = trimTruncatedReply(contextual);
             } else {
-              const reply = "I could not work that out just now. Try asking me to find contacts, list your campaigns, or show your numbers.";
+              // Never dead-end. "I could not work that out just now" was both a
+              // lie by omission (we DO hold their account) and the single
+              // worst thing to say when someone asks a real question. Answer
+              // from the snapshot instead, and admit the model is down rather
+              // than pretending we understood them.
+              const reply = degradedReply(accountCtx?.facts);
               await persist(admin, userId, convId, message, reply, null, {}, false);
               // "router", not "ai": the model did NOT answer this turn. Reporting
               // "ai" here hid a total provider outage behind a normal-looking

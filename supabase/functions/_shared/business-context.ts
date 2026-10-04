@@ -175,3 +175,52 @@ export function buildAgentAccountContext(a: AgentAccountSnapshot): string {
 
   return lines.join("\n");
 }
+
+/**
+ * A useful answer built with zero AI calls, for the rare turn where the model
+ * is unreachable.
+ *
+ * The previous line here was "I could not work that out just now." It was the
+ * worst possible reply: the agent already holds this user's plan, lead count
+ * and campaign count, so it was refusing to answer a question it could partly
+ * answer, and it read like a form rejection.
+ *
+ * Two rules keep this honest rather than a fake answer:
+ *   - Say plainly that the model is unreachable. Never imply we understood the
+ *     question we could not read.
+ *   - Report only real numbers from the snapshot.
+ *
+ * Kept deliberately short. This path fires during an incident; a long canned
+ * paragraph would be its own kind of failure.
+ */
+export function degradedReply(facts?: AgentAccountSnapshot | null): string {
+  if (!facts) {
+    return "I can't reach my language model right now, so I won't guess at your question. Give me a moment and ask me again.";
+  }
+
+  // Deliberately not addressing them by name. Taking a first name out of a full
+  // name turns "Health Check" into "Health," and "Mary Jane Watson" into "Mary",
+  // which reads as broken at exactly the moment we can least afford to look
+  // broken. The numbers below identify them fine.
+  const opener = "I can't reach my language model right now, so I won't guess at your question.";
+
+  const sentences: string[] = [];
+  const plan = (facts.plan || "").trim();
+  if (plan) sentences.push(`You're on the ${plan} plan.`);
+
+  const bits: string[] = [];
+  if (facts.leads > 0) bits.push(`${facts.leads} saved ${facts.leads === 1 ? "lead" : "leads"}`);
+  if (facts.activeCampaigns > 0) {
+    bits.push(`${facts.activeCampaigns} live ${facts.activeCampaigns === 1 ? "campaign" : "campaigns"}`);
+  }
+  if (facts.replies) bits.push(`${facts.replies} repl${facts.replies === 1 ? "y" : "ies"}`);
+  // Replies outrank send volume: what came back matters more than what went out.
+  if (facts.monthSent > 0) {
+    bits.push(`${facts.monthSent} email${facts.monthSent === 1 ? "" : "s"} sent this month`);
+  }
+
+  if (bits.length) sentences.push(`Right now you have ${bits.slice(0, 3).join(", ")}.`);
+  else sentences.push("There's nothing saved on the account yet, so we'd be starting from scratch.");
+
+  return `${opener} ${sentences.join(" ")} Give me a moment and ask me again.`;
+}

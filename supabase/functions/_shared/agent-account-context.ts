@@ -34,6 +34,13 @@ export interface AgentAccountContext {
   business: string;
   /** True when the owner has not filled in Settings. */
   businessIncomplete: boolean;
+  /**
+   * The same numbers, structured. The rendered blocks are written FOR THE
+   * MODEL, so quoting them back to a human produces robotic filler like
+   * "You are (account owner, name not set)". Having the real values lets us
+   * answer from data when the model is unreachable.
+   */
+  facts?: AgentAccountSnapshot;
 }
 
 /**
@@ -102,6 +109,7 @@ export async function loadAgentAccountContext(
       account: buildAgentAccountContext(snapshot),
       business,
       businessIncomplete,
+      facts: snapshot,
     };
   } catch (err) {
     // A missing table or column must not take the whole agent down.
