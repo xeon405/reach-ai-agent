@@ -45,28 +45,84 @@ type Bubble = {
 };
 
 /**
- * The menu. A click is an unambiguous intent, so the backend answers these
+ * The menu is a TREE, not a flat list: services first, then the actions
+ * inside them, so nobody ever faces every choice at once. A tap either
+ * drills into the next level or acts.
+ *
+ * A leaf with `message` is an unambiguous intent, so the backend answers it
  * with `viaMenu` and never calls the model - same reply, zero AI calls and
  * zero quota. `message` is the phrase the pure keyword router already
- * recognises; it is deliberately written in plain words the user would
- * actually say. Labels are kept to 2-3 plain words so nobody has to read
- * marketing jargon to find what they need.
+ * recognises, written in plain words the user would actually say. A leaf
+ * with `href` opens a page instead of sending anything.
+ *
+ * EVERY page in the sidebar and every intent the executor can run is
+ * reachable from here - the menu is the product's full surface, not a
+ * highlight reel. Order is authored, never sorted by usage: a hierarchy
+ * that reshuffles itself is no longer a hierarchy.
  */
-const MENU: { label: string; message: string; group: "top" | "work" | "safety" }[] = [
-  { label: "See my results", message: "show my results", group: "top" },
-  { label: "Find new contacts", message: "find new contacts", group: "top" },
-  { label: "Who should I email?", message: "who should i email", group: "top" },
-  { label: "Start a campaign", message: "start a campaign", group: "work" },
-  { label: "Pause a campaign", message: "pause a campaign", group: "work" },
-  { label: "Who's unsubscribed?", message: "who has unsubscribed", group: "safety" },
+type MenuNode = {
+  label: string;
+  /** Leaf: sent verbatim as the next message. */
+  message?: string;
+  /** Leaf: opens a page instead of sending anything. */
+  href?: string;
+  /** Branch: the next level down. */
+  children?: MenuNode[];
+};
+
+const TREE: MenuNode[] = [
+  {
+    label: "Campaigns",
+    children: [
+      { label: "Create new campaign", message: "create a new campaign" },
+      { label: "Add leads to a campaign", message: "add leads to a campaign" },
+      { label: "Pause a campaign", message: "pause a campaign" },
+      { label: "See my campaigns", message: "show my campaigns" },
+      { label: "Open campaigns page", href: "/campaigns" },
+    ],
+  },
+  {
+    label: "Leads",
+    children: [
+      { label: "Find new contacts", href: "/lead-finder" },
+      { label: "See all leads", href: "/leads" },
+      { label: "Search my saved contacts", message: "find new contacts" },
+      { label: "Who should I email?", message: "who should i email" },
+    ],
+  },
+  {
+    label: "Results",
+    children: [
+      { label: "See my results", message: "show my results" },
+      { label: "Sending health", message: "sender reputation" },
+      { label: "Open dashboard", href: "/dashboard" },
+    ],
+  },
+  {
+    label: "Inbox",
+    children: [{ label: "See emails", href: "/emails" }],
+  },
+  {
+    label: "Safety",
+    children: [{ label: "Who's unsubscribed?", message: "who has unsubscribed" }],
+  },
+  {
+    label: "Account",
+    children: [
+      { label: "Billing", href: "/billing" },
+      { label: "Settings", href: "/settings" },
+    ],
+  },
 ];
+
+/** The level the menu opens on: the service list itself. */
+const ROOT: MenuNode = { label: "", children: TREE };
 
 /** localStorage keys. Teach-once is per-browser on purpose: showing the same
  * "you can just type!" pop-up on every visit is a nag, not help. */
 const SS_TYPING = "agent_typing_typing_this_session";
 const LS_TAUGHT = "agent_menu_taught";
 const SS_SESSION = "agent_session";
-const LS_MENUCOUNTS = "agent_menu_counts";
 
 /** Typing permission lasts for ONE visit. Closing the tab goes back to the
  * menu next time, which is the whole point of a menu-first design. */
@@ -111,30 +167,6 @@ function sessionId(): string {
     return "no-session";
   }
 }
-/** How often each button has been used, for the smart ordering. */
-function bumpMenuUse(label: string): void {
-  try {
-    const raw = localStorage.getItem(LS_MENUCOUNTS);
-    const counts: Record<string, number> = raw ? JSON.parse(raw) : {};
-    counts[label] = (counts[label] ?? 0) + 1;
-    localStorage.setItem(LS_MENUCOUNTS, JSON.stringify(counts));
-  } catch {
-    /* preference is a nicety, never a failure */
-  }
-}
-function menuOrder(): typeof MENU {
-  try {
-    const raw = localStorage.getItem(LS_MENUCOUNTS);
-    if (!raw) return MENU;
-    const counts: Record<string, number> = JSON.parse(raw);
-    // Sort by use, but keep the two most-used pinned so the layout does not
-    // jump around on every click - people build muscle memory on the top row.
-    return [...MENU].sort((a, b) => (counts[b.label] ?? 0) - (counts[a.label] ?? 0));
-  } catch {
-    return MENU;
-  }
-}
-
 type Learned = {
   id: number;
   phrase: string;
@@ -185,7 +217,8 @@ function AgentPage() {
   const [typing, setTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(true);
   const [showTeach, setShowTeach] = useState(false);
-  const [order, setOrder] = useState<typeof MENU>(MENU);
+  /** Indices into successive levels of the tree. Empty = the service list. */
+  const [path, setPath] = useState<number[]>([]);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [convsOpen, setConvsOpen] = useState(false);
   const [convsBusy, setConvsBusy] = useState(false);
@@ -200,11 +233,54 @@ function AgentPage() {
 
   const navigate = useNavigate();
 
-  /** One menu click. `viaMenu` keeps it on the free keyword router. */
-  function pick(m: (typeof MENU)[number]): void {
-    bumpMenuUse(m.label);
+  /** The level on screen; its children are the chips to render. */
+  const current: MenuNode = path.reduce<MenuNode>((node, i) => node.children?.[i] ?? ROOT, ROOT);
+  const siblings: MenuNode[] = current.children ?? [];
+
+  function back(): void {
+    setPath((p) => p.slice(0, -1));
+  }
+
+  /** One menu tap: drill into a branch, or act on a leaf. */
+  function pick(m: MenuNode): void {
+    if (m.children) {
+      // Drilling down stays on the menu - closing it here would leave an
+      // empty screen the first time anyone opened the service list.
+      setPath([...path, siblings.indexOf(m)]);
+      return;
+    }
     setMenuOpen(false);
-    void send(m.message, false, true);
+    if (m.href) {
+      // Leaving the chat entirely, so the tree starts over next time.
+      setPath([]);
+      navigate({ to: m.href });
+      return;
+    }
+    if (m.message) void send(m.message, false, true);
+  }
+
+  /** The chips for the current level, plus a way back up the tree. */
+  function menuChips() {
+    return (
+      <div className="space-y-2">
+        {path.length > 0 && (
+          <p className="text-xs font-medium text-muted-foreground">{current.label}</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {path.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={back}>
+              ← Back
+            </Button>
+          )}
+          {siblings.map((m, i) => (
+            <Button key={`${m.label}-${i}`} variant="outline" size="sm" onClick={() => pick(m)}>
+              {m.label}
+              {m.children && <span className="ml-1 text-muted-foreground">›</span>}
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const lastBubble = bubbles[bubbles.length - 1];
@@ -224,7 +300,6 @@ function AgentPage() {
   // rather than appearing by itself.
   useEffect(() => {
     setTyping(readSession());
-    setOrder(menuOrder());
     setMenuOpen(true);
   }, []);
 
@@ -544,19 +619,15 @@ function AgentPage() {
         <div className="mx-auto w-full max-w-4xl space-y-3 px-4 pb-3">
           {menuOpen && bubbles.length === 0 && (
             <div className="space-y-3 py-6">
-              <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
-                <p className="mb-1 flex items-center gap-2 font-medium">
-                  <ShieldCheck className="h-4 w-4" /> {t("app_agent_safe")}
-                </p>
-                <p className="text-muted-foreground">{t("app_agent_safe_body")}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {order.map((m) => (
-                  <Button key={m.label} variant="outline" size="sm" onClick={() => pick(m)}>
-                    {m.label}
-                  </Button>
-                ))}
-              </div>
+              {path.length === 0 && (
+                <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
+                  <p className="mb-1 flex items-center gap-2 font-medium">
+                    <ShieldCheck className="h-4 w-4" /> {t("app_agent_safe")}
+                  </p>
+                  <p className="text-muted-foreground">{t("app_agent_safe_body")}</p>
+                </div>
+              )}
+              {menuChips()}
               <button
                 type="button"
                 className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
@@ -659,15 +730,7 @@ function AgentPage() {
             </div>
           )}
 
-          {inlineMenu && !busy && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {order.map((m) => (
-                <Button key={m.label} variant="outline" size="sm" onClick={() => pick(m)}>
-                  {m.label}
-                </Button>
-              ))}
-            </div>
-          )}
+          {inlineMenu && !busy && <div className="pt-1">{menuChips()}</div>}
           <div ref={endRef} />
         </div>
       </div>
@@ -699,8 +762,10 @@ function AgentPage() {
               className="h-[42px] w-[42px] rounded-full"
               title="Show menu"
               onClick={() => {
-                // The menu now sits at the end of the chat, so the grid button
-                // just takes you to it instead of reopening a panel at the top.
+                // The menu now sits at the end of the chat, and the grid
+                // button always means "menu": back to the top of the tree,
+                // which is where every service starts.
+                setPath([]);
                 if (bubbles.length === 0) setMenuOpen(true);
                 else endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
               }}
