@@ -17,6 +17,7 @@
 // ============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAccessToken } from "../_shared/gmail.ts";
+import { groqKeys, groqModels } from "../_shared/groq.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import {
   alertBody,
@@ -36,14 +37,21 @@ import {
 const ESCALATION_MS = 24 * 60 * 60 * 1000;
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 Deno.serve(async (req) => {
   const secret = Deno.env.get("CRON_SECRET");
-  if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Unauthorized" }, 401);
+  if (!secret || req.headers.get("x-cron-secret") !== secret)
+    return json({ error: "Unauthorized" }, 401);
 
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
   const nowIso = new Date().toISOString();
   const pingUrl = Deno.env.get("HEALTHCHECKS_PING_URL");
   let systemOwner: string | undefined;
@@ -60,7 +68,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
     let ownerId = ownerResult.data?.profile_id ?? null;
     if (!ownerId) {
-      const p = await supabase.from("profiles").select("id").order("created_at", { ascending: true }).limit(1).maybeSingle();
+      const p = await supabase
+        .from("profiles")
+        .select("id")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
       ownerId = p.data?.id ?? null;
     }
     systemOwner = ownerId ?? undefined;
@@ -167,14 +180,19 @@ Deno.serve(async (req) => {
     await probe("sender", async () => {
       const { data: rows } = await supabase
         .from("sender_health")
-        .select("profile_id, phase, current_cap, warm_cap, bounces_7d, bounce_rate_7d, complaint_rate_7d, clean_days, last_measured_at");
+        .select(
+          "profile_id, phase, current_cap, warm_cap, bounces_7d, bounce_rate_7d, complaint_rate_7d, clean_days, last_measured_at",
+        );
       const out: HealthProblem[] = [];
       for (const r of (rows ?? []) as any[]) {
         const reasons: string[] = [];
         if (r.phase === "recovery") reasons.push(`phase=${r.phase}`);
-        if (Number(r.bounce_rate_7d) > SENDER_BOUNCE_RED) reasons.push(`bounce${(Number(r.bounce_rate_7d) * 100).toFixed(1)}%`);
-        if (Number(r.complaint_rate_7d) > SENDER_COMPLAINT_RED) reasons.push(`complaint${(Number(r.complaint_rate_7d) * 100).toFixed(1)}%`);
-        if (new Date(nowIso).getTime() - new Date(r.last_measured_at).getTime() > SENDER_STALE_MS) reasons.push("stale measurement");
+        if (Number(r.bounce_rate_7d) > SENDER_BOUNCE_RED)
+          reasons.push(`bounce${(Number(r.bounce_rate_7d) * 100).toFixed(1)}%`);
+        if (Number(r.complaint_rate_7d) > SENDER_COMPLAINT_RED)
+          reasons.push(`complaint${(Number(r.complaint_rate_7d) * 100).toFixed(1)}%`);
+        if (new Date(nowIso).getTime() - new Date(r.last_measured_at).getTime() > SENDER_STALE_MS)
+          reasons.push("stale measurement");
         if (reasons.length) {
           out.push({
             key: `sender:${r.profile_id}`,
@@ -192,7 +210,7 @@ Deno.serve(async (req) => {
       const { data: states } = await supabase
         .from("ai_cost_state")
         .select("profile_id, window_date, window_month, used_daily_usd, used_monthly_usd");
-      const rows = states as any[] ?? [];
+      const rows = (states as any[]) ?? [];
       const sumsByProfile: Record<string, { daily: number; monthly: number }> = {};
       await Promise.all(
         rows.map(async (s) => {
@@ -209,18 +227,56 @@ Deno.serve(async (req) => {
               .gte("ts", `${s.window_month}-01T00:00:00Z`),
           ]);
           sumsByProfile[s.profile_id] = {
-            daily: (dayRes.data as any[] ?? []).reduce((a, r) => a + Number(r.est_cost_usd), 0),
-            monthly: (monthRes.data as any[] ?? []).reduce((a, r) => a + Number(r.est_cost_usd), 0),
+            daily: ((dayRes.data as any[]) ?? []).reduce((a, r) => a + Number(r.est_cost_usd), 0),
+            monthly: ((monthRes.data as any[]) ?? []).reduce(
+              (a, r) => a + Number(r.est_cost_usd),
+              0,
+            ),
           };
         }),
       );
       return driftProblems(rows, sumsByProfile);
     });
 
+    // ---- 6. AI capacity (counts only, never key material) ----
+    // groqChat silently degrades to the dead-end reply when every key x model
+    // pair is rate-limited, and from the outside that looks identical to a bad
+    // prompt. Surfacing the pool size and which models are live is the only way
+    // to tell "our fault" from "Groq throttled us" without redeploying to count.
+    let aiCapacity = { keys: 0, models: [] as string[] };
+    await probe("ai-capacity", async () => {
+      aiCapacity = { keys: groqKeys().length, models: groqModels() };
+      if (aiCapacity.keys === 0) {
+        return [
+          {
+            key: "ai:no-keys",
+            title: "No AI keys configured",
+            body: "GROQ_API_KEYS resolved to zero keys. Every AI surface is returning a degraded reply.",
+            userId: systemOwner ?? undefined,
+          },
+        ];
+      }
+      if (aiCapacity.models.length === 0) {
+        return [
+          {
+            key: "ai:no-models",
+            title: "No AI models configured",
+            body: "GROQ_MODEL and its fallbacks resolved to zero models. Every AI call will fail.",
+            userId: systemOwner ?? undefined,
+          },
+        ];
+      }
+      return [];
+    });
+
     // ---- dedup / cooldown ----
-    const { data: stateRows } = await supabase.from("health_state").select("check_key, active_since, last_alerted_at, last_seen_at, resolved_at, escalated_at, alert_count");
+    const { data: stateRows } = await supabase
+      .from("health_state")
+      .select(
+        "check_key, active_since, last_alerted_at, last_seen_at, resolved_at, escalated_at, alert_count",
+      );
     const existing = Object.fromEntries(
-      (stateRows as any[] ?? []).map((r) => [r.check_key, r as HealthState]),
+      ((stateRows as any[]) ?? []).map((r) => [r.check_key, r as HealthState]),
     );
 
     const { decisions, resolveKeys } = evaluateHealth(problems, existing, nowIso, ESCALATION_MS);
@@ -277,10 +333,18 @@ Deno.serve(async (req) => {
         alerts: alertCounts,
         resolved: resolveKeys,
         ping_ok: pingOk,
+        ai_keys: aiCapacity.keys,
+        ai_models: aiCapacity.models,
       },
     });
 
-    return json({ ok: true, problems: problems.map((p) => p.key), alerts: alertCounts, resolved: resolveKeys });
+    return json({
+      ok: true,
+      problems: problems.map((p) => p.key),
+      alerts: alertCounts,
+      resolved: resolveKeys,
+      ai: aiCapacity,
+    });
   } catch (err) {
     // Own failure mode: make it LOUD, not quiet.
     const msg = err instanceof Error ? err.message : String(err);

@@ -8,7 +8,9 @@ const DEFAULT_MODEL = Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b";
 // any of the other healthy keys — effectively multiplying the budget across
 // keys and models. Only models PROBED to exist on this account are listed.
 const MODEL_FALLBACKS = (Deno.env.get("GROQ_MODEL_FALLBACKS") ?? "openai/gpt-oss-20b")
-  .split(",").map((s) => s.trim()).filter(Boolean);
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 // Metered AI spend (INTELLIGENCE-LAYER-DESIGN.md §6.1). Token prices are ENV-
 // configurable so rate changes never need a deploy; defaults are the gpt-oss-120b
@@ -78,7 +80,10 @@ function meterDb() {
 // When `settle` is set (a gated call that reserved up front), the counter is
 // settled to ACTUAL (reserved + settleDelta) so the durable ceiling converges to
 // true spend each call — abandoned reserves only decay by window rollover.
-async function recordMeter(row: LedgerRow, settle?: { userId?: string; delta: number; guest?: boolean }): Promise<void> {
+async function recordMeter(
+  row: LedgerRow,
+  settle?: { userId?: string; delta: number; guest?: boolean },
+): Promise<void> {
   const db = meterDb();
   if (!db) {
     if (meterPending.length < METER_BUFFER_MAX) meterPending.push(row);
@@ -89,12 +94,18 @@ async function recordMeter(row: LedgerRow, settle?: { userId?: string; delta: nu
     await db.from("ai_spend_ledger").insert(row);
     if (settle) {
       if (settle.guest) {
-        db.rpc("ai_cost_guest_settle", { p_delta: settle.delta }).then(() => {}, () => {});
+        db.rpc("ai_cost_guest_settle", { p_delta: settle.delta }).then(
+          () => {},
+          () => {},
+        );
       } else {
         db.rpc("ai_cost_settle", {
           p_profile_id: settle.userId,
           p_delta: settle.delta,
-        }).then(() => {}, () => {});
+        }).then(
+          () => {},
+          () => {},
+        );
       }
     }
     const buffered = meterPending;
@@ -102,16 +113,21 @@ async function recordMeter(row: LedgerRow, settle?: { userId?: string; delta: nu
       meterPending = [];
       const dropped = meterDropped;
       meterDropped = 0;
-      db.from("audit_events").insert({
-        user_id: row.user_id ?? null,
-        campaign_id: row.campaign_id ?? null,
-        lead_id: row.lead_id ?? null,
-        event: "ai.metering.degraded",
-        payload: { unreported_calls: buffered.length, dropped, recovered: true },
-        decision_id: row.decision_id ?? null,
-        model_version: "meter/v1",
-        strategy_ref: null,
-      }).then(() => {}, () => {});
+      db.from("audit_events")
+        .insert({
+          user_id: row.user_id ?? null,
+          campaign_id: row.campaign_id ?? null,
+          lead_id: row.lead_id ?? null,
+          event: "ai.metering.degraded",
+          payload: { unreported_calls: buffered.length, dropped, recovered: true },
+          decision_id: row.decision_id ?? null,
+          model_version: "meter/v1",
+          strategy_ref: null,
+        })
+        .then(
+          () => {},
+          () => {},
+        );
     }
     if (!meterWarned) {
       meterWarned = true;
@@ -122,14 +138,26 @@ async function recordMeter(row: LedgerRow, settle?: { userId?: string; delta: nu
     else meterDropped++;
     if (!meterWarned) {
       meterWarned = true;
-      console.warn("[meter] ai_spend_ledger write failed — rows buffered; metering degraded is visible via ai.metering.degraded + last_reported_at staleness (conserve, don't spend blind)");
+      console.warn(
+        "[meter] ai_spend_ledger write failed — rows buffered; metering degraded is visible via ai.metering.degraded + last_reported_at staleness (conserve, don't spend blind)",
+      );
     }
   }
 }
 
+/**
+ * The models this deployment will actually try, primary first. Exported so
+ * health-check can report the pool without redeploying to inspect config.
+ */
+export function groqModels(primary?: string): string[] {
+  return [primary ?? Deno.env.get("GROQ_MODEL") ?? DEFAULT_MODEL, ...MODEL_FALLBACKS];
+}
+
 export function groqKeys(): string[] {
   return (Deno.env.get("GROQ_API_KEYS") ?? Deno.env.get("GROQ_API_KEY") ?? "")
-    .split(",").map((s) => s.trim()).filter(Boolean);
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 // ── Healthy-key pool ───────────────────────────────────────────
@@ -159,15 +187,16 @@ function pickKey(keys: string[]): string {
 }
 
 function parkKey(key: string, retryAfterSec: number | null): void {
-  const delay = retryAfterSec && Number.isFinite(retryAfterSec) && retryAfterSec > 0
-    ? Math.min(retryAfterSec, 300) * 1000
-    : KEY_COOLDOWN_MS;
+  const delay =
+    retryAfterSec && Number.isFinite(retryAfterSec) && retryAfterSec > 0
+      ? Math.min(retryAfterSec, 300) * 1000
+      : KEY_COOLDOWN_MS;
   keyStates.set(key, { coolUntil: Date.now() + delay });
 }
 
 export async function groqChat(
   messages: Array<{ role: string; content: string }>,
-  opts?: { maxTokens?: number; temperature?: number; context?: MeterContext }
+  opts?: { maxTokens?: number; temperature?: number; context?: MeterContext },
 ): Promise<string> {
   const keys = groqKeys();
   if (keys.length === 0) throw new Error("No GROQ API keys configured");
@@ -175,7 +204,7 @@ export async function groqChat(
   // keys = [key1...]. The override lets a call site (support-chat) pick a model
   // with a bigger TPM pool while every other surface keeps DEFAULT_MODEL.
   const primary = opts?.context?.model ?? DEFAULT_MODEL;
-  const models = [primary, ...MODEL_FALLBACKS];
+  const models = groqModels(primary);
   // Up to 2 passes over every (key × model) pair so a burst still eventually
   // completes once any pool frees up. Capped hard so we never loop forever.
   const maxTries = Math.max(6, Math.min(keys.length * models.length * 2, 16));
@@ -220,8 +249,11 @@ export async function groqChat(
       // Reasoning models sometimes put everything in `reasoning` with empty content
       let text = String(msg.content ?? "");
       if (!text.trim() && typeof msg.reasoning === "string") text = msg.reasoning;
-// Some models wrap thoughts in tags or code fences — strip both
-      text = text.replace(/ thinking[\s\S]*?<\/think>/g, "").replace(/```json|```/g, "").trim();
+      // Some models wrap thoughts in tags or code fences — strip both
+      text = text
+        .replace(/ thinking[\s\S]*?<\/think>/g, "")
+        .replace(/```json|```/g, "")
+        .trim();
       // Meter (fire-and-forget, never blocks the response): capture usage that was
       // previously discarded and write the spend ledger row. Gated calls (reserve
       // set) additionally settle the durable counter to ACTUAL (reserve + delta).
@@ -229,21 +261,28 @@ export async function groqChat(
       const u = data?.usage ?? {};
       const inTokens = Math.max(0, Number(u?.input_tokens ?? u?.prompt_tokens ?? 0) || 0);
       const outTokens = Math.max(0, Number(u?.output_tokens ?? u?.completion_tokens ?? 0) || 0);
-      recordMeter({
-        fn: ctx.fn ?? "unknown",
-        kind: ctx.kind ?? "generic",
-        model,
-        input_tokens: inTokens,
-        output_tokens: outTokens,
-        est_cost_usd: estimateCost(inTokens, outTokens),
-        user_id: ctx.user_id ?? null,
-        campaign_id: ctx.campaign_id ?? null,
-        lead_id: ctx.lead_id ?? null,
-        decision_id: ctx.decision_id ?? null,
-        model_version: null,
-      }, ctx.reserve != null && (ctx.user_id || ctx.guest)
-        ? { userId: String(ctx.user_id ?? ""), delta: estimateCost(inTokens, outTokens) - Number(ctx.reserve), guest: ctx.guest }
-        : undefined).catch(() => {});
+      recordMeter(
+        {
+          fn: ctx.fn ?? "unknown",
+          kind: ctx.kind ?? "generic",
+          model,
+          input_tokens: inTokens,
+          output_tokens: outTokens,
+          est_cost_usd: estimateCost(inTokens, outTokens),
+          user_id: ctx.user_id ?? null,
+          campaign_id: ctx.campaign_id ?? null,
+          lead_id: ctx.lead_id ?? null,
+          decision_id: ctx.decision_id ?? null,
+          model_version: null,
+        },
+        ctx.reserve != null && (ctx.user_id || ctx.guest)
+          ? {
+              userId: String(ctx.user_id ?? ""),
+              delta: estimateCost(inTokens, outTokens) - Number(ctx.reserve),
+              guest: ctx.guest,
+            }
+          : undefined,
+      ).catch(() => {});
       return text;
     } catch (e) {
       lastErr = e;
