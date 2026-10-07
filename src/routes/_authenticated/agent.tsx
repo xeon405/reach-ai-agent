@@ -191,6 +191,20 @@ function AgentPage() {
     setMenuOpen(false);
   }
 
+  /** One menu click. `viaMenu` keeps it on the free keyword router. */
+  function pick(m: (typeof MENU)[number]): void {
+    bumpMenuUse(m.label);
+    setMenuOpen(false);
+    void send(m.message, false, true);
+  }
+
+  const lastBubble = bubbles[bubbles.length - 1];
+  // The menu belongs at the end of the conversation, not only at the top:
+  // after any reply the next step is one tap away. The one exception is an
+  // unanswered write confirmation, where a second row of buttons would
+  // compete with the yes/no the agent is actually waiting for.
+  const inlineMenu = bubbles.length > 0 && !lastBubble?.confirm;
+
   // Menu-first on every new visit: a fresh session always opens on the menu,
   // even for someone who typed last time. The box comes back with one click
   // rather than appearing by itself.
@@ -511,7 +525,7 @@ function AgentPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl space-y-3 px-4 pb-3">
-          {menuOpen && (
+          {menuOpen && bubbles.length === 0 && (
             <div className="space-y-3 py-6">
               <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
                 <p className="mb-1 flex items-center gap-2 font-medium">
@@ -521,19 +535,7 @@ function AgentPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {order.map((m) => (
-                  <Button
-                    key={m.label}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      bumpMenuUse(m.label);
-                      setMenuOpen(false);
-                      // viaMenu tells the backend this is a click, not a typed
-                      // question, so it answers from the keyword router and never
-                      // spends an AI call.
-                      void send(m.message, false, true);
-                    }}
-                  >
+                  <Button key={m.label} variant="outline" size="sm" onClick={() => pick(m)}>
                     {m.label}
                   </Button>
                 ))}
@@ -617,6 +619,16 @@ function AgentPage() {
               </div>
             </div>
           )}
+
+          {inlineMenu && !busy && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {order.map((m) => (
+                <Button key={m.label} variant="outline" size="sm" onClick={() => pick(m)}>
+                  {m.label}
+                </Button>
+              ))}
+            </div>
+          )}
           <div ref={endRef} />
         </div>
       </div>
@@ -645,7 +657,12 @@ function AgentPage() {
               size="icon"
               className="h-[42px] w-[42px] rounded-full"
               title="Show menu"
-              onClick={() => setMenuOpen(true)}
+              onClick={() => {
+                // The menu now sits at the end of the chat, so the grid button
+                // just takes you to it instead of reopening a panel at the top.
+                if (bubbles.length === 0) setMenuOpen(true);
+                else endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+              }}
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>
@@ -653,7 +670,7 @@ function AgentPage() {
         ) : (
           <div className="flex w-full items-center justify-between gap-3 py-1.5">
             <p className="text-sm text-muted-foreground">
-              Pick an option above, or write your own question.
+              Pick an option, or write your own question.
             </p>
             <Button
               variant="outline"

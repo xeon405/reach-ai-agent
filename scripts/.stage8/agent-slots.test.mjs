@@ -28,7 +28,10 @@ check("ignores command verbs", !extractProperNouns("Please Find London leads").i
 check("ignores greetings", !extractProperNouns("hi my London shop").includes("hi"));
 check("ignores short tokens", !extractProperNouns("go to LA now").includes("LA"));
 check("ignores all-caps acronyms", !extractProperNouns("send to Q3 in London").includes("Q3"));
-check("de-duplicates", extractProperNouns("London and london").length === 1);
+// Two Title Case repeats: the first token is never a candidate (sentence
+// initial), and a lowercase repeat never matches the Title Case rule, so the
+// case-insensitive dedupe can only be exercised by a repeat further in.
+check("de-duplicates", extractProperNouns("and London and London").length === 1);
 check("handles punctuation", extractProperNouns("my London, dentists;").includes("London"));
 check("empty message yields nothing", extractProperNouns("").length === 0);
 
