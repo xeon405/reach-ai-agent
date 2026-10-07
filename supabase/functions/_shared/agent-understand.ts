@@ -369,7 +369,12 @@ export function repeatCount(text: string, history: HistoryTurn[], lookback = 4):
 function looksTruncated(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
-  return !/[.!?)\]"']$/.test(t);
+  // ":" counts as a FINISHED ending. It introduces the rows table the frontend
+  // renders underneath, and treating it as a severed reply deleted the last
+  // word of every one of them - "Here is your sending health:" shipped as
+  // "Here is your sending". A trailing ellipsis is deliberate too, and only a
+  // bare word or a continuing comma/dash means we were actually cut off.
+  return !/[.!?)\]:"'…]$/.test(t);
 }
 
 /**

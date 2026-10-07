@@ -90,7 +90,8 @@ export function buildBIContext(profile: Record<string, unknown>): string {
   // Deliberately terse. This block competes for the model's attention with the
   // shorter conversation-derived profile, and at full length the model kept
   // reaching for that tidier block instead and answering from stale memory.
-  if (profile.business_description) parts.push(`Business: ${clean(profile.business_description, 220)}`);
+  if (profile.business_description)
+    parts.push(`Business: ${clean(profile.business_description, 220)}`);
   if (profile.offer) parts.push(`Product/Service: ${clean(profile.offer, 220)}`);
   if (profile.target_customer) parts.push(`Ideal customer: ${clean(profile.target_customer, 240)}`);
   if (profile.problem_solved) parts.push(`Problem we solve: ${clean(profile.problem_solved, 200)}`);
@@ -98,7 +99,8 @@ export function buildBIContext(profile: Record<string, unknown>): string {
   if (cities.length) parts.push(`Cities they sell in: ${cities.join(", ")}`);
   if (profile.website_url) parts.push(`Their website: ${clean(profile.website_url, 100)}`);
   if (profile.autopilot_niche) parts.push(`Chosen niche: ${clean(profile.autopilot_niche, 70)}`);
-  if (profile.communication_style) parts.push(`Tone & style: ${clean(profile.communication_style, 160)}`);
+  if (profile.communication_style)
+    parts.push(`Tone & style: ${clean(profile.communication_style, 160)}`);
   // A hard rule the model can skim past is worse than a short one it obeys, so
   // this keeps the leading rules and the owner's own summary line.
   if (profile.dont_claim) {
@@ -151,12 +153,14 @@ export function buildAgentAccountContext(a: AgentAccountSnapshot): string {
   ];
 
   const who = [clean(a.name, 80), clean(a.company, 120)].filter(Boolean).join(", runs ");
-  lines.push(who
-    ? `- Who they are: ${who}`
-    : "- Who they are: (account owner, name not set)");
+  lines.push(who ? `- Who they are: ${who}` : "- Who they are: (account owner, name not set)");
 
-  lines.push(`- Plan: ${a.plan}${caps ? ` (allows ${caps.emails} emails/month, ${caps.leads} leads)` : ""}`);
-  lines.push(`- Gmail for sending: ${a.gmailConnected ? "connected" : "NOT connected (they cannot send yet)"}`);
+  lines.push(
+    `- Plan: ${a.plan}${caps ? ` (allows ${caps.emails} emails/month, ${caps.leads} leads)` : ""}`,
+  );
+  lines.push(
+    `- Gmail for sending: ${a.gmailConnected ? "connected" : "NOT connected (they cannot send yet)"}`,
+  );
   lines.push(`- Emails sent today: ${a.todaySent}`);
   lines.push(`- Emails sent this month: ${a.monthSent}${caps ? ` of ${caps.emails}` : ""}`);
   lines.push(`- Leads saved: ${a.leads}`);
@@ -168,8 +172,8 @@ export function buildAgentAccountContext(a: AgentAccountSnapshot): string {
 
   if (a.businessIncomplete) {
     lines.push(
-      "- Business details: NOT filled in yet. They can add them in Settings. "
-      + "Do NOT guess or assume what their business is — if it matters, ask them or point them to Settings.",
+      "- Business details: NOT filled in yet. They can add them in Settings. " +
+        "Do NOT guess or assume what their business is — if it matters, ask them or point them to Settings.",
     );
   }
 
@@ -211,7 +215,9 @@ export function degradedReply(facts?: AgentAccountSnapshot | null): string {
   const bits: string[] = [];
   if (facts.leads > 0) bits.push(`${facts.leads} saved ${facts.leads === 1 ? "lead" : "leads"}`);
   if (facts.activeCampaigns > 0) {
-    bits.push(`${facts.activeCampaigns} live ${facts.activeCampaigns === 1 ? "campaign" : "campaigns"}`);
+    bits.push(
+      `${facts.activeCampaigns} live ${facts.activeCampaigns === 1 ? "campaign" : "campaigns"}`,
+    );
   }
   if (facts.replies) bits.push(`${facts.replies} repl${facts.replies === 1 ? "y" : "ies"}`);
   // Replies outrank send volume: what came back matters more than what went out.
@@ -220,7 +226,8 @@ export function degradedReply(facts?: AgentAccountSnapshot | null): string {
   }
 
   if (bits.length) sentences.push(`Right now you have ${bits.slice(0, 3).join(", ")}.`);
-  else sentences.push("There's nothing saved on the account yet, so we'd be starting from scratch.");
+  else
+    sentences.push("There's nothing saved on the account yet, so we'd be starting from scratch.");
 
   return `${opener} ${sentences.join(" ")} Give me a moment and ask me again.`;
 }

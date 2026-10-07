@@ -24,8 +24,12 @@ export interface AgentRequest {
   summary: string;
 }
 
-export const READ_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => !g.write).map((g) => g.intent);
-export const WRITE_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => g.write).map((g) => g.intent);
+export const READ_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => !g.write).map(
+  (g) => g.intent,
+);
+export const WRITE_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => g.write).map(
+  (g) => g.intent,
+);
 
 /** Lowercase, strip accents/punctuation, collapse whitespace. */
 function norm(s: unknown): string {
@@ -38,15 +42,63 @@ function norm(s: unknown): string {
     .trim();
 }
 
-const CAP: Record<string, string> = { us: "United States", usa: "United States", gb: "United Kingdom", uk: "United Kingdom", ae: "United Arab Emirates", uae: "United Arab Emirates", sa: "Saudi Arabia", qa: "Qatar", kw: "Kuwait", bh: "Bahrain", om: "Oman", eg: "Egypt", in: "India", de: "Germany", fr: "France", es: "Spain", it: "Italy", nl: "Netherlands", ca: "Canada", au: "Australia", nz: "New Zealand", ie: "Ireland", pl: "Poland", se: "Sweden", no: "Norway", dk: "Denmark" };
+const CAP: Record<string, string> = {
+  us: "United States",
+  usa: "United States",
+  gb: "United Kingdom",
+  uk: "United Kingdom",
+  ae: "United Arab Emirates",
+  uae: "United Arab Emirates",
+  sa: "Saudi Arabia",
+  qa: "Qatar",
+  kw: "Kuwait",
+  bh: "Bahrain",
+  om: "Oman",
+  eg: "Egypt",
+  in: "India",
+  de: "Germany",
+  fr: "France",
+  es: "Spain",
+  it: "Italy",
+  nl: "Netherlands",
+  ca: "Canada",
+  au: "Australia",
+  nz: "New Zealand",
+  ie: "Ireland",
+  pl: "Poland",
+  se: "Sweden",
+  no: "Norway",
+  dk: "Denmark",
+};
 
 /** Extract a country from either a name or a 2-letter code. */
 function findCountry(s: string): string | undefined {
   const countries = [
-    "united states", "united kingdom", "united arab emirates", "saudi arabia",
-    "new zealand", "south africa", "singapore", "australia", "canada", "germany",
-    "france", "spain", "italy", "netherlands", "india", "egypt", "qatar", "kuwait",
-    "bahrain", "oman", "ireland", "poland", "sweden", "norway", "denmark",
+    "united states",
+    "united kingdom",
+    "united arab emirates",
+    "saudi arabia",
+    "new zealand",
+    "south africa",
+    "singapore",
+    "australia",
+    "canada",
+    "germany",
+    "france",
+    "spain",
+    "italy",
+    "netherlands",
+    "india",
+    "egypt",
+    "qatar",
+    "kuwait",
+    "bahrain",
+    "oman",
+    "ireland",
+    "poland",
+    "sweden",
+    "norway",
+    "denmark",
   ];
   for (const c of countries) {
     if (s.includes(c)) {
@@ -69,8 +121,19 @@ function findCount(s: string): number | undefined {
   const digits = s.match(/\b(\d{1,5})\b/);
   if (digits) return Math.min(Math.max(parseInt(digits[1], 10), 1), 200);
   const words: Record<string, number> = {
-    five: 5, ten: 10, fifteen: 15, twenty: 20, thirty: 30, forty: 40,
-    fifty: 50, a: 1, an: 1, couple: 2, few: 5, dozen: 12, hundred: 100,
+    five: 5,
+    ten: 10,
+    fifteen: 15,
+    twenty: 20,
+    thirty: 30,
+    forty: 40,
+    fifty: 50,
+    a: 1,
+    an: 1,
+    couple: 2,
+    few: 5,
+    dozen: 12,
+    hundred: 100,
   };
   for (const w of Object.keys(words)) {
     if (new RegExp(`\\b${w}\\b`).test(s)) return words[w];
@@ -104,7 +167,17 @@ function has(s: string, ...words: string[]): boolean {
 }
 
 const STOP_AFTER_FIND = /\b(?:in|near|around|for|from|with|and|but|who|that|at|as|to)\b/;
-const FIND_VERBS = ["find", "search", "look for", "get me", "show me", "i need", "need", "want", "give me"];
+const FIND_VERBS = [
+  "find",
+  "search",
+  "look for",
+  "get me",
+  "show me",
+  "i need",
+  "need",
+  "want",
+  "give me",
+];
 
 /**
  * The category is what the user asked for BEFORE any place word:
@@ -134,7 +207,11 @@ function findCategory(s: string): string | undefined {
  */
 function campaignNameFrom(orig: string, ...verbs: string[]): string | undefined {
   const clean = (v: string) =>
-    v.replace(/\s+/g, " ").trim().replace(/[.,!?;]+$/, "").trim();
+    v
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[.,!?;]+$/, "")
+      .trim();
 
   const namedVerbs = ["called ", "named ", "titled "];
   for (const nv of namedVerbs) {
@@ -164,13 +241,44 @@ export function routeIntent(message: string): AgentRequest | null {
   if (!s) return null;
 
   // --- compliance / unsubscribes: ask before anything else, it is unambiguous
-  if (has(s, "unsubscribe", "unsubscribed", "opt out", "opt-out", "compliance", "gdpr", "spam complaint")) {
-    return { intent: "compliance_check", params: {}, summary: "Check who has unsubscribed and who is blocked" };
+  if (
+    has(
+      s,
+      "unsubscribe",
+      "unsubscribed",
+      "opt out",
+      "opt-out",
+      "compliance",
+      "gdpr",
+      "spam complaint",
+    )
+  ) {
+    return {
+      intent: "compliance_check",
+      params: {},
+      summary: "Check who has unsubscribed and who is blocked",
+    };
   }
 
   // --- sender reputation
-  if (has(s, "sender health", "sender reputation", "reputation", "bounce rate", "bounces", "deliverability", "am i banned", "blacklist")) {
-    return { intent: "sender_health", params: {}, summary: "Check sending reputation and bounce rate" };
+  if (
+    has(
+      s,
+      "sender health",
+      "sender reputation",
+      "reputation",
+      "bounce rate",
+      "bounces",
+      "deliverability",
+      "am i banned",
+      "blacklist",
+    )
+  ) {
+    return {
+      intent: "sender_health",
+      params: {},
+      summary: "Check sending reputation and bounce rate",
+    };
   }
 
   // --- pause a campaign (write)
@@ -184,7 +292,19 @@ export function routeIntent(message: string): AgentRequest | null {
   }
 
   // --- stats
-  if (has(s, "how many", "stats", "statistics", "performance", "numbers", "results", "how much did", "report")) {
+  if (
+    has(
+      s,
+      "how many",
+      "stats",
+      "statistics",
+      "performance",
+      "numbers",
+      "results",
+      "how much did",
+      "report",
+    )
+  ) {
     return { intent: "campaign_stats", params: {}, summary: "Show sending and reply numbers" };
   }
 
@@ -194,13 +314,19 @@ export function routeIntent(message: string): AgentRequest | null {
   }
 
   // --- add existing contacts to a campaign (write)
-  if (has(s, "add", "assign", "put", "move") && has(s, "campaign") && !has(s, "find", "search", "look for", "get me")) {
+  if (
+    has(s, "add", "assign", "put", "move") &&
+    has(s, "campaign") &&
+    !has(s, "find", "search", "look for", "get me")
+  ) {
     const name = campaignNameFrom(message, "to campaign called ", "to the campaign called ", "to ");
     const who = afterPrep(s, "add ", "assign ", "move ");
     return {
       intent: "add_contacts_to_campaign",
       params: { campaignName: name, query: who?.slice(0, 60) },
-      summary: name ? `Add "${who ?? "matching contacts"}" to the campaign "${name}"` : "Add contacts to a campaign",
+      summary: name
+        ? `Add "${who ?? "matching contacts"}" to the campaign "${name}"`
+        : "Add contacts to a campaign",
     };
   }
 
@@ -214,9 +340,36 @@ export function routeIntent(message: string): AgentRequest | null {
     };
   }
 
+  // --- suggest targeting. The only GOALS intent the router had no branch for,
+  // so the menu chip for it would have fallen through to the model and cost an
+  // AI call. Kept deliberately narrow: "find me dentists in London" must still
+  // be find_contacts, and "who has unsubscribed" is matched by compliance_check
+  // earlier in this function.
+  if (
+    has(
+      s,
+      "who should i email",
+      "who to email",
+      "who do i email",
+      "who am i emailing",
+      "what should i email",
+    ) ||
+    (has(s, "suggest", "recommend", "better targeting", "best targeting", "who") &&
+      has(s, "targeting", "target", "email list") &&
+      !has(s, "unsubscrib", "find", "search"))
+  ) {
+    return {
+      intent: "suggest_targeting",
+      params: {},
+      summary: "Recommend who to email",
+    };
+  }
+
   // --- find contacts. "leads", "customers", "businesses" and "people" are all
   // the same ask to a customer, so all of them route identically.
-  if (has(s, "find", "search", "look for", "get me", "show me", "need", "want", "i need", "give me")) {
+  if (
+    has(s, "find", "search", "look for", "get me", "show me", "need", "want", "i need", "give me")
+  ) {
     const company = afterPrep(s, "for ", "from ");
     const city = findCity(s);
     return {
@@ -250,7 +403,8 @@ export const INTENT_DESCRIPTIONS: Record<AgentIntent, string> = {
   suggest_targeting: "Recommend who to email next, from the segments already in their contacts",
   find_contacts: "Search the user's saved contacts by company, city, country, or category",
   add_contacts_to_campaign: "Attach matching saved contacts to an existing campaign",
-  create_campaign_draft: "Create a new campaign in DRAFT status, ready for the user to review and launch",
+  create_campaign_draft:
+    "Create a new campaign in DRAFT status, ready for the user to review and launch",
   pause_campaign: "Pause an active campaign so it stops sending",
   compliance_check: "Report who has unsubscribed and is blocked from future sends",
   sender_health: "Report sending reputation, bounce rate, and mailbox warm-up state",

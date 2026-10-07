@@ -23,9 +23,9 @@ import { effectivePlan } from "./effective-plan.ts";
 type Db = { from: (t: string) => any };
 
 const PROFILE_COLUMNS =
-  "name, company, plan, referral_reward_plan, referral_reward_until, "
-  + "gmail_connected, gmail_email, business_description, offer, problem_solved, "
-  + "target_customer, cities, communication_style, dont_claim, website_url";
+  "name, company, plan, referral_reward_plan, referral_reward_until, " +
+  "gmail_connected, gmail_email, business_description, offer, problem_solved, " +
+  "target_customer, cities, communication_style, dont_claim, website_url";
 
 export interface AgentAccountContext {
   /** The "## THEIR ACCOUNT" block for the prompt. */
@@ -63,23 +63,43 @@ export async function loadAgentAccountContext(
 
     // Fire the independent reads together - serial awaits would add a full
     // round trip each and this runs on every single turn.
-    const [todayRes, monthRes, leadRes, campRes, activeRes, replyRes, interestedRes] = await Promise.all([
-      db.from("usage_limits").select("emails_sent_today, limit_date").eq("user_id", userId).maybeSingle(),
-      db.from("emails_sent").select("*", { count: "exact", head: true })
-        .eq("user_id", userId).gte("sent_at", monthStart).not("gmail_message_id", "is", null),
-      db.from("leads").select("*", { count: "exact", head: true }).eq("user_id", userId),
-      db.from("campaigns").select("*", { count: "exact", head: true }).eq("user_id", userId),
-      db.from("campaigns").select("*", { count: "exact", head: true }).eq("user_id", userId).eq("status", "active"),
-      db.from("emails_sent").select("*", { count: "exact", head: true })
-        .eq("user_id", userId).eq("replied", true),
-      db.from("emails_sent").select("*", { count: "exact", head: true })
-        .eq("user_id", userId).eq("reply_sentiment", "INTERESTED"),
-    ]);
+    const [todayRes, monthRes, leadRes, campRes, activeRes, replyRes, interestedRes] =
+      await Promise.all([
+        db
+          .from("usage_limits")
+          .select("emails_sent_today, limit_date")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        db
+          .from("emails_sent")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gte("sent_at", monthStart)
+          .not("gmail_message_id", "is", null),
+        db.from("leads").select("*", { count: "exact", head: true }).eq("user_id", userId),
+        db.from("campaigns").select("*", { count: "exact", head: true }).eq("user_id", userId),
+        db
+          .from("campaigns")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("status", "active"),
+        db
+          .from("emails_sent")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("replied", true),
+        db
+          .from("emails_sent")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("reply_sentiment", "INTERESTED"),
+      ]);
 
     const todayStr = new Date().toISOString().slice(0, 10);
-    const todaySent = todayRes.data && todayRes.data.limit_date === todayStr
-      ? Number(todayRes.data.emails_sent_today ?? 0)
-      : 0;
+    const todaySent =
+      todayRes.data && todayRes.data.limit_date === todayStr
+        ? Number(todayRes.data.emails_sent_today ?? 0)
+        : 0;
 
     const plan = effectivePlan({
       plan: profile?.plan ?? null,

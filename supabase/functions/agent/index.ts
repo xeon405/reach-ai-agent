@@ -23,23 +23,56 @@ import { createClient } from "npm:@supabase/supabase-js";
 import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { actionCaps, budgetPrompt, requestAction } from "../_shared/action-budget.ts";
-import { executeIntent, preflightWrite, hydrateCampaignName, type AgentOutcome } from "../_shared/agent-executor.ts";
 import {
-  loadPendingState, savePendingState, clearPendingState, mergePendingParams,
+  executeIntent,
+  preflightWrite,
+  hydrateCampaignName,
+  type AgentOutcome,
+} from "../_shared/agent-executor.ts";
+import {
+  loadPendingState,
+  savePendingState,
+  clearPendingState,
+  mergePendingParams,
 } from "../_shared/agent-pending.ts";
 import {
-  loadProfile, saveProfileFacts, clearProfile, hasFacts,
-  type Profile, type ProfileFacts,
+  loadProfile,
+  saveProfileFacts,
+  clearProfile,
+  hasFacts,
+  type Profile,
+  type ProfileFacts,
 } from "../_shared/agent-profile.ts";
 import {
-  GOALS, isWriteIntent, mergeParams, missingSlots, type AgentIntent, type AgentParams, type AgentRequest,
+  GOALS,
+  isWriteIntent,
+  mergeParams,
+  missingSlots,
+  type AgentIntent,
+  type AgentParams,
+  type AgentRequest,
 } from "../_shared/agent-capabilities.ts";
-import { understand, answerFromContext, repeatCount, trimTruncatedReply, type HistoryTurn, MAX_HISTORY } from "../_shared/agent-understand.ts";
+import {
+  understand,
+  answerFromContext,
+  repeatCount,
+  trimTruncatedReply,
+  type HistoryTurn,
+  MAX_HISTORY,
+} from "../_shared/agent-understand.ts";
 import { loadAgentAccountContext } from "../_shared/agent-account-context.ts";
 import { degradedReply } from "../_shared/business-context.ts";
 import {
-  ACCOUNT_SCOPE, describeLearned, forget, isLearnable, listLearned, phraseKey,
-  recall, recordUse, retireLastUsed, type LearnedRow,
+  ACCOUNT_SCOPE,
+  describeLearned,
+  forget,
+  isLearnable,
+  listLearned,
+  phraseKey,
+  recall,
+  recordUse,
+  retireLastUsed,
+  type LearnedRow,
 } from "../_shared/agent-learning.ts";
 // The keyword router is no longer the gatekeeper. It is the SAFETY NET for when
 // the model is unavailable, rate-limited, or returns something unusable.
@@ -58,8 +91,20 @@ type Admin = { from: (table: string) => any };
 /** Only an explicit agreement counts. Anything else is a decline. */
 function isAffirmative(msg: string): boolean {
   const m = phraseKey(msg);
-  return ["yes", "yeah", "yep", "yup", "ok", "okay", "sure", "do it", "go ahead", "confirm", "please do", "y"]
-    .includes(m);
+  return [
+    "yes",
+    "yeah",
+    "yep",
+    "yup",
+    "ok",
+    "okay",
+    "sure",
+    "do it",
+    "go ahead",
+    "confirm",
+    "please do",
+    "y",
+  ].includes(m);
 }
 
 /**
@@ -67,20 +112,33 @@ function isAffirmative(msg: string): boolean {
  * caller-supplied id belonging to someone else is rejected, not trusted, so a
  * forged conversationId cannot reach another tenant's history or vocabulary.
  */
-async function ensureConversation(admin: Admin, userId: string, conversationId: string | null): Promise<string> {
+async function ensureConversation(
+  admin: Admin,
+  userId: string,
+  conversationId: string | null,
+): Promise<string> {
   if (conversationId) {
     const { data: owns } = await admin
-      .from("agent_conversations").select("id").eq("id", conversationId).eq("user_id", userId).maybeSingle();
+      .from("agent_conversations")
+      .select("id")
+      .eq("id", conversationId)
+      .eq("user_id", userId)
+      .maybeSingle();
     if (owns) return owns.id as string;
   }
   const { data: created } = await admin
     .from("agent_conversations")
     .insert({ user_id: userId, title: "New chat" })
-    .select("id").single();
+    .select("id")
+    .single();
   return created?.id as string;
 }
 
-async function loadHistory(admin: Admin, userId: string, conversationId: string): Promise<HistoryTurn[]> {
+async function loadHistory(
+  admin: Admin,
+  userId: string,
+  conversationId: string,
+): Promise<HistoryTurn[]> {
   const { data } = await admin
     .from("agent_messages")
     .select("role, content")
@@ -115,7 +173,15 @@ async function persist(
       used_ai: usedAi,
       executed_at: opts.spent ? new Date().toISOString() : null,
     },
-    { conversation_id: convId, user_id: userId, role: "assistant", content: assistantText, intent, params, used_ai: usedAi },
+    {
+      conversation_id: convId,
+      user_id: userId,
+      role: "assistant",
+      content: assistantText,
+      intent,
+      params,
+      used_ai: usedAi,
+    },
   ]);
 }
 
@@ -151,23 +217,34 @@ Deno.serve(async (req) => {
       if (!id) return json({ error: "conversationId is required" }, 400, req);
       // Scoped by user_id so one account can never read another's thread.
       const { data: convo } = await admin
-        .from("agent_conversations").select("id, title, created_at")
-        .eq("id", id).eq("user_id", userId).maybeSingle();
+        .from("agent_conversations")
+        .select("id, title, created_at")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
       if (!convo) return json({ error: "Conversation not found" }, 404, req);
       const { data: msgs } = await admin
         .from("agent_messages")
         .select("id, role, content, intent, params, used_ai, created_at, executed_at")
-        .eq("conversation_id", id).eq("user_id", userId)
+        .eq("conversation_id", id)
+        .eq("user_id", userId)
         .order("created_at", { ascending: true })
         .limit(500);
-      return json({
-        conversationId: id,
-        title: convo.title,
-        messages: (msgs ?? []).map((m) => ({
-          id: m.id, role: m.role, content: m.content,
-          usedAi: m.used_ai ?? false, intent: m.intent ?? null,
-        })),
-      }, 200, req);
+      return json(
+        {
+          conversationId: id,
+          title: convo.title,
+          messages: (msgs ?? []).map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            usedAi: m.used_ai ?? false,
+            intent: m.intent ?? null,
+          })),
+        },
+        200,
+        req,
+      );
     }
 
     // ---- list this user's conversations, newest first --------------------
@@ -189,8 +266,11 @@ Deno.serve(async (req) => {
       if (!id) return json({ error: "conversationId is required" }, 400, req);
       // Messages first: they are children of the conversation.
       await admin.from("agent_messages").delete().eq("conversation_id", id).eq("user_id", userId);
-      const { error } = await admin.from("agent_conversations")
-        .delete().eq("id", id).eq("user_id", userId);
+      const { error } = await admin
+        .from("agent_conversations")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
       if (error) return json({ error: error.message }, 500, req);
       // Provisional phrases learned only in that chat are now meaningless.
       await admin.from("agent_learned_phrases").delete().eq("user_id", userId).eq("scope", id);
@@ -217,9 +297,15 @@ Deno.serve(async (req) => {
       return json({ ok: true }, 200, req);
     }
 
-    const message = String(body.message ?? "").slice(0, MAX_MESSAGE).trim();
+    const message = String(body.message ?? "")
+      .slice(0, MAX_MESSAGE)
+      .trim();
     if (!message) return json({ error: "Message is empty" }, 400, req);
     const confirm = body.confirm === true;
+    // The UI sends this when the person clicked a MENU BUTTON instead of
+    // typing. A click is an unambiguous, machine-chosen intent, so it must
+    // never be read by the model: same answer, zero AI calls, zero quota.
+    const viaMenu = body.viaMenu === true;
     const convId = await ensureConversation(admin, userId, body.conversationId ?? null);
 
     // =====================================================================
@@ -241,12 +327,29 @@ Deno.serve(async (req) => {
           .limit(1)
           .maybeSingle();
         if (last?.id) {
-          await admin.from("agent_messages").update({ executed_at: new Date().toISOString() })
-            .eq("id", last.id as string).eq("user_id", userId);
+          await admin
+            .from("agent_messages")
+            .update({ executed_at: new Date().toISOString() })
+            .eq("id", last.id as string)
+            .eq("user_id", userId);
         }
         const reply = "Understood — I did not change anything.";
-        await persist(admin, userId, convId, message, reply, null, {}, false, { storeUserIntent: false, spent: true });
-        return json({ conversationId: convId, text: reply, intent: null, declined: true, usedAi: false, source: "confirm" }, 200, req);
+        await persist(admin, userId, convId, message, reply, null, {}, false, {
+          storeUserIntent: false,
+          spent: true,
+        });
+        return json(
+          {
+            conversationId: convId,
+            text: reply,
+            intent: null,
+            declined: true,
+            usedAi: false,
+            source: "confirm",
+          },
+          200,
+          req,
+        );
       }
 
       const { data: pending } = await admin
@@ -262,9 +365,17 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!pending?.intent || !isWriteIntent(pending.intent as AgentIntent)) {
-        const reply = "There is nothing waiting for your confirmation. Ask me to change something and I will check with you first.";
-        await persist(admin, userId, convId, message, reply, null, {}, false, { storeUserIntent: false, spent: true });
-        return json({ conversationId: convId, text: reply, intent: null, usedAi: false, source: "confirm" }, 200, req);
+        const reply =
+          "There is nothing waiting for your confirmation. Ask me to change something and I will check with you first.";
+        await persist(admin, userId, convId, message, reply, null, {}, false, {
+          storeUserIntent: false,
+          spent: true,
+        });
+        return json(
+          { conversationId: convId, text: reply, intent: null, usedAi: false, source: "confirm" },
+          200,
+          req,
+        );
       }
 
       const req_: AgentRequest = {
@@ -273,7 +384,11 @@ Deno.serve(async (req) => {
         summary: pending.content ?? "",
       };
 
-      const { data: prof } = await admin.from("profiles").select("plan").eq("id", userId).maybeSingle();
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("plan")
+        .eq("id", userId)
+        .maybeSingle();
       const gate = await requestAction(admin, {
         conversationId: convId,
         messageId: `${convId}:${nid()}`,
@@ -281,20 +396,51 @@ Deno.serve(async (req) => {
       });
       if (!gate.allowed) {
         const reply = budgetPrompt(gate);
-        await persist(admin, userId, convId, message, reply, null, {}, false, { storeUserIntent: false, spent: true });
-        return json({ conversationId: convId, text: reply, intent: req_.intent, limitHit: true, usedAi: false, source: "confirm" }, 200, req);
+        await persist(admin, userId, convId, message, reply, null, {}, false, {
+          storeUserIntent: false,
+          spent: true,
+        });
+        return json(
+          {
+            conversationId: convId,
+            text: reply,
+            intent: req_.intent,
+            limitHit: true,
+            usedAi: false,
+            source: "confirm",
+          },
+          200,
+          req,
+        );
       }
 
       const outcome = await runOutcome(admin, userId, req_);
-      await admin.from("agent_messages").update({ executed_at: new Date().toISOString() })
-        .eq("id", pending.id as string).eq("user_id", userId);
-      await persist(admin, userId, convId, message, outcome.text, req_.intent, req_.params, false, { storeUserIntent: false });
+      await admin
+        .from("agent_messages")
+        .update({ executed_at: new Date().toISOString() })
+        .eq("id", pending.id as string)
+        .eq("user_id", userId);
+      await persist(admin, userId, convId, message, outcome.text, req_.intent, req_.params, false, {
+        storeUserIntent: false,
+      });
       await insertAudit(admin, {
         user_id: userId,
         event: "agent_write",
         payload: { intent: req_.intent, params: req_.params, source: "confirm" },
       });
-      return json({ conversationId: convId, text: outcome.text, rows: outcome.rows, empty: outcome.empty, intent: req_.intent, usedAi: false, source: "confirm" }, 200, req);
+      return json(
+        {
+          conversationId: convId,
+          text: outcome.text,
+          rows: outcome.rows,
+          empty: outcome.empty,
+          intent: req_.intent,
+          usedAi: false,
+          source: "confirm",
+        },
+        200,
+        req,
+      );
     }
 
     // =====================================================================
@@ -315,22 +461,36 @@ Deno.serve(async (req) => {
     const accountCtx = await loadAgentAccountContext(admin, userId);
 
     let usedAi = false;
-    let source: "learned" | "ai" | "router" = "learned";
+    let source: "learned" | "ai" | "router" | "menu" = "learned";
     let routed: AgentRequest | null = null;
     let replyText: string | null = null;
-    let askOnly: { question: string; intent: AgentIntent | null; params?: AgentParams } | null = null;
+    let askOnly: { question: string; intent: AgentIntent | null; params?: AgentParams } | null =
+      null;
     let profileReply: string | null = null;
     let profileFacts: ProfileFacts = {};
     let cacheIntent: AgentIntent | null = null;
     let u: Awaited<ReturnType<typeof understand>> = null;
     let cacheParams: AgentParams = {};
 
-    if (learned) {
+    // MENU FAST PATH — a button click is an unambiguous, machine-chosen
+    // intent. routeIntent() is pure keyword matching with no I/O, so it
+    // answers here with zero AI calls and zero quota. It runs BEFORE the
+    // learned-phrase lane because an explicit click beats a phrase we
+    // guessed from an earlier turn. If the router does not recognise it we
+    // fall through to the normal path instead of dead-ending.
+    const menuHit = viaMenu ? routeIntent(message) : null;
+    if (menuHit) {
+      routed = menuHit;
+      source = "menu";
+    } else if (learned) {
       routed = { intent: learned.intent, params: learned.params, summary: message };
       source = "learned";
     } else {
       const cap = Number(Deno.env.get("AI_DAILY_CAP") ?? 200);
-      const { data: allowed, error: qErr } = await admin.rpc("consume_ai_quota", { uid: userId, cap });
+      const { data: allowed, error: qErr } = await admin.rpc("consume_ai_quota", {
+        uid: userId,
+        cap,
+      });
       if (qErr) return json({ error: qErr.message }, 500, req);
       if (!allowed) {
         const fallback = routeIntent(message);
@@ -369,7 +529,17 @@ Deno.serve(async (req) => {
               // "router", not "ai": the model did NOT answer this turn. Reporting
               // "ai" here hid a total provider outage behind a normal-looking
               // success, which is how a broken AI lane looks like flaky prompts.
-              return json({ conversationId: convId, text: reply, intent: null, source: "router", usedAi: false }, 200, req);
+              return json(
+                {
+                  conversationId: convId,
+                  text: reply,
+                  intent: null,
+                  source: "router",
+                  usedAi: false,
+                },
+                200,
+                req,
+              );
             }
           }
         } else {
@@ -428,21 +598,29 @@ Deno.serve(async (req) => {
       }
       await clearPendingState(admin, userId, convId);
       await persist(admin, userId, convId, message, profileReply, null, {}, usedAi);
-      return json({
-        conversationId: convId,
-        text: profileReply,
-        intent: null,
-        remembered: hasFacts(profileFacts),
-        profile: publicProfile(profile),
-        usedAi,
-        source,
-      }, 200, req);
+      return json(
+        {
+          conversationId: convId,
+          text: profileReply,
+          intent: null,
+          remembered: hasFacts(profileFacts),
+          profile: publicProfile(profile),
+          usedAi,
+          source,
+        },
+        200,
+        req,
+      );
     }
 
     // Pure conversation: no data touched, nothing to execute.
     if (replyText !== null) {
       await persist(admin, userId, convId, message, replyText, null, {}, usedAi);
-      return json({ conversationId: convId, text: replyText, intent: null, usedAi, source }, 200, req);
+      return json(
+        { conversationId: convId, text: replyText, intent: null, usedAi, source },
+        200,
+        req,
+      );
     }
 
     // Missing a required slot, or genuinely ambiguous: ask, do not guess.
@@ -455,7 +633,11 @@ Deno.serve(async (req) => {
       await mergePendingParams(admin, userId, convId, askOnly.params ?? {}, askOnly.intent);
       const safeQuestion = trimTruncatedReply(askOnly.question);
       await persist(admin, userId, convId, message, safeQuestion, null, {}, usedAi);
-      return json({ conversationId: convId, text: safeQuestion, intent: null, asked: true, usedAi, source }, 200, req);
+      return json(
+        { conversationId: convId, text: safeQuestion, intent: null, asked: true, usedAi, source },
+        200,
+        req,
+      );
     }
 
     if (!routed) {
@@ -501,20 +683,40 @@ Deno.serve(async (req) => {
       if (pre?.need) {
         await savePendingState(admin, userId, convId, pre.need.intent, pre.need.params);
         await persist(admin, userId, convId, message, pre.text, null, {}, usedAi);
-        return json({
-          conversationId: convId, text: pre.text, intent: null, asked: true,
-          rows: pre.rows, usedAi, source,
-        }, 200, req);
+        return json(
+          {
+            conversationId: convId,
+            text: pre.text,
+            intent: null,
+            asked: true,
+            rows: pre.rows,
+            usedAi,
+            source,
+          },
+          200,
+          req,
+        );
       }
 
       if (pre?.choose) {
         await savePendingState(admin, userId, convId, pre.choose.intent, pre.choose.params);
         await persist(admin, userId, convId, message, pre.text, null, {}, usedAi);
-        return json({
-          conversationId: convId, text: pre.text, intent: null, asked: true,
-          rows: pre.choose.candidates.map((name) => ({ label: name, value: "Say the name to pick this one" })),
-          usedAi, source,
-        }, 200, req);
+        return json(
+          {
+            conversationId: convId,
+            text: pre.text,
+            intent: null,
+            asked: true,
+            rows: pre.choose.candidates.map((name) => ({
+              label: name,
+              value: "Say the name to pick this one",
+            })),
+            usedAi,
+            source,
+          },
+          200,
+          req,
+        );
       }
 
       if (pre?.empty) {
@@ -522,10 +724,19 @@ Deno.serve(async (req) => {
         // parked for the next message to inherit.
         await clearPendingState(admin, userId, convId);
         await persist(admin, userId, convId, message, pre.text, null, {}, usedAi);
-        return json({
-          conversationId: convId, text: pre.text, intent: null, empty: true,
-          rows: [], usedAi, source,
-        }, 200, req);
+        return json(
+          {
+            conversationId: convId,
+            text: pre.text,
+            intent: null,
+            empty: true,
+            rows: [],
+            usedAi,
+            source,
+          },
+          200,
+          req,
+        );
       }
 
       // Unambiguous: now it is safe to ask.
@@ -535,15 +746,19 @@ Deno.serve(async (req) => {
       await clearPendingState(admin, userId, convId);
       const ask = `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`;
       await persist(admin, userId, convId, message, ask, routed.intent, routed.params, usedAi);
-      return json({
-        conversationId: convId,
-        text: ask,
-        intent: routed.intent,
-        pending: { intent: routed.intent, params: routed.params },
-        rows: [{ label: "This will change your account", value: "Reply yes to confirm" }],
-        usedAi,
-        source,
-      }, 200, req);
+      return json(
+        {
+          conversationId: convId,
+          text: ask,
+          intent: routed.intent,
+          pending: { intent: routed.intent, params: routed.params },
+          rows: [{ label: "This will change your account", value: "Reply yes to confirm" }],
+          usedAi,
+          source,
+        },
+        200,
+        req,
+      );
     }
 
     // The request completed (or was abandoned), so the clarification is spent.
@@ -563,10 +778,19 @@ Deno.serve(async (req) => {
     if (outcome.need) {
       await savePendingState(admin, userId, convId, outcome.need.intent, outcome.need.params);
       await persist(admin, userId, convId, message, outcome.text, null, {}, usedAi);
-      return json({
-        conversationId: convId, text: outcome.text, intent: null, asked: true,
-        rows: outcome.rows, usedAi, source,
-      }, 200, req);
+      return json(
+        {
+          conversationId: convId,
+          text: outcome.text,
+          intent: null,
+          asked: true,
+          rows: outcome.rows,
+          usedAi,
+          source,
+        },
+        200,
+        req,
+      );
     }
 
     // Two campaigns share a name: refuse to guess and offer the real options.
@@ -575,11 +799,22 @@ Deno.serve(async (req) => {
     if (outcome.choose) {
       await savePendingState(admin, userId, convId, outcome.choose.intent, outcome.choose.params);
       await persist(admin, userId, convId, message, outcome.text, null, {}, usedAi);
-      return json({
-        conversationId: convId, text: outcome.text, intent: null, asked: true,
-        rows: outcome.choose.candidates.map((name) => ({ label: name, value: "Say the name to pick this one" })),
-        usedAi, source,
-      }, 200, req);
+      return json(
+        {
+          conversationId: convId,
+          text: outcome.text,
+          intent: null,
+          asked: true,
+          rows: outcome.choose.candidates.map((name) => ({
+            label: name,
+            value: "Say the name to pick this one",
+          })),
+          usedAi,
+          source,
+        },
+        200,
+        req,
+      );
     }
 
     // Confusion is the retirement signal, NOT an empty result. A brand-new
@@ -596,20 +831,28 @@ Deno.serve(async (req) => {
     if (!learned && cacheIntent && isLearnable(key) && routed.intent === cacheIntent) {
       await recordUse(admin, userId, key, cacheIntent, cacheParams, convId, null);
     } else if (learned) {
-      await recordUse(admin, userId, learned.phrase, learned.intent, learned.params, convId, learned);
+      await recordUse(
+        admin,
+        userId,
+        learned.phrase,
+        learned.intent,
+        learned.params,
+        convId,
+        learned,
+      );
     }
 
     // A read can repeat itself too. The guard used to sit only on the chat path,
-// so a deterministic executor line came back four times in a row untouched.
-//
-// Two exclusions, both deliberate:
-// - the learned fast lane REPEATS on purpose; serving a cached phrase again is
-//   the whole point, and re-asking the model would spend an AI call to say the
-//   same thing
-// - a write confirmation is not ours to rewrite; it must match what the person
-//   is confirming
-const isWriteGoal = GOALS.find((g) => g.intent === routed.intent)?.write === true;
-if (!learned && !isWriteGoal && repeatCount(outcome.text, history) >= 1) {
+    // so a deterministic executor line came back four times in a row untouched.
+    //
+    // Two exclusions, both deliberate:
+    // - the learned fast lane REPEATS on purpose; serving a cached phrase again is
+    //   the whole point, and re-asking the model would spend an AI call to say the
+    //   same thing
+    // - a write confirmation is not ours to rewrite; it must match what the person
+    //   is confirming
+    const isWriteGoal = GOALS.find((g) => g.intent === routed.intent)?.write === true;
+    if (!learned && !isWriteGoal && repeatCount(outcome.text, history) >= 1) {
       const fresh = await answerFromContext(message, history, userId, accountCtx);
       if (fresh) {
         outcome.text = fresh;
@@ -618,16 +861,29 @@ if (!learned && !isWriteGoal && repeatCount(outcome.text, history) >= 1) {
       }
     }
 
-    await persist(admin, userId, convId, message, outcome.text, routed.intent, routed.params, usedAi);
-    return json({
-      conversationId: convId,
-      text: outcome.text,
-      rows: outcome.rows,
-      empty: outcome.empty,
-      intent: routed.intent,
+    await persist(
+      admin,
+      userId,
+      convId,
+      message,
+      outcome.text,
+      routed.intent,
+      routed.params,
       usedAi,
-      source,
-    }, 200, req);
+    );
+    return json(
+      {
+        conversationId: convId,
+        text: outcome.text,
+        rows: outcome.rows,
+        empty: outcome.empty,
+        intent: routed.intent,
+        usedAi,
+        source,
+      },
+      200,
+      req,
+    );
   } catch (err) {
     console.error("agent failed", err);
     return json({ error: "The assistant could not handle that." }, 500, req);
