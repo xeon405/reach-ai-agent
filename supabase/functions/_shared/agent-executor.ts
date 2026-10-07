@@ -69,6 +69,15 @@ async function resolveCampaign(
   };
 }
 
+export interface AgentOption {
+  /** Short, plain label shown on the button. */
+  label: string;
+  /** Sent verbatim as the next message when tapped. */
+  message?: string;
+  /** In-app page to open instead of sending anything. */
+  href?: string;
+}
+
 export interface AgentOutcome {
   /** Plain-language result shown in the chat bubble. */
   text: string;
@@ -76,6 +85,12 @@ export interface AgentOutcome {
   rows?: { label: string; value: string }[];
   /** Set when nothing was found, so the UI can suggest what to do instead. */
   empty?: boolean;
+  /**
+   * Next steps the person can tap rather than work out and type. Used for the
+   * two moments where a chat naturally stalls: an ambiguous name (pick one of
+   * these) and an empty result (here is where to go instead).
+   */
+  options?: AgentOption[];
   /**
    * A SLOT is missing, not the whole goal. The caller remembers it and folds
    * the person's next answer into the same request.
@@ -199,7 +214,17 @@ async function findContacts(db: Db, userId: string, req: AgentRequest): Promise<
   const { data, error } = await q.limit(Math.min(p.limit ?? 25, MAX_ROWS));
   if (error) return { text: "I could not search your contacts just now." };
   if (!data || data.length === 0) {
-    return { text: `I could not find any saved contacts${p.category ? ` for ${p.category}` : ""}.`, empty: true };
+    // An empty list is a dead end unless it says where contacts come from.
+    // These are only ever READ from, so the honest next step is the page that
+    // adds them - not another search that would return nothing again.
+    const filter = p.category ?? p.city ?? p.query;
+    return {
+      text: filter
+        ? `You have no saved contacts matching "${filter}" yet. New contacts come from Lead Finder - search there and they will show up here.`
+        : "You do not have any saved contacts yet. New contacts come from Lead Finder - search there and they will show up here.",
+      empty: true,
+      options: [{ label: "Open Lead Finder", href: "/lead-finder" }],
+    };
   }
   const rows = data.slice(0, 25).map((l: any) => ({
     label: l.company || l.name || "Unnamed",

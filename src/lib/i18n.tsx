@@ -118,6 +118,7 @@ const DICT: Record<string, { en: string; ar: string }> = {
   app_agent_direct: { en: "Looked up directly", ar: "تم البحث مباشرة" },
   app_agent_working: { en: "Working…", ar: "جارٍ العمل…" },
   app_agent_placeholder: { en: "Ask something…", ar: "اسأل شيئاً…" },
+  app_agent_answer_placeholder: { en: "Type your answer…", ar: "اكتب إجابتك…" },
   app_agent_chats: { en: "Past chats", ar: "المحادثات السابقة" },
   app_agent_chats_body: {
     en: "Your chats are saved. Open any of them, or delete one you no longer want. Nothing is deleted automatically.",

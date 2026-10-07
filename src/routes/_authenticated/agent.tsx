@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Sparkles,
   Send,
@@ -24,6 +24,9 @@ export const Route = createFileRoute("/_authenticated/agent")({
 
 type Row = { label: string; value: string };
 
+/** A tap the agent offered: either the next message to send, or a page to open. */
+type AgentOption = { label: string; message?: string; href?: string };
+
 type Bubble = {
   id: string;
   role: "user" | "assistant";
@@ -32,6 +35,10 @@ type Bubble = {
   /** A write is waiting for the user to say yes before it runs. */
   pending?: boolean;
   confirm?: boolean;
+  /** The agent asked something, so the reply box opens for this turn only. */
+  asked?: boolean;
+  /** Next steps offered instead of leaving the person at a dead end. */
+  options?: AgentOption[];
   usedAi?: boolean;
   source?: string;
   limitHit?: boolean;
@@ -191,6 +198,8 @@ function AgentPage() {
     setMenuOpen(false);
   }
 
+  const navigate = useNavigate();
+
   /** One menu click. `viaMenu` keeps it on the free keyword router. */
   function pick(m: (typeof MENU)[number]): void {
     bumpMenuUse(m.label);
@@ -199,6 +208,11 @@ function AgentPage() {
   }
 
   const lastBubble = bubbles[bubbles.length - 1];
+  // The agent asked us something, so the reply box opens for this one turn
+  // even in menu-first mode. Without it "What should the campaign be called?"
+  // could not be answered without first hunting for the type-your-own link.
+  // It closes again as soon as an answer goes out.
+  const awaiting = !busy && Boolean(lastBubble?.asked);
   // The menu belongs at the end of the conversation, not only at the top:
   // after any reply the next step is one tap away. The one exception is an
   // unanswered write confirmation, where a second row of buttons would
@@ -351,6 +365,9 @@ function AgentPage() {
           rows: data.rows,
           pending: Boolean(data.pending),
           confirm: Boolean(data.pending),
+          asked: Boolean(data.asked),
+          options:
+            Array.isArray(data.options) && data.options.length > 0 ? data.options : undefined,
           usedAi: data.usedAi,
           source: data.source,
           limitHit: Boolean(data.limitHit),
@@ -579,6 +596,28 @@ function AgentPage() {
                   </dl>
                 )}
 
+                {b.options && b.options.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {b.options.map((o) => (
+                      <Button
+                        key={o.label}
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          if (o.href) {
+                            navigate({ to: o.href });
+                            return;
+                          }
+                          if (o.message) void send(o.message);
+                        }}
+                      >
+                        {o.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
                 {b.confirm && (
                   <div className="mt-3 flex gap-2">
                     <Button size="sm" disabled={busy} onClick={() => void send("yes", true)}>
@@ -634,14 +673,16 @@ function AgentPage() {
       </div>
 
       <div className="mx-auto flex w-full max-w-4xl items-end gap-2 border-t border-border px-4 pt-3">
-        {typing ? (
+        {typing || awaiting ? (
           <>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
               rows={1}
-              placeholder={t("app_agent_placeholder")}
+              placeholder={
+                awaiting && !typing ? t("app_agent_answer_placeholder") : t("app_agent_placeholder")
+              }
               className="max-h-32 min-h-[42px] flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
             />
             <Button
