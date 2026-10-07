@@ -5,7 +5,7 @@
  *  - /assets/* (hashed, immutable): cache-first.
  *  - Supabase REST/auth/functions + cross-origin: network only (never cached).
  */
-const VERSION = "v6";
+const VERSION = "v7";
 const SHELL_CACHE = `shell-${VERSION}`;
 const ASSET_CACHE = `assets-${VERSION}`;
 const SHELL_URL = "/";
