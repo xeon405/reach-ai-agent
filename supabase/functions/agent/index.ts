@@ -91,20 +91,24 @@ type Admin = { from: (table: string) => any };
 /** Only an explicit agreement counts. Anything else is a decline. */
 function isAffirmative(msg: string): boolean {
   const m = phraseKey(msg);
-  return [
-    "yes",
-    "yeah",
-    "yep",
-    "yup",
-    "ok",
-    "okay",
-    "sure",
-    "do it",
-    "go ahead",
-    "confirm",
-    "please do",
-    "y",
-  ].includes(m) || m.startsWith("yes ") || m.startsWith("ok ");
+  return (
+    [
+      "yes",
+      "yeah",
+      "yep",
+      "yup",
+      "ok",
+      "okay",
+      "sure",
+      "do it",
+      "go ahead",
+      "confirm",
+      "please do",
+      "y",
+    ].includes(m) ||
+    m.startsWith("yes ") ||
+    m.startsWith("ok ")
+  );
 }
 
 /**

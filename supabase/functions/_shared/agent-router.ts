@@ -241,7 +241,8 @@ function campaignNameFrom(orig: string, ...verbs: string[]): string | undefined 
       )
     )
       continue;
-    if (tv === "a campaign" || tv === "the campaign" || tv === "my campaigns" || tv === "campaigns") continue;
+    if (tv === "a campaign" || tv === "the campaign" || tv === "my campaigns" || tv === "campaigns")
+      continue;
     return val.slice(0, 80);
   }
   return undefined;
