@@ -104,7 +104,7 @@ function isAffirmative(msg: string): boolean {
     "confirm",
     "please do",
     "y",
-  ].includes(m);
+  ].includes(m) || m.startsWith("yes ") || m.startsWith("ok ");
 }
 
 /**
