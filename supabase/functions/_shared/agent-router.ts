@@ -218,7 +218,13 @@ function campaignNameFrom(orig: string, ...verbs: string[]): string | undefined 
     const i = orig.toLowerCase().indexOf(nv);
     if (i !== -1) {
       const val = clean(orig.slice(i + nv.length));
-      if (val) return val.slice(0, 80);
+      if (
+        val &&
+        !/^(a |an |the |my |that |those |these |to |of |for |in |at |as |on |with |campaign|campaigns|it)$/i.test(
+          val.trim(),
+        )
+      )
+        return val.slice(0, 80);
     }
   }
   for (const v of verbs) {
@@ -227,7 +233,16 @@ function campaignNameFrom(orig: string, ...verbs: string[]): string | undefined 
     const rest = orig.slice(i + v.length);
     const stop = rest.search(/\b(?:in|for|from|with|and|but|who|that|at|as|to)\b/i);
     const val = clean(stop === -1 ? rest : rest.slice(0, stop));
-    if (val) return val.slice(0, 80);
+    if (!val) continue;
+    const tv = val.trim().toLowerCase();
+    if (
+      /^(a|an|the|my|that|those|these|to|of|for|in|at|as|on|with|campaign|campaigns|it|them|this)$/i.test(
+        tv,
+      )
+    )
+      continue;
+    if (tv === "a campaign" || tv === "the campaign" || tv === "my campaigns" || tv === "campaigns") continue;
+    return val.slice(0, 80);
   }
   return undefined;
 }
