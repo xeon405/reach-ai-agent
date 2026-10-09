@@ -62,7 +62,6 @@ export async function findSavedLeads(
     .select("*")
     .eq("niche", q.niche)
     .eq("country", q.country)
-    .not("email", "is", null)
     .order("last_seen", { ascending: false })
     .limit(Math.max(1, Math.min(q.limit, 100)));
   const locCity = (q.location ?? "").split(",")[0].trim().toLowerCase();
@@ -117,18 +116,25 @@ export async function saveBusinesses(
   niche: string,
   country: string,
 ): Promise<number> {
-  const rows: Array<Record<string, unknown>> = [];
+  // A business is worth remembering even before we know its email: Google
+  // returns the business, not the inbox, and most rows have no email. Keeping
+  // only email-bearing rows is why this "our own map" stayed at ~100 entries
+  // and never got big enough to answer a repeat search for free. So we now save
+  // BOTH: with-email rows into one upsert, no-email rows into another that
+  // deliberately omits the email columns, so a later email-less sighting of a
+  // business we already have an email for can never blank that email out.
+  const withEmail: Array<Record<string, unknown>> = [];
+  const noEmail: Array<Record<string, unknown>> = [];
   const seen = new Set<string>();
   for (const l of leads) {
     const email = String(l.email ?? "").trim().toLowerCase();
-    if (!email || !email.includes("@")) continue;
+    const hasEmail = email.includes("@");
     const key = placeKey(l as { place_id?: string; email?: string; website?: string });
     if (!key) continue;
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push({
+    const identity: Record<string, unknown> = {
       place_id: key,
-      email,
       website: String(l.website ?? ""),
       domain: domainOf(String(l.website ?? "")),
       name: String(l.name ?? ""),
@@ -142,19 +148,35 @@ export async function saveBusinesses(
       phone: String(l.phone ?? ""),
       address: String(l.address ?? ""),
       rating: typeof l.rating === "number" ? l.rating : null,
-      email_source: l.email_source ? String(l.email_source) : null,
-      email_source_url: l.email_source_url ? String(l.email_source_url) : null,
-      email_status: l.email_status ? String(l.email_status) : null,
-      email_confidence: typeof l.email_confidence === "number" ? l.email_confidence : null,
-      email_is_role: typeof l.email_is_role === "boolean" ? l.email_is_role : null,
-      email_is_disposable: typeof l.email_is_disposable === "boolean" ? l.email_is_disposable : null,
       last_seen: new Date().toISOString(),
-    });
+    };
+    if (hasEmail) {
+      withEmail.push({
+        ...identity,
+        email,
+        email_source: l.email_source ? String(l.email_source) : null,
+        email_source_url: l.email_source_url ? String(l.email_source_url) : null,
+        email_status: l.email_status ? String(l.email_status) : null,
+        email_confidence: typeof l.email_confidence === "number" ? l.email_confidence : null,
+        email_is_role: typeof l.email_is_role === "boolean" ? l.email_is_role : null,
+        email_is_disposable: typeof l.email_is_disposable === "boolean" ? l.email_is_disposable : null,
+      });
+    } else {
+      noEmail.push(identity);
+    }
   }
-  if (rows.length === 0) return 0;
-  const { error } = await supabase.from("saved_businesses").upsert(rows, { onConflict: "place_id" });
-  if (error) console.error("saveBusinesses:", error.message);
-  return error ? 0 : rows.length;
+  let saved = 0;
+  if (withEmail.length > 0) {
+    const { error } = await supabase.from("saved_businesses").upsert(withEmail, { onConflict: "place_id" });
+    if (error) console.error("saveBusinesses(email):", error.message);
+    else saved += withEmail.length;
+  }
+  if (noEmail.length > 0) {
+    const { error } = await supabase.from("saved_businesses").upsert(noEmail, { onConflict: "place_id" });
+    if (error) console.error("saveBusinesses(no email):", error.message);
+    else saved += noEmail.length;
+  }
+  return saved;
 }
 
 // ---- Refresh rotation: keep covered areas fresh without wasting quota ----
