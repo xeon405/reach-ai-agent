@@ -12,6 +12,16 @@ import {
   LayoutGrid,
   PenLine,
   X,
+  Megaphone,
+  Users,
+  BarChart3,
+  Inbox,
+  Settings,
+  ChevronRight,
+  ArrowRight,
+  ArrowLeft,
+  Search,
+  type LucideIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -119,6 +129,21 @@ const TREE: MenuNode[] = [
 
 /** The level the menu opens on: the service list itself. */
 const ROOT: MenuNode = { label: "", children: TREE };
+
+/** Each top service wears an icon in a tinted square. Icons give the eye a
+ * target and make the launcher scannable; a service's children inherit the
+ * parent's look so a level keeps one identity. Class names are written out in
+ * full because Tailwind only ships the ones it can see in the source. */
+type NodeStyle = { icon: LucideIcon; tint: string };
+const NODE_STYLE: Record<string, NodeStyle> = {
+  Campaigns: { icon: Megaphone, tint: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+  Leads: { icon: Users, tint: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+  Results: { icon: BarChart3, tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  Inbox: { icon: Inbox, tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  Safety: { icon: ShieldCheck, tint: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
+  Account: { icon: Settings, tint: "bg-slate-500/10 text-slate-600 dark:text-slate-400" },
+};
+const DEFAULT_STYLE: NodeStyle = { icon: ArrowRight, tint: "bg-muted text-muted-foreground" };
 
 /** localStorage keys. Teach-once is per-browser on purpose: showing the same
  * "you can just type!" pop-up on every visit is a nag, not help. */
@@ -262,25 +287,65 @@ function AgentPage() {
     if (m.message) void send(m.message, false, true);
   }
 
-  /** The chips for the current level, plus a way back up the tree. */
-  function menuChips() {
+  /** Root services get their own icon/tint; a service's children inherit the
+   * parent's so a level keeps one visual identity. */
+  function styleFor(m: MenuNode, isRoot: boolean): NodeStyle {
+    if (isRoot) return NODE_STYLE[m.label] ?? DEFAULT_STYLE;
+    return (path.length > 0 && NODE_STYLE[TREE[path[0]].label]) || DEFAULT_STYLE;
+  }
+
+  /** Every tap target is a card: icon, label, chevron. Cards read as an app
+   * launcher and give the eye something to grab, which a row of small outline
+   * buttons does not. */
+  function menuCard(m: MenuNode, i: number, isRoot: boolean) {
+    const style = styleFor(m, isRoot);
+    const Icon = style.icon;
     return (
-      <div className="space-y-2">
-        {path.length > 0 && (
-          <p className="text-xs font-medium text-muted-foreground">{current.label}</p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {path.length > 0 && (
+      <button
+        key={`${m.label}-${i}`}
+        type="button"
+        onClick={() => pick(m)}
+        className="group flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left transition-colors hover:border-primary/60 hover:bg-primary/5 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      >
+        <span
+          className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", style.tint)}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.label}</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+      </button>
+    );
+  }
+
+  /** The cards for the current level, plus a breadcrumb + back to walk up. */
+  function menuChips() {
+    const isRoot = path.length === 0;
+    return (
+      <div className="space-y-3">
+        {!isRoot && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setPath([])}
+                className="rounded-full px-2 py-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {t("app_agent_menu_home")}
+              </button>
+              <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
+              <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
+                {current.label}
+              </span>
+            </div>
             <Button variant="ghost" size="sm" onClick={back}>
-              ← Back
+              <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+              {t("app_agent_back")}
             </Button>
-          )}
-          {siblings.map((m, i) => (
-            <Button key={`${m.label}-${i}`} variant="outline" size="sm" onClick={() => pick(m)}>
-              {m.label}
-              {m.children && <span className="ml-1 text-muted-foreground">›</span>}
-            </Button>
-          ))}
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {siblings.map((m, i) => menuCard(m, i, isRoot))}
         </div>
       </div>
     );
@@ -631,14 +696,30 @@ function AgentPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-4xl space-y-3 px-4 pb-3">
           {menuOpen && bubbles.length === 0 && (
-            <div className="space-y-3 py-6">
+            <div className="space-y-4 py-6">
               {path.length === 0 && (
-                <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
-                  <p className="mb-1 flex items-center gap-2 font-medium">
-                    <ShieldCheck className="h-4 w-4" /> {t("app_agent_safe")}
-                  </p>
-                  <p className="text-muted-foreground">{t("app_agent_safe_body")}</p>
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">{t("app_agent_menu_title")}</h2>
+                  <p className="text-sm text-muted-foreground">{t("app_agent_menu_sub")}</p>
                 </div>
+              )}
+              {path.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => pick({ label: t("app_agent_start_here"), href: "/lead-finder" })}
+                  className="group flex w-full items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-left transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <Search className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{t("app_agent_start_here")}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {t("app_agent_start_here_sub")}
+                    </span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+                </button>
               )}
               {menuChips()}
               <button
@@ -651,6 +732,14 @@ function AgentPage() {
               >
                 I&apos;ll type my own question
               </button>
+              {path.length === 0 && (
+                <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs">
+                  <p className="mb-0.5 flex items-center gap-2 font-medium">
+                    <ShieldCheck className="h-3.5 w-3.5" /> {t("app_agent_safe")}
+                  </p>
+                  <p className="text-muted-foreground">{t("app_agent_safe_body")}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -791,9 +880,7 @@ function AgentPage() {
           </>
         ) : (
           <div className="flex w-full items-center justify-between gap-3 py-1.5">
-            <p className="text-sm text-muted-foreground">
-              Pick an option, or write your own question.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("app_agent_menu_sub")}</p>
             <Button
               variant="outline"
               size="sm"

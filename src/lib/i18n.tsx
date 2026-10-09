@@ -119,6 +119,15 @@ const DICT: Record<string, { en: string; ar: string }> = {
   app_agent_working: { en: "Working…", ar: "جارٍ العمل…" },
   app_agent_placeholder: { en: "Ask something…", ar: "اسأل شيئاً…" },
   app_agent_answer_placeholder: { en: "Type your answer…", ar: "اكتب إجابتك…" },
+  app_agent_menu_title: { en: "What do you want to do?", ar: "ماذا تريد أن تفعل؟" },
+  app_agent_menu_sub: {
+    en: "Pick an option, or write your own question.",
+    ar: "اختر خياراً، أو اكتب سؤالك.",
+  },
+  app_agent_menu_home: { en: "Home", ar: "الرئيسية" },
+  app_agent_back: { en: "Back", ar: "رجوع" },
+  app_agent_start_here: { en: "Start here", ar: "ابدأ من هنا" },
+  app_agent_start_here_sub: { en: "Find businesses to email", ar: "اعثر على شركات لمراسلتها" },
   app_agent_chats: { en: "Past chats", ar: "المحادثات السابقة" },
   app_agent_chats_body: {
     en: "Your chats are saved. Open any of them, or delete one you no longer want. Nothing is deleted automatically.",
