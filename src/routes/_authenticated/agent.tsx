@@ -37,6 +37,8 @@ type Bubble = {
   confirm?: boolean;
   /** The agent asked something, so the reply box opens for this turn only. */
   asked?: boolean;
+  /** What to type, when the agent is waiting on one specific slot. */
+  askLabel?: string;
   /** Next steps offered instead of leaving the person at a dead end. */
   options?: AgentOption[];
   usedAi?: boolean;
@@ -201,6 +203,7 @@ function AgentPage() {
   const [busy, setBusy] = useState(false);
   const [convId, setConvId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // What the agent has learned, so a wrong assumption is visible and fixable
   // rather than silently steering every future answer.
@@ -290,10 +293,11 @@ function AgentPage() {
   // It closes again as soon as an answer goes out.
   const awaiting = !busy && Boolean(lastBubble?.asked);
   // The menu belongs at the end of the conversation, not only at the top:
-  // after any reply the next step is one tap away. The one exception is an
-  // unanswered write confirmation, where a second row of buttons would
-  // compete with the yes/no the agent is actually waiting for.
-  const inlineMenu = bubbles.length > 0 && !lastBubble?.confirm;
+  // after any reply the next step is one tap away. Two exceptions, both
+  // deliberate: an unanswered write confirmation (a second row would compete
+  // with the yes/no), and a question the agent is waiting on (the menu would
+  // compete with the one thing we actually need - the answer).
+  const inlineMenu = bubbles.length > 0 && !lastBubble?.confirm && !awaiting;
 
   // Menu-first on every new visit: a fresh session always opens on the menu,
   // even for someone who typed last time. The box comes back with one click
@@ -306,6 +310,14 @@ function AgentPage() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles]);
+
+  // The agent asked something, so put the cursor in the box for them: the
+  // answer should be one keystroke away, not one extra tap.
+  useEffect(() => {
+    if (!awaiting) return;
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [awaiting]);
 
   async function loadConversations(): Promise<Conversation[]> {
     setConvsBusy(true);
@@ -441,6 +453,7 @@ function AgentPage() {
           pending: Boolean(data.pending),
           confirm: Boolean(data.pending),
           asked: Boolean(data.asked),
+          askLabel: typeof data.askLabel === "string" ? data.askLabel : undefined,
           options:
             Array.isArray(data.options) && data.options.length > 0 ? data.options : undefined,
           usedAi: data.usedAi,
@@ -739,12 +752,15 @@ function AgentPage() {
         {typing || awaiting ? (
           <>
             <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
               rows={1}
               placeholder={
-                awaiting && !typing ? t("app_agent_answer_placeholder") : t("app_agent_placeholder")
+                awaiting && !typing
+                  ? (lastBubble?.askLabel ?? t("app_agent_answer_placeholder"))
+                  : t("app_agent_placeholder")
               }
               className="max-h-32 min-h-[42px] flex-1 resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
             />

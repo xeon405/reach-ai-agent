@@ -88,6 +88,24 @@ const nid = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`;
 
 type Admin = { from: (table: string) => any };
 
+/**
+ * The reply box is a fill-in-the-blank when we already know exactly what we
+ * are waiting for, so the placeholder can name the slot instead of saying
+ * "type your answer" and making the person re-read the question. Where we are
+ * not sure what is missing, this returns null and the UI keeps its generic
+ * placeholder.
+ */
+function askLabelFor(intent: AgentIntent | null | undefined): string | null {
+  switch (intent) {
+    case "create_campaign_draft":
+    case "add_contacts_to_campaign":
+    case "pause_campaign":
+      return "Campaign name";
+    default:
+      return null;
+  }
+}
+
 /** Only an explicit agreement counts. Anything else is a decline. */
 function isAffirmative(msg: string): boolean {
   const m = phraseKey(msg);
@@ -419,6 +437,37 @@ Deno.serve(async (req) => {
       }
 
       const outcome = await runOutcome(admin, userId, req_);
+
+      // The write could still turn out to need one more slot (a campaign with
+      // no name, say). Ask for it and keep the goal parked instead of spending
+      // the pending row on an action that never ran - otherwise the person gets
+      // a question with no working way to answer it.
+      if (outcome.need) {
+        await mergePendingParams(
+          admin,
+          userId,
+          convId,
+          outcome.need.params ?? {},
+          outcome.need.intent,
+        );
+        await persist(admin, userId, convId, message, outcome.text, null, {}, false, {
+          storeUserIntent: false,
+        });
+        return json(
+          {
+            conversationId: convId,
+            text: outcome.text,
+            asked: true,
+            askLabel: askLabelFor(outcome.need.intent),
+            rows: outcome.rows,
+            usedAi: false,
+            source: "confirm",
+          },
+          200,
+          req,
+        );
+      }
+
       await admin
         .from("agent_messages")
         .update({ executed_at: new Date().toISOString() })
@@ -638,7 +687,15 @@ Deno.serve(async (req) => {
       const safeQuestion = trimTruncatedReply(askOnly.question);
       await persist(admin, userId, convId, message, safeQuestion, null, {}, usedAi);
       return json(
-        { conversationId: convId, text: safeQuestion, intent: null, asked: true, usedAi, source },
+        {
+          conversationId: convId,
+          text: safeQuestion,
+          intent: null,
+          asked: true,
+          askLabel: askLabelFor(askOnly.intent),
+          usedAi,
+          source,
+        },
         200,
         req,
       );
@@ -693,6 +750,7 @@ Deno.serve(async (req) => {
             text: pre.text,
             intent: null,
             asked: true,
+            askLabel: askLabelFor(pre.need.intent),
             rows: pre.rows,
             usedAi,
             source,
@@ -787,6 +845,7 @@ Deno.serve(async (req) => {
           text: outcome.text,
           intent: null,
           asked: true,
+          askLabel: askLabelFor(outcome.need.intent),
           rows: outcome.rows,
           usedAi,
           source,

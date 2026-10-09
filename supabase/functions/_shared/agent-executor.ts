@@ -502,6 +502,20 @@ export async function preflightWrite(
     const target = await resolveAddTarget(db, userId, req);
     return target.ok ? null : target.outcome;
   }
+  if (req.intent === "create_campaign_draft") {
+    // A draft cannot be created without a name, so never ask the person to
+    // confirm an action that is not runnable yet: ask for the name FIRST, then
+    // confirm the named campaign. The confirm-then-ask order was backwards.
+    return req.params.campaignName?.trim()
+      ? null
+      : {
+          text: "What should the campaign be called?",
+          need: {
+            intent: "create_campaign_draft",
+            params: { ...req.params, campaignName: undefined },
+          },
+        };
+  }
   return null;
 }
 
