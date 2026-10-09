@@ -91,5 +91,27 @@ check(
 );
 check("confirm path can re-ask instead of consuming", idx.includes("if (outcome.need) {"));
 
+// --- 8. a one-line answer to our own question is taken literally ------------
+// "What should the campaign be called?" + "usa" must name the campaign, not be
+// re-read by the model as a country for a targeting lookup.
+check("pending slot answer is captured", idx.includes("const pendingAnswer ="));
+check(
+  "slot answer uses the pending goal",
+  idx.includes("missingSlots(pendingGoal, carried?.params ?? {})"),
+);
+check("slot answer is deterministic, not AI", idx.includes('source = "router";'));
+check(
+  "a recognised command is not swallowed as a name",
+  idx.includes("routeIntent(message) === null"),
+);
+check("slotAnswer guards cancels", idx.includes("CANCEL_RE"));
+check("slotAnswer rejects placeholders", idx.includes("isPlaceholderSlot(slot, t)"));
+// Creating a paused draft is done, not confirmed again.
+check(
+  "create draft skips the second yes",
+  idx.includes('routed.intent === "create_campaign_draft"'),
+);
+check("create reply names the campaign", exec.includes("Saved the campaign named"));
+
 console.log(failures === 0 ? "NO FAILURES" : `FAILURES: ${failures}`);
 Deno.exit(failures === 0 ? 0 : 1);

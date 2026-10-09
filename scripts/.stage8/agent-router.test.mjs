@@ -97,6 +97,14 @@ for (const m of [
   check(r(m) === null, `"${m}" correctly falls through to the AI`);
 }
 
+// ---- a plain answer to "what should it be called?" is NOT a command -------
+// The slot-fill lane only takes the message literally when the router does not
+// recognise it. A campaign name like "usa" (also a country!) must not match, or
+// it would be re-read as a targeting request instead of the name.
+for (const m of ["usa", "Spring Sale", "Q3 push", "dubai dentists"]) {
+  check(r(m) === null, `"${m}" is treated as a name, not a command`);
+}
+
 // ---- safety properties ---------------------------------------------------
 {
   check(READ_INTENTS.length + WRITE_INTENTS.length === 9, "every intent is classified as read or write");

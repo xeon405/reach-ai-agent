@@ -307,7 +307,7 @@ async function createCampaignDraft(db: Db, userId: string, req: AgentRequest): P
     .single();
   if (error || !data) return { text: "I could not create that campaign." };
   return {
-    text: `Created "${data.name}". It is paused, so nothing is sending yet. Open it to add contacts, then start it when you are ready.`,
+    text: `Saved the campaign named "${data.name}". It is paused, so nothing is sending until you start it.`,
     rows: [{ label: data.name, value: "Paused" }],
   };
 }

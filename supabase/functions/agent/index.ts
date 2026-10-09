@@ -45,7 +45,9 @@ import {
 } from "../_shared/agent-profile.ts";
 import {
   GOALS,
+  GOAL_BY_INTENT,
   isWriteIntent,
+  isPlaceholderSlot,
   mergeParams,
   missingSlots,
   type AgentIntent,
@@ -104,6 +106,34 @@ function askLabelFor(intent: AgentIntent | null | undefined): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Words that abandon the question the agent is waiting on, so a plain answer
+ * is not mistaken for a value (a campaign literally named "cancel" aside).
+ */
+const CANCEL_RE =
+  /^(cancel|never ?mind|forget it|forget about it|stop|abort|no|nvm|nothing|leave it|skip|not now)\b/i;
+
+/**
+ * Take a one-line answer to the agent's own question literally.
+ *
+ * When the agent asked for exactly one thing - a campaign name - the next
+ * message IS that value. It is NOT a fresh request for the model to
+ * reinterpret, which is what happened when "What should the campaign be
+ * called?" + "usa" became an audience lookup: "usa" was read as a country
+ * instead of the name. Cancels, paragraphs and placeholder-only answers are
+ * left to the normal path.
+ */
+function slotAnswer(message: string, slot: keyof AgentParams): string | null {
+  const t = message
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\s+/g, " ");
+  if (!t || t.length > 80) return null;
+  if (CANCEL_RE.test(t)) return null;
+  if (isPlaceholderSlot(slot, t)) return null;
+  return t.slice(0, 120);
 }
 
 /** Only an explicit agreement counts. Anything else is a decline. */
@@ -525,6 +555,19 @@ Deno.serve(async (req) => {
     let u: Awaited<ReturnType<typeof understand>> = null;
     let cacheParams: AgentParams = {};
 
+    // SLOT-FILL FAST PATH — if the agent asked for exactly one thing, the next
+    // message is that value, answered deterministically with zero AI calls.
+    // This is the fix for "What should the campaign be called?" + "usa": the
+    // model used to read "usa" as a country and run an audience lookup instead
+    // of naming the campaign. A message that is clearly a DIFFERENT command
+    // (the keyword router recognises it) is left to the normal path.
+    const pendingGoal = carried?.intent ? GOAL_BY_INTENT.get(carried.intent) : undefined;
+    const pendingGaps = pendingGoal ? missingSlots(pendingGoal, carried?.params ?? {}) : [];
+    const pendingAnswer =
+      !viaMenu && pendingGoal && pendingGaps.length === 1 && routeIntent(message) === null
+        ? slotAnswer(message, pendingGaps[0])
+        : null;
+
     // MENU FAST PATH — a button click is an unambiguous, machine-chosen
     // intent. routeIntent() is pure keyword matching with no I/O, so it
     // answers here with zero AI calls and zero quota. It runs BEFORE the
@@ -532,7 +575,14 @@ Deno.serve(async (req) => {
     // guessed from an earlier turn. If the router does not recognise it we
     // fall through to the normal path instead of dead-ending.
     const menuHit = viaMenu ? routeIntent(message) : null;
-    if (menuHit) {
+    if (pendingAnswer) {
+      routed = {
+        intent: carried!.intent,
+        params: { ...(carried!.params ?? {}), [pendingGaps[0]]: pendingAnswer },
+        summary: pendingGoal!.goal,
+      };
+      source = "router";
+    } else if (menuHit) {
       routed = menuHit;
       source = "menu";
     } else if (learned) {
@@ -805,21 +855,34 @@ Deno.serve(async (req) => {
       // Clear the clarification first. A write supersedes it: leaving the old
       // goal parked would let a later, unrelated message inherit it.
       await clearPendingState(admin, userId, convId);
-      const ask = `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`;
-      await persist(admin, userId, convId, message, ask, routed.intent, routed.params, usedAi);
-      return json(
-        {
-          conversationId: convId,
-          text: ask,
-          intent: routed.intent,
-          pending: { intent: routed.intent, params: routed.params },
-          rows: [{ label: "This will change your account", value: "Reply yes to confirm" }],
-          usedAi,
-          source,
-        },
-        200,
-        req,
-      );
+
+      // Creating a PAUSED draft is the one write we simply do. Nothing can
+      // send, and the person has just told us what to call it - asking "can I
+      // create it?" after that is the exact double-step this change removes.
+      // Audit like any other write, then fall through and run it.
+      if (routed.intent === "create_campaign_draft") {
+        await insertAudit(admin, {
+          user_id: userId,
+          event: "agent_write",
+          payload: { intent: routed.intent, params: routed.params, source },
+        });
+      } else {
+        const ask = `Can I ${routed.summary.toLowerCase()}? Nothing changes until you confirm.`;
+        await persist(admin, userId, convId, message, ask, routed.intent, routed.params, usedAi);
+        return json(
+          {
+            conversationId: convId,
+            text: ask,
+            intent: routed.intent,
+            pending: { intent: routed.intent, params: routed.params },
+            rows: [{ label: "This will change your account", value: "Reply yes to confirm" }],
+            usedAi,
+            source,
+          },
+          200,
+          req,
+        );
+      }
     }
 
     // The request completed (or was abandoned), so the clarification is spent.
