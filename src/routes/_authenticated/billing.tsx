@@ -68,15 +68,24 @@ const PLANS = [
 function BillingPage() {
   const [plan, setPlan] = useState("starter");
   const [userId, setUserId] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
   const [paying, setPaying] = useState<string | null>(null);
-  const [payments, setPayments] = useState<Array<{
-    id: string; plan: string; amount_cents: number; currency: string; status: string; created_at: string;
-  }>>([]);
+  const [payments, setPayments] = useState<
+    Array<{
+      id: string;
+      plan: string;
+      amount_cents: number;
+      currency: string;
+      status: string;
+      created_at: string;
+    }>
+  >([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       setUserId(data.user.id);
+      setEmail(data.user.email ?? "");
       const { data: p } = await supabase
         .from("profiles")
         .select("plan")
@@ -96,7 +105,9 @@ function BillingPage() {
     s.src = "https://checkout.razorpay.com/v1/checkout.js";
     s.async = true;
     document.body.appendChild(s);
-    return () => { s.remove(); };
+    return () => {
+      s.remove();
+    };
   }, []);
 
   /**
@@ -120,7 +131,8 @@ function BillingPage() {
         // Script still loading (or blocked) — retry once after a tick.
         await new Promise((r) => setTimeout(r, 1200));
       }
-      if (!window.Razorpay) throw new Error("Payment window failed to load. Check your connection and try again.");
+      if (!window.Razorpay)
+        throw new Error("Payment window failed to load. Check your connection and try again.");
 
       const rz = new window.Razorpay({
         key: data.key_id,
@@ -129,6 +141,11 @@ function BillingPage() {
         currency: data.currency,
         name: "OutshipAi",
         description: `${planName} plan`,
+        // Prefill the signed-in email and let a declined card try another
+        // method. International cards are declined more often than domestic
+        // ones, so a dead-end failure wastes a sale; retry keeps it alive.
+        prefill: { email },
+        retry: { enabled: true },
         handler: async (response: Record<string, string>) => {
           setPlan(planId);
           setPaying(null);
@@ -161,7 +178,9 @@ function BillingPage() {
         <div className="text-sm text-muted-foreground">Current plan</div>
         <div className="mt-1 flex items-center gap-3">
           <h2 className="text-2xl font-bold capitalize">{plan}</h2>
-          <Badge className="bg-success/15 text-success" variant="secondary">Active</Badge>
+          <Badge className="bg-success/15 text-success" variant="secondary">
+            Active
+          </Badge>
         </div>
         {plan === "free" && (
           <p className="mt-2 text-sm text-muted-foreground">
@@ -190,7 +209,14 @@ function BillingPage() {
         <span>Exact email caps — hard stop, never overage</span>
         <span>Prices never change based on your activity</span>
         <span>14-day money-back, no questions asked</span>
-        <a href="/honesty" target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-4">Our Honesty Charter →</a>
+        <a
+          href="/honesty"
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-primary underline underline-offset-4"
+        >
+          Our Honesty Charter →
+        </a>
       </div>
 
       {/* Pricing */}
@@ -234,11 +260,17 @@ function BillingPage() {
                 onClick={() => startCheckout(p.id, p.name)}
               >
                 {isCurrent ? (
-                  <><Check className="mr-2 h-4 w-4" /> Current plan</>
+                  <>
+                    <Check className="mr-2 h-4 w-4" /> Current plan
+                  </>
                 ) : paying === p.id ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening checkout…</>
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening checkout…
+                  </>
                 ) : (
-                  <><Zap className="mr-2 h-4 w-4" /> Get {p.name} — ${p.price}/mo</>
+                  <>
+                    <Zap className="mr-2 h-4 w-4" /> Get {p.name} — ${p.price}/mo
+                  </>
                 )}
               </Button>
             </div>
@@ -249,7 +281,8 @@ function BillingPage() {
       {/* Guarantee */}
       <div className="rounded-lg border border-border bg-card p-4 text-center">
         <p className="text-sm text-muted-foreground">
-          <strong>14-day money back guarantee.</strong> No questions asked. Payments are one-time — you are never auto-charged, and your plan runs until the end of the period you paid for.
+          <strong>14-day money back guarantee.</strong> No questions asked. Payments are one-time —
+          you are never auto-charged, and your plan runs until the end of the period you paid for.
         </p>
       </div>
 
@@ -284,10 +317,15 @@ function BillingPage() {
                         : `$${(p.amount_cents / 100).toFixed(2)}`}
                     </td>
                     <td className="px-4 py-3 capitalize">
-                      <span className={
-                        p.status === "paid" ? "text-success" :
-                        p.status === "failed" ? "text-destructive" : "text-muted-foreground"
-                      }>
+                      <span
+                        className={
+                          p.status === "paid"
+                            ? "text-success"
+                            : p.status === "failed"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                        }
+                      >
                         {p.status}
                       </span>
                     </td>
