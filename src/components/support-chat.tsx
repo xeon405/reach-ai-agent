@@ -14,7 +14,7 @@ const SUGGESTIONS = [
 
 const CHAT_KEY = "outreachai_support_chat";
 const THREAD_KEY = "outreachai_support_thread";
-const SUPPORT_EMAIL = "outreachai.team@gmail.com";
+const SUPPORT_EMAIL = "outshipai@gmail.com";
 
 const WELCOME: Msg = {
   role: "assistant",

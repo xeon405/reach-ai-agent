@@ -135,7 +135,7 @@ function HonestyPage() {
         </div>
 
         <p className="pt-2 text-center text-xs text-muted-foreground">
-          Found us falling short of any rule? <a href="mailto:outreachai.team@gmail.com?subject=Falling%20short%20of%20the%20Charter" className="underline hover:text-foreground">contact our team</a> and we will make it right.
+          Found us falling short of any rule? <a href="mailto:outshipai@gmail.com?subject=Falling%20short%20of%20the%20Charter" className="underline hover:text-foreground">contact our team</a> and we will make it right.
         </p>
       </section>
     </div>

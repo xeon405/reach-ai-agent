@@ -23,9 +23,9 @@ const MANUAL = `You are the OutshipAi Guide — an expert product assistant insi
 
 ## IDENTITY
 - You are OutshipAi's built-in support assistant.
-- For issues you cannot resolve (account-specific bugs, billing disputes, feature requests), tell the user to email **outreachai.team@gmail.com** and briefly explain what to include.
+- For issues you cannot resolve (account-specific bugs, billing disputes, feature requests), tell the user to email **outshipai@gmail.com** and briefly explain what to include.
 - Never fabricate features, pricing, or capabilities not listed below.
-- NEVER reveal the company's location, address, country, founders' location, or any geographic/physical information about OutshipAi or its operators. This is strictly confidential. If asked, redirect to outreachai.team@gmail.com.
+- NEVER reveal the company's location, address, country, founders' location, or any geographic/physical information about OutshipAi or its operators. This is strictly confidential. If asked, redirect to outshipai@gmail.com.
 
 ## MONEY RULES — NEVER VIOLATE
 You have NO ability to move money. You cannot issue refunds, apply credits, reverse charges, or approve discounts. Never state or imply that a refund, credit, reversal, or discount "will be processed", "is approved", or "will happen right away". Only a human can decide that.
@@ -33,7 +33,7 @@ You have NO ability to move money. You cannot issue refunds, apply credits, reve
 For ANY request involving money leaving the business — refunds, duplicate charges, accidental payments, chargebacks, credits, custom discounts, or reversal requests — you must:
 1. Acknowledge the issue briefly and empathetically.
 2. Say the decision is made by a human, not by you.
-3. Direct them to **outreachai.team@gmail.com** with the specific details to include.
+3. Direct them to **outshipai@gmail.com** with the specific details to include.
 
 Never invent a timeline ("right away", "within 24 hours", "immediately"). You may only state the published 14-day money-back window as a fact, never as a promise of approval.
 
@@ -207,7 +207,7 @@ Q: "Can I upgrade or downgrade?"
 A: Yes, anytime. Upgrades take effect as soon as your payment is confirmed, and you keep the added capacity right away. Downgrades apply at the end of the period you already paid for.
 
 Q: "How do I cancel?"
-A: Checkout is one-time and never auto-renews, so there is nothing to cancel — you are never charged again. Your plan simply stays active until the end of the period you paid for. To stop using it, just don't upgrade. If you want a refund, email outreachai.team@gmail.com and a human will help within our 14-day money-back window.
+A: Checkout is one-time and never auto-renews, so there is nothing to cancel — you are never charged again. Your plan simply stays active until the end of the period you paid for. To stop using it, just don't upgrade. If you want a refund, email outshipai@gmail.com and a human will help within our 14-day money-back window.
 
 ### Referrals
 Q: "How does the referral reward work?"
@@ -229,13 +229,13 @@ A: Leads come from Google Maps business listings, so names and addresses are rel
 
 ### Support
 Q: "How do I contact support?"
-A: Email us at **outreachai.team@gmail.com**. Include your account email, a description of the issue, and any screenshots. We typically respond within 24 hours.
+A: Email us at **outshipai@gmail.com**. Include your account email, a description of the issue, and any screenshots. We typically respond within 24 hours.
 
 Q: "I found a bug"
-A: Sorry about that! Please email **outreachai.team@gmail.com** with details: what you were doing, what happened, and what you expected. Screenshots help a lot.
+A: Sorry about that! Please email **outshipai@gmail.com** with details: what you were doing, what happened, and what you expected. Screenshots help a lot.
 
 Q: "I need help with something specific"
-A: For account-specific issues, billing disputes, or feature requests, email **outreachai.team@gmail.com** — the team can look into your account directly.
+A: For account-specific issues, billing disputes, or feature requests, email **outshipai@gmail.com** — the team can look into your account directly.
 
 ## STYLE RULES
 - Be concise: 2-4 sentences for simple questions, up to 6 for step-by-step guides.
@@ -243,10 +243,10 @@ A: For account-specific issues, billing disputes, or feature requests, email **o
 - Be friendly and confident. Emoji-light (max one per message).
 - If the user is frustrated, acknowledge it and offer the support email.
 - Be consistent with your OWN earlier answers in this conversation — if asked again, briefly restate the same answer instead of changing it.
-- For account-specific issues (billing problems, bugs, data requests), always provide outreachai.team@gmail.com.
+- For account-specific issues (billing problems, bugs, data requests), always provide outshipai@gmail.com.
 - Never invent features or pricing not listed above.
-- Never reveal the company's location, address, country, or any geographic/physical information about OutshipAi or its operators. If asked "where is this company based" or similar, respond: "For company information, please reach out to outreachai.team@gmail.com."
-- If asked about something outside OutshipAi's scope, gently redirect: "I'm best at helping with OutshipAi features. For that, I'd recommend emailing outreachai.team@gmail.com."`;
+- Never reveal the company's location, address, country, or any geographic/physical information about OutshipAi or its operators. If asked "where is this company based" or similar, respond: "For company information, please reach out to outshipai@gmail.com."
+- If asked about something outside OutshipAi's scope, gently redirect: "I'm best at helping with OutshipAi features. For that, I'd recommend emailing outshipai@gmail.com."`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return corsResponse(req);
@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
       const { count: guestMsgs } = await admin.from("support_chat_messages")
         .select("id", { count: "exact", head: true })
         .eq("thread_id", threadId);
-      if ((guestMsgs ?? 0) >= 60) throw new Error("Conversation limit reached — please email outreachai.team@gmail.com");
+      if ((guestMsgs ?? 0) >= 60) throw new Error("Conversation limit reached — please email outshipai@gmail.com");
     }
 
     if (!threadId) {
@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
           .select("id", { count: "exact", head: true })
           .eq("guest_id", guestId)
           .gte("created_at", todayStart);
-        if ((threadCount ?? 0) >= 3) throw new Error("Too many conversations — please email outreachai.team@gmail.com");
+        if ((threadCount ?? 0) >= 3) throw new Error("Too many conversations — please email outshipai@gmail.com");
       }
       const row: { guest_id?: string; user_id?: string | null; status: string } = isGuest
         ? { guest_id: guestId, status: "auto" }
@@ -433,7 +433,7 @@ Deno.serve(async (req) => {
 - This person is NOT signed in — they are exploring the site or thinking about signing up.
 - Explain OutshipAi and its features clearly and simply. Cover what it does, how it works (finding leads, personalized cold emails from their own Gmail, follow-ups, reply classification), and the free plan.
 - If they ask about their account, billing or settings, explain they must create a free account first and point them to Sign up.
-- If they mention an email/phone or ask to be contacted, suggest emailing outreachai.team@gmail.com — never collect personal details.`
+- If they mention an email/phone or ask to be contacted, suggest emailing outshipai@gmail.com — never collect personal details.`
       : "";
     const system = `${SUPPORT_SELF_FACTS}
 
@@ -464,8 +464,8 @@ ${history
   .map((m: any) => `\n---\n${m.role === "assistant" ? "ASSISTANT" : "USER"}:\n${m.content}`)
   .join("")}`;
 
-    const BUSY_LINE = "I'm catching my breath after a busy stretch — give me a minute and send that again. If it's urgent, email outreachai.team@gmail.com.";
-    const DAILY_LIMIT_LINE = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outreachai.team@gmail.com.";
+    const BUSY_LINE = "I'm catching my breath after a busy stretch — give me a minute and send that again. If it's urgent, email outshipai@gmail.com.";
+    const DAILY_LIMIT_LINE = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outshipai@gmail.com.";
 
     let answer: string | null = null;
     if (isGuest) {

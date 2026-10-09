@@ -36,8 +36,8 @@ const SVC = (
 ).find((k) => k.name === "service_role").api_key;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const BUSY = "I'm catching my breath after a busy stretch — give me a minute and send that again. If it's urgent, email outreachai.team@gmail.com.";
-const DAILY = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outreachai.team@gmail.com.";
+const BUSY = "I'm catching my breath after a busy stretch — give me a minute and send that again. If it's urgent, email outshipai@gmail.com.";
+const DAILY = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outshipai@gmail.com.";
 
 const GUEST = randomUUID();
 let passed = 0, failed = 0;

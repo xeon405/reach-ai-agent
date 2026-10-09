@@ -70,7 +70,7 @@ function AboutPage() {
         </div>
 
         <p className="pt-2 text-center text-xs text-muted-foreground">
-          Questions? Our team responds at <a href="mailto:outreachai.team@gmail.com" className="underline hover:text-foreground">outreachai.team@gmail.com</a> within 24 hours.
+          Questions? Our team responds at <a href="mailto:outshipai@gmail.com" className="underline hover:text-foreground">outshipai@gmail.com</a> within 24 hours.
         </p>
       </section>
     </div>

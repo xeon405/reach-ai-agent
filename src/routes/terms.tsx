@@ -92,8 +92,8 @@ function Terms() {
             <p className="mt-2">
               For questions, support, refunds, or any concern about these Terms, contact our team
               at{" "}
-              <a href="mailto:outreachai.team@gmail.com" className="text-primary underline underline-offset-4">
-                outreachai.team@gmail.com
+              <a href="mailto:outshipai@gmail.com" className="text-primary underline underline-offset-4">
+                outshipai@gmail.com
               </a>
               . We respond within 24 hours.
             </p>

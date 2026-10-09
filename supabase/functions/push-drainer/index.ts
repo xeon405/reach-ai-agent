@@ -58,7 +58,7 @@ serve(async (req) => {
 
     const pubKey = Deno.env.get("VAPID_PUBLIC_KEY")!;
     const privKey = Deno.env.get("VAPID_PRIVATE_KEY")!;
-    const subject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:outreachai.team@gmail.com";
+    const subject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:outshipai@gmail.com";
     webPush.setVapidDetails(subject, pubKey, privKey);
 
     let sent = 0;

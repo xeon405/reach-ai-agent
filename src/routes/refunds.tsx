@@ -52,7 +52,7 @@ function RefundsPage() {
             <h2 className="font-semibold">Timelines &amp; process</h2>
           </div>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>• <strong>Request:</strong> email <a href="mailto:outreachai.team@gmail.com?subject=Refund%20request" className="text-primary underline underline-offset-4">outreachai.team@gmail.com</a> with the subject "Refund request"</li>
+            <li>• <strong>Request:</strong> email <a href="mailto:outshipai@gmail.com?subject=Refund%20request" className="text-primary underline underline-offset-4">outshipai@gmail.com</a> with the subject "Refund request"</li>
             <li>• <strong>Response:</strong> within 24 hours with confirmation</li>
             <li>• <strong>Processing:</strong> refunds are issued to your original payment method within 5–10 business days </li>
             <li>• <strong>Your data:</strong> refunding never locks you out early — your plan stays active until the period you paid for ends, and you can export or delete your data anytime</li>

@@ -50,7 +50,7 @@ export const Route = createFileRoute("/")({
               "@type": "Organization",
               name: "OutshipAi",
               url: APP_BASE_URL,
-              email: "outreachai.team@gmail.com",
+              email: "outshipai@gmail.com",
               description:
                 "OutshipAi is an AI sales agent that finds ideal customers, writes personalized cold emails, follows up automatically, and surfaces interested replies.",
             },
