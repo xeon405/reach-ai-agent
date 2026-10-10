@@ -183,10 +183,11 @@ function LeadsPage() {
     });
 
     let imported = 0;
+    let capped = false;
     for (const row of rows) {
       const email = row["email"] || row["email address"] || row["e-mail"];
       if (!email || !EMAIL_RE.test(email)) continue;
-      await supabase.from("leads").insert({
+      const { error } = await supabase.from("leads").insert({
         user_id: u.user.id,
         email,
         name: row["name"] || row["full name"] || null,
@@ -195,10 +196,18 @@ function LeadsPage() {
         country: row["country"] || null,
         status: "new",
       });
+      if (error) {
+        if (error.code === "P0001") { capped = true; break; }
+        continue;
+      }
       imported++;
     }
 
-    toast.success(`Imported ${imported} leads!`);
+    if (capped) {
+      toast.error(`Imported ${imported}, then reached your plan's lead limit. Delete some leads or upgrade to import the rest.`);
+    } else {
+      toast.success(`Imported ${imported} leads!`);
+    }
     setImporting(false);
     load();
     e.target.value = "";

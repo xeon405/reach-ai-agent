@@ -148,7 +148,7 @@ export const PLAN_CAPS: Record<string, { emails: number; leads: number }> = {
 };
 
 /** Real account numbers injected into the support-chat system prompt so answers
- *  are specific ("you're on Starter, 30 of 50 monthly emails used") instead of
+ *  are specific ("you're on Starter, 30 of 50 daily emails used") instead of
  *  generic product boilerplate. Pure function → offline-testable. */
 export function buildSupportUserContext(p: {
   name: string | null;
@@ -165,7 +165,7 @@ export function buildSupportUserContext(p: {
 }): string {
   const cap = PLAN_CAPS[p.plan]?.emails;
   const leadCap = PLAN_CAPS[p.plan]?.leads;
-  const capLine = cap ? ` (monthly email cap ${cap}, ${leadCap} leads)` : "";
+  const capLine = cap ? ` (daily email cap ${cap}, ${leadCap} leads)` : "";
   const fuLine = p.followupsEnabled === false
     ? "follow-up engine currently toggled OFF for their campaigns"
     : "follow-up engine active per campaign";
@@ -173,8 +173,8 @@ export function buildSupportUserContext(p: {
   lines.push(`- User name: ${p.name ?? "unknown"}`);
   lines.push(`- Current plan: ${p.plan}${capLine}`);
   lines.push(`- Gmail: ${p.gmailConnected ? "connected" + (p.gmailEmail ? ` (${p.gmailEmail})` : "") : "NOT connected"}`);
-  lines.push(`- Emails sent today: ${p.todaySent}`);
-  lines.push(`- Emails sent this month: ${p.monthSent}${cap ? ` of ${cap}` : ""}`);
+  lines.push(`- Emails sent today: ${p.todaySent}${cap ? ` of ${cap}` : ""}`);
+  lines.push(`- Emails sent this month: ${p.monthSent}`);
   lines.push(`- Leads in database: ${p.leads}`);
   lines.push(`- Campaigns: ${p.campaigns} total, ${p.activeCampaigns} active`);
   lines.push(`- Follow-ups pending for this user: ${p.pendingFollowups} (${fuLine})`);
@@ -276,7 +276,7 @@ function supportTopicDirective(topic: string): string {
     CAMPAIGNS: "## TOPIC: CAMPAIGNS — The user asked about campaigns. Answer DIRECTLY from the manual: create (name, country, niche, offer) → AI Write → Launch; toggle active/pause; follow-ups per campaign.",
     REPLIES: "## TOPIC: REPLY HANDLING — The user asked about replies. Answer DIRECTLY from the manual: hourly scan, AI classification, AI draft for warm replies in Emails Sent, owner alerts for complex ones, follow-ups auto-cancel on reply.",
     FOLLOWUPS: "## TOPIC: FOLLOW-UPS — The user asked about follow-ups. Answer DIRECTLY: up to 14 AI follow-ups on the set schedule, auto-cancel when the lead replies, toggle off per campaign.",
-    BILLING: "## TOPIC: BILLING / PLANS — The user asked about pricing or plans. Answer DIRECTLY with the real plan numbers from the manual and their actual ACCOUNT CONTEXT (plan + monthly usage) when available.",
+    BILLING: "## TOPIC: BILLING / PLANS — The user asked about pricing or plans. Answer DIRECTLY with the real plan numbers from the manual and their actual ACCOUNT CONTEXT (plan + daily usage) when available.",
     EMAILS: "## TOPIC: SENDING & EMAILS — The user asked about sending emails or deliverability. Answer DIRECTLY with the real steps and safety guidance from the manual (Gmail connected, campaign active, daily limits, spam fixes).",
     GETTING_STARTED: "## TOPIC: GETTING STARTED — The user is new or lost. Give the concrete 3-step path: connect Gmail → find & save leads → create campaign, AI Write, Launch.",
     DATA_PRIVACY: "## TOPIC: DATA & PRIVACY — The user asked about data, privacy, or account deletion. Answer DIRECTLY from the manual (encrypted at rest, AES-256 tokens, Settings → Danger Zone for deletion).",

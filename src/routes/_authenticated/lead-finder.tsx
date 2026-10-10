@@ -279,14 +279,20 @@ function LeadFinderPage() {
 
       let savedCount = 0;
       let dupeCount = existingEmails.size;
+      let capped = false;
       for (const row of rows) {
         const { error } = await supabase.from("leads").insert(row);
         if (!error) savedCount++;
         else if (error.code === "23505") dupeCount++; // unique constraint violation
+        else if (error.code === "P0001") { capped = true; break; } // plan lead cap
       }
 
       setConfirmCount(savedCount);
-      if (dupeCount > 0) {
+      if (capped) {
+        toast.error(
+          `Added ${savedCount}, then reached your plan's lead limit. Delete some leads or upgrade to keep saving.`,
+        );
+      } else if (dupeCount > 0) {
         toast.warning(`${savedCount} added, ${dupeCount} duplicate${dupeCount !== 1 ? "s" : ""} skipped`);
       } else {
         toast.success(`Added ${savedCount} lead${savedCount !== 1 ? "s" : ""}!`);

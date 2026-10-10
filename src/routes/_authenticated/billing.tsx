@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, Zap, Loader2 } from "lucide-react";
+import { planSummary, type PlanId } from "@/lib/plan-limits";
 
 declare global {
   interface Window {
@@ -21,7 +22,6 @@ const PLANS = [
     id: "starter",
     name: "Starter",
     price: 37,
-    cap: "50 emails/day · 1 campaign at a time",
     badge: null,
     features: [
       "AI Lead Finder (open directories)",
@@ -36,7 +36,6 @@ const PLANS = [
     id: "growth",
     name: "Growth",
     price: 79,
-    cap: "200 emails/day · 5 campaigns at a time",
     badge: "Most Popular",
     features: [
       "Everything in Starter",
@@ -52,7 +51,6 @@ const PLANS = [
     id: "agency",
     name: "Agency",
     price: 149,
-    cap: "500 emails/day · Unlimited campaigns",
     badge: "Best Value",
     features: [
       "Everything in Growth",
@@ -182,24 +180,12 @@ function BillingPage() {
             Active
           </Badge>
         </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your plan includes {planSummary(plan as PlanId)}.
+        </p>
         {plan === "free" && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Free plan: 10 emails/day · 1 active campaign. Upgrade anytime for higher sending power.
-          </p>
-        )}
-        {plan === "starter" && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Starter: 50 emails/day · 1 active campaign.
-          </p>
-        )}
-        {plan === "growth" && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Growth: 200 emails/day · 5 active campaigns.
-          </p>
-        )}
-        {plan === "agency" && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Agency: 500 emails/day · unlimited campaigns.
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upgrade anytime for higher sending power.
           </p>
         )}
       </div>
@@ -241,7 +227,9 @@ function BillingPage() {
                   <span className="text-4xl font-bold">${p.price}</span>
                   <span className="text-base text-muted-foreground mb-1">/mo</span>
                 </div>
-                <p className="mt-1 text-sm text-primary font-medium">{p.cap}</p>
+                <p className="mt-1 text-sm text-primary font-medium">
+                  {planSummary(p.id as PlanId)}
+                </p>
               </div>
 
               <ul className="mt-5 space-y-2 flex-1">

@@ -132,8 +132,9 @@ function CampaignsPage() {
 
   async function toggle(c: Campaign) {
     const status = c.status === "active" ? "paused" : "active";
-    await supabase.from("campaigns").update({ status }).eq("id", c.id);
-    load();
+    const { error } = await supabase.from("campaigns").update({ status }).eq("id", c.id);
+    if (error) toast.error(error.message);
+    else load();
   }
 
   async function remove(id: string) {
