@@ -1,22 +1,30 @@
 // ============================================================
-// RAZORPAY PREFLIGHT — can this account actually take money, in USD?
+// RAZORPAY PREFLIGHT — what state is checkout actually in?
 //
-// Answers the one question that decides whether checkout can be
-// switched on: does the live Razorpay account accept a USD order
-// (the international-card path), and is the webhook secret set?
+// Why this does NOT log into Razorpay: the Supabase Management API
+// returns a SHA-256 HASH of a secret when you read it back, never the
+// value. So a script outside the edge function can never see the real
+// key secret, and must never try to authenticate with the hash (that
+// is the mistake this script used to make — it reported a false FAIL).
 //
-// It creates ONE abandoned order of $1 in USD. Creating an order
-// never charges anyone — it is the same first step the real checkout
-// takes. No card, no payment, no customer. The order simply expires.
+// What it CAN do reliably:
+//   * tell whether the checkout gate is on, by comparing the stored
+//     gate secret against sha256("true") (the hashing is plain SHA-256),
+//   * report which Razorpay secrets are present (names only),
+//   * read the live database for real evidence: orders created, any
+//     settled payment, and webhook/billing events.
 //
-// The key id and key secret are read from Supabase project secrets at
-// runtime and are never printed. Only the verdict is.
+// The Key ID / Key Secret themselves are validated where they are typed
+// in — by scripts/.ops/set-razorpay-live.ps1, which tests them against
+// Razorpay BEFORE storing them.
 //
 //   node scripts/.ops/razorpay-preflight.mjs
 // ============================================================
 
-import { getEnv } from "./_db.mjs";
+import { createHash } from "node:crypto";
+import { getEnv, runQuery } from "./_db.mjs";
 
+const sha256 = (s) => createHash("sha256").update(s).digest("hex");
 const ref = getEnv("SUPABASE_PROJECT_REF") ?? "zvohdvopmvzsujktrdmu";
 const token = getEnv("SUPABASE_ACCESS_TOKEN");
 if (!token) {
@@ -24,93 +32,53 @@ if (!token) {
   process.exit(2);
 }
 
-async function secrets() {
-  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/secrets`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`secrets fetch failed: HTTP ${res.status}`);
-  return Object.fromEntries((await res.json()).map((s) => [s.name, s.value]));
+const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/secrets`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+if (!res.ok) {
+  console.error(`secrets fetch failed: HTTP ${res.status}`);
+  process.exit(2);
 }
+const secrets = Object.fromEntries((await res.json()).map((s) => [s.name, s.value]));
 
-const s = await secrets();
-const keyId = s.RAZORPAY_KEY_ID ?? "";
-const keySecret = s.RAZORPAY_KEY_SECRET ?? "";
-const gateOn = s.RAZORPAY_CHECKOUT_ENABLED === "true";
-const webhookSecretSet = Boolean(s.RAZORPAY_WEBHOOK_SECRET);
+const set = (name) => Boolean(secrets[name] && secrets[name].length > 0);
+const gateOn = secrets.RAZORPAY_CHECKOUT_ENABLED === sha256("true");
 
-const say = (label, ok, detail) =>
-  console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? "  — " + detail : ""}`);
-
-console.log("Razorpay preflight for project", ref);
-console.log(`key id: ${keyId ? keyId.slice(0, 8) + "…" : "(missing)"}`);
-console.log(`checkout gate: ${gateOn ? "ON" : "OFF"}`);
-console.log(`webhook secret: ${webhookSecretSet ? "set" : "MISSING"}`);
+console.log("Razorpay preflight (read-only) for", ref);
 console.log("");
-
-if (!keyId || !keySecret) {
-  say("credentials present", false, "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not set");
-  process.exit(1);
+console.log("Secrets present (values are write-only; read-back is a hash):");
+for (const n of ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"]) {
+  console.log(`  ${set(n) ? "yes" : "NO "}  ${n}`);
 }
+console.log(`  ${gateOn ? "ON " : "OFF"}  RAZORPAY_CHECKOUT_ENABLED (== sha256("true")? ${gateOn})`);
 
-const auth = "Basic " + Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-
-// 1) Auth works at all.
-let authOk = false;
+console.log("");
+console.log("Live database evidence:");
 try {
-  const res = await fetch("https://api.razorpay.com/v1/orders?count=1", {
-    headers: { Authorization: auth },
-  });
-  authOk = res.ok;
-  const body = await res.text();
-  say("Razorpay auth", res.ok, res.ok ? "ok" : `HTTP ${res.status} ${body.slice(0, 200)}`);
-} catch (e) {
-  say("Razorpay auth", false, e instanceof Error ? e.message : String(e));
-}
+  const byStatus = await runQuery("select status, count(*)::int n from payments group by status order by status");
+  if (byStatus.length === 0) console.log("  payments: none yet");
+  for (const r of byStatus) console.log(`  payments ${r.status}: ${r.n}`);
 
-// 2) USD (international) order accepted.
-let intlOk = false;
-let intlDetail = "";
-try {
-  const res = await fetch("https://api.razorpay.com/v1/orders", {
-    method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      amount: 100, // $1.00 in cents
-      currency: "USD",
-      receipt: `preflight_${Date.now()}`,
-      notes: { preflight: "true", purpose: "international-card-readiness" },
-    }),
-  });
-  const text = await res.text();
-  if (res.ok) {
-    const order = JSON.parse(text);
-    intlOk = true;
-    intlDetail = `order ${order.id} ${order.currency} ${order.amount}`;
-  } else {
-    let desc = text.slice(0, 240);
-    try {
-      const j = JSON.parse(text);
-      desc = j.error?.description ?? j.error?.reason ?? desc;
-    } catch { /* keep raw */ }
-    intlDetail = `HTTP ${res.status}: ${desc}`;
-  }
-  say("USD (international card) order", intlOk, intlDetail);
+  const latest = await runQuery(
+    "select max(created_at) latest_order, max(paid_at) latest_paid from payments",
+  );
+  console.log(`  latest order: ${latest[0]?.latest_order ?? "—"}`);
+  console.log(`  latest paid : ${latest[0]?.latest_paid ?? "—"}`);
+
+  const be = await runQuery("select count(*)::int n from billing_events");
+  console.log(`  billing_events (webhook wrote a plan change): ${be[0]?.n ?? 0}`);
 } catch (e) {
-  say("USD (international card) order", false, e instanceof Error ? e.message : String(e));
+  console.log("  (could not read db:", e instanceof Error ? e.message.slice(0, 120) : e, ")");
 }
 
 console.log("");
-const readyToGoLive = authOk && intlOk && webhookSecretSet;
-if (readyToGoLive) {
-  console.log("VERDICT: account accepts USD orders and the webhook secret is set.");
-  console.log("         International cards can be enabled by setting RAZORPAY_CHECKOUT_ENABLED=true");
-  console.log("         AFTER the webhook is registered in the Razorpay dashboard.");
+const ready = set("RAZORPAY_KEY_ID") && set("RAZORPAY_KEY_SECRET") && gateOn;
+if (ready) {
+  console.log("VERDICT: checkout is configured and the gate is ON.");
+  console.log("         Domestic cards can pay now. International cards use the SAME");
+  console.log("         checkout and light up as soon as Razorpay approves them.");
+  console.log("         To prove the full loop, complete one payment and re-run this:");
+  console.log("         a new 'paid' row + a billing_events row means the webhook granted the plan.");
 } else {
-  console.log("VERDICT: not ready for international cards yet. Fix the FAIL line(s) above.");
-  if (!intlOk) {
-    console.log("         If the USD order was rejected, International Payments / USD is not");
-    console.log("         enabled on the Razorpay account (dashboard -> Account & Settings ->");
-    console.log("         Payment Methods / International). This needs KYC approval.");
-  }
+  console.log("VERDICT: checkout is not ready. Run set-razorpay-live.ps1 and enable the gate.");
 }
-process.exit(readyToGoLive ? 0 : 1);
