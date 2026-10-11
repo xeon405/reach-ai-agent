@@ -116,6 +116,9 @@ export interface SearchRegionSpec {
 export interface SearchResult {
   leads: GoogleMapsLead[];
   quotaHit: boolean;
+  // Number of Google API calls actually made (Text Search pages + Place
+  // Details). Callers record this into the daily budget (search-budget.ts).
+  apiCalls: number;
 }
 
 export async function searchGoogleMaps(
@@ -126,9 +129,10 @@ export async function searchGoogleMaps(
   extraPhrases?: string[],
   extraAreas?: SearchRegionSpec[],
   enrichmentBudget?: number,
+  enrich = true,
 ): Promise<SearchResult> {
   const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
-  if (!apiKey) return { leads: [], quotaHit: false };
+  if (!apiKey) return { leads: [], quotaHit: false, apiCalls: 0 };
 
   const region = COUNTRY_REGIONS[String(country ?? "").toLowerCase().trim()];
   const phrases = [jobTitle, ...(extraPhrases ?? []).filter((p) => String(p).trim().toLowerCase() !== jobTitle.toLowerCase())]
@@ -145,7 +149,7 @@ export async function searchGoogleMaps(
 
   const seenEmails = new Set<string>();
   const seenPlaceIds = new Set<string>();
-  const shared = { set: seenEmails, seenPlaceIds, enrichmentsUsed: 0, quotaHit: false };
+  const shared = { set: seenEmails, seenPlaceIds, enrichmentsUsed: 0, quotaHit: false, apiCalls: 0, enrich };
   const leads: GoogleMapsLead[] = [];
 
   for (const r of regions) {
@@ -156,7 +160,7 @@ export async function searchGoogleMaps(
     leads.push(...subLeads);
   }
 
-  return { leads, quotaHit: shared.quotaHit };
+  return { leads, quotaHit: shared.quotaHit, apiCalls: shared.apiCalls };
 }
 
 async function searchRegion(
@@ -165,7 +169,7 @@ async function searchRegion(
   region: string | undefined,
   limit: number,
   perRegionCap: number,
-  shared: { set: Set<string>; seenPlaceIds: Set<string>; enrichmentsUsed: number; quotaHit: boolean },
+  shared: { set: Set<string>; seenPlaceIds: Set<string>; enrichmentsUsed: number; quotaHit: boolean; apiCalls: number; enrich: boolean },
   bumpEnrich: () => void,
   budget: number,
   where: string,
@@ -197,6 +201,7 @@ async function searchRegion(
 
       let data: NewTextSearchResponse;
       try {
+        shared.apiCalls++;
         const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
           method: "POST",
           headers: {
@@ -244,6 +249,7 @@ async function searchRegion(
         let address = place.formattedAddress ?? "";
         let rating = place.rating ?? null;
         if (!website) {
+          shared.apiCalls++;
           const details = await getPlaceDetailsNew(place.id, apiKey);
           if (details) {
             website = details.websiteUri ?? "";
@@ -264,17 +270,8 @@ async function searchRegion(
         const countryName = String(parsedCountry ?? "").toLowerCase();
         const category = formatCategory(c.place.types, c.place.primaryType);
 
-        // Step 3: Enrich website for publicly displayed emails — pick the single
-        // best email so one business never floods the list with duplicates.
-        bumpEnrich();
-        const enrichment = await enrichWebsiteEmails(c.website);
-        const best = enrichment.emails
-          .filter((e) => !shared.set.has(e.email))
-          .sort((a, b) => (b.source_type === "mailto" ? 2 : b.source_type === "text" ? 1 : 0) -
-            (a.source_type === "mailto" ? 2 : a.source_type === "text" ? 1 : 0))[0];
-
         const base = {
-          name: c.place.displayName?.text || best?.email.split("@")[0] || "",
+          name: c.place.displayName?.text || "",
           company: c.place.displayName?.text || "",
           job_title: phrases[0],
           country: countryName,
@@ -287,6 +284,23 @@ async function searchRegion(
           category,
           place_id: c.place.id,
         };
+
+        // Background warming skips this: crawling every website is heavy and
+        // can exhaust the worker's compute. Those rows are saved email-less and
+        // filled later by website-crawl, which has its own budget.
+        if (!shared.enrich) {
+          leads.push({ ...base, email: "" });
+          continue;
+        }
+
+        // Step 3: Enrich website for publicly displayed emails — pick the single
+        // best email so one business never floods the list with duplicates.
+        bumpEnrich();
+        const enrichment = await enrichWebsiteEmails(c.website);
+        const best = enrichment.emails
+          .filter((e) => !shared.set.has(e.email))
+          .sort((a, b) => (b.source_type === "mailto" ? 2 : b.source_type === "text" ? 1 : 0) -
+            (a.source_type === "mailto" ? 2 : a.source_type === "text" ? 1 : 0))[0];
 
         if (best) {
           shared.set.add(best.email);
@@ -320,14 +334,16 @@ export async function probeArea(
   jobTitle: string,
   metro: Metro,
   country: string,
-): Promise<{ businesses: number; with_websites: number; ratingSum: number; saturated: boolean; quotaHit: boolean }> {
+): Promise<{ businesses: number; with_websites: number; ratingSum: number; saturated: boolean; quotaHit: boolean; apiCalls: number }> {
   const region = COUNTRY_REGIONS[String(country ?? "").toLowerCase().trim()];
   const fieldMask = "places.id,places.displayName,places.websiteUri,places.rating,places.userRatingCount,nextPageToken";
   const body: Record<string, unknown> = { textQuery: `${jobTitle} in ${metro.query}`, maxResultCount: 20 };
   if (region) body.regionCode = region;
   let quotaHitFlag = false;
+  let apiCalls = 0;
 
   async function searchOnce(withPage2: boolean): Promise<{ data: NewTextSearchResponse; status: number }> {
+    apiCalls++;
     const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": fieldMask },
@@ -342,6 +358,7 @@ export async function probeArea(
     const data1: NewTextSearchResponse = await res.json();
     if (!withPage2 || !data1.nextPageToken) return { data: data1, status: res.status };
     await new Promise((r) => setTimeout(r, 1200));
+    apiCalls++;
     const res2 = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": fieldMask },
@@ -377,7 +394,7 @@ export async function probeArea(
       data = first.data;
     }
     if (status >= 400 || data.places === undefined) {
-      return { businesses: 0, with_websites: 0, ratingSum: 0, saturated: false, quotaHit: quotaHitFlag };
+      return { businesses: 0, with_websites: 0, ratingSum: 0, saturated: false, quotaHit: quotaHitFlag, apiCalls };
     }
     const places = data.places ?? [];
     return {
@@ -386,9 +403,10 @@ export async function probeArea(
       ratingSum: places.reduce((s, p) => s + (p.userRatingCount ?? 0), 0),
       saturated: !!data.nextPageToken,
       quotaHit: quotaHitFlag,
+      apiCalls,
     };
   } catch {
-    return { businesses: 0, with_websites: 0, ratingSum: 0, saturated: false, quotaHit: quotaHitFlag };
+    return { businesses: 0, with_websites: 0, ratingSum: 0, saturated: false, quotaHit: quotaHitFlag, apiCalls };
   } finally {
     clearTimeout(timer);
   }

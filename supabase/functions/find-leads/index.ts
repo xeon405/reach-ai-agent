@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO, nicheFor, searchDirectory } from "../_shared/osm.ts";
 import { searchGoogleMaps, isGoogleMapsAvailable } from "../_shared/google-maps.ts";
+import { recordGoogleSearches } from "../_shared/search-budget.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { verifyEmail, type EmailVerification } from "../_shared/email-verifier.ts";
 import { planSearchQueries, curateLeads, isAiConfigured } from "../_shared/lead-ai.ts";
@@ -169,6 +170,7 @@ serve(async (req) => {
           extraAreas,
         );
         if (gres.quotaHit) quotaHit = true;
+        await recordGoogleSearches(supabase, gres.apiCalls);
         if (gres.leads.length > 0) {
           leads = gres.leads.map((l) => ({
             name: l.name,

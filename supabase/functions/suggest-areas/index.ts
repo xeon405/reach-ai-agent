@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { probeArea, isGoogleMapsAvailable } from "../_shared/google-maps.ts";
+import { recordGoogleSearches } from "../_shared/search-budget.ts";
 import { metrosFor, rankAreas, type AreaRecommendation } from "../_shared/areas.ts";
 import { groqChat, extractJson, sanitizeForPrompt, groqKeys } from "../_shared/groq.ts";
 import { cacheGet, cacheSet, AREA_TTL_MS } from "../_shared/search-cache.ts";
@@ -71,6 +72,7 @@ serve(async (req) => {
       const r = await probeArea(apiKey, String(jobTitle), metro, country);
       return { metro, ...r };
     });
+    await recordGoogleSearches(supabase, raw.reduce((a, r) => a + (r.apiCalls || 0), 0));
     // Progress beats perfection: use whatever cities actually answered.
     const viable = raw.filter((r) => !r.quotaHit && r.businesses > 0);
     const quotaHit = viable.length === 0 && raw.some((r) => r.quotaHit);

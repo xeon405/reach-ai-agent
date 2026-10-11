@@ -1,19 +1,29 @@
-// warm-areas — nightly "leftover quota" worker.
-// 1) Refreshes covered-but-stale areas (so newly-opened businesses get found),
-// 2) seeds brand-new (niche x metro) combos we haven't covered yet,
-// saving everything into our own saved-businesses ledger ("our own map").
-// Invoked by pg_cron with the x-cron-secret header; stops instantly on quota.
+// warm-areas — background "leftover quota" coordinator.
+//
+// Google Maps gives us a daily search allowance (GOOGLE_SEARCH_DAILY_BUDGET,
+// see _shared/search-budget.ts). Live user searches spend from it first; this
+// worker spends whatever is LEFT to grow our own map while it's free:
+//   1) Refreshes covered-but-stale areas (older than 7 days) so businesses that
+//      opened since then still get discovered.
+//   2) Seeds brand-new (niche x metro) combos, real user demand first, then a
+//      fixed list — so popular niches are warm before anyone asks.
+// It never overspends: it reads the remaining allowance, caps each run, stops
+// the moment Google returns 429, and records exactly what it spent.
+// Invoked by pg_cron with the x-cron-secret header.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { insertAudit } from "../_shared/audit.ts";
 import { isGoogleMapsAvailable, searchGoogleMaps } from "../_shared/google-maps.ts";
 import { metrosFor } from "../_shared/areas.ts";
-import { saveBusinesses, markCoverageRefreshed, grantRefresh } from "../_shared/saved-businesses.ts";
+import { saveBusinesses, markCoverageRefreshed } from "../_shared/saved-businesses.ts";
+import { googleSearchBudget, googleSearchesRemaining, recordGoogleSearches } from "../_shared/search-budget.ts";
 
-const STALE_REFRESH_MAX = 6;
-const NEW_COMBO_MAX = 8;
+// Never spend more than this many Google calls in a single invocation, even if
+// the day's allowance is untouched — keeps one run from burning the whole lot.
+const PER_RUN_MAX = 15;
 const REFRESH_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const STALE_SCAN = 40;
 const SEED_NICHES = [
   "dentist", "gym", "restaurant", "salon", "lawyer", "real estate",
   "auto repair", "veterinary", "photographer", "accountant", "bakery",
@@ -26,6 +36,10 @@ const SEED_COUNTRIES = [
 
 function titleCase(s: string): string {
   return String(s).split(/\s+/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
 interface Combo { niche: string; country: string; city: string; query: string }
@@ -47,7 +61,6 @@ serve(async (req) => {
   );
   // Run-marker: unconditional proof this invocation EXECUTED (health-check's
   // cron probe judges freshness on this, never on dispatch 'succeeded' alone).
-  // Emitted before the no-key skip so "ran but skipped" is still observable.
   try {
     await insertAudit(supabase as any, {
       user_id: null,
@@ -57,15 +70,25 @@ serve(async (req) => {
   } catch { /* marker is best-effort; the run is authoritative */ }
 
   if (!isGoogleMapsAvailable()) {
-    return new Response(JSON.stringify({ status: "skipped: no google key" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return json({ status: "skipped: no google key" });
   }
-  const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY")!;
-  const out = { refreshed: 0, seeded: 0, savedTotal: 0, searches: 0, quotaHit: false };
+
+  // Spend only what today's user searches did not.
+  const budget = googleSearchBudget();
+  const remaining = await googleSearchesRemaining(supabase);
+  const runCap = Math.min(PER_RUN_MAX, remaining);
+  const out = { budget, remaining, runCap, refreshed: 0, seeded: 0, savedTotal: 0, searches: 0, apiCalls: 0, quotaHit: false };
+
+  if (runCap <= 0) {
+    return json({ ...out, note: "daily search budget spent; nothing to do" });
+  }
 
   async function probe(combo: Combo): Promise<"ok" | "quota" | "capped"> {
-    if (!(await grantRefresh(supabase))) return "capped";
-    const gres = await searchGoogleMaps(combo.niche, combo.country, 25, combo.query, [], undefined);
+    if (out.apiCalls >= runCap) return "capped";
+    const gres = await searchGoogleMaps(combo.niche, combo.country, 25, combo.query, [], undefined, undefined, false);
     out.searches++;
+    out.apiCalls += gres.apiCalls;
+    await recordGoogleSearches(supabase, gres.apiCalls);
     if (gres.quotaHit) { out.quotaHit = true; return "quota"; }
     const saved = await saveBusinesses(supabase, gres.leads, combo.niche.trim().toLowerCase(), combo.country.trim());
     await markCoverageRefreshed(supabase, combo.niche.trim().toLowerCase(), combo.country.trim(), combo.city, combo.query);
@@ -79,16 +102,16 @@ serve(async (req) => {
     .select("niche, country, city, query")
     .lt("last_live_search_at", new Date(Date.now() - REFRESH_AFTER_MS).toISOString())
     .order("last_live_search_at", { ascending: true })
-    .limit(STALE_REFRESH_MAX) as { data?: Array<{ niche: string; country: string; city: string; query: string | null }> };
+    .limit(STALE_SCAN) as { data?: Array<{ niche: string; country: string; city: string; query: string | null }> };
   for (const row of staleRes.data ?? []) {
-    if (out.quotaHit || out.refreshed >= STALE_REFRESH_MAX) break;
+    if (out.quotaHit || out.apiCalls >= runCap) break;
     const res = await probe({ niche: row.niche, country: row.country, city: row.city, query: row.query || `${titleCase(row.city)}, ${row.country}` });
     if (res === "quota") break;
     if (res === "ok") out.refreshed++;
   }
 
   // 2) Seed combos we've never covered — user demand first, then a static list.
-  if (!out.quotaHit) {
+  if (!out.quotaHit && out.apiCalls < runCap) {
     const combos = new Map<string, Combo>();
     const addCombo = (niche: string, country: string, metro: { city: string; query: string }) => {
       const city = String(metro.query).split(",")[0].trim().toLowerCase();
@@ -121,7 +144,7 @@ serve(async (req) => {
       }
     }
     for (const combo of combos.values()) {
-      if (out.quotaHit || out.seeded >= NEW_COMBO_MAX) break;
+      if (out.quotaHit || out.apiCalls >= runCap) break;
       const existing = await supabase
         .from("lead_refresh")
         .select("niche")
@@ -136,5 +159,5 @@ serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify(out), { status: 200, headers: { "Content-Type": "application/json" } });
+  return json(out);
 });
