@@ -71,6 +71,7 @@ const CHARTER = [
 ];
 
 const LIMITATIONS = [
+  "Find Leads works — it pulls real businesses from public directories like Google Maps — but most of those listings do not publish an email address, so a lot of results come with a name, website, phone or location but no email yet. We are actively working on pulling emails from more sources. Until that ships, the fastest way to actually reach people is to import your own contacts (CSV) — that takes seconds.",
   "AI-written drafts are strong but not perfect — we recommend reading the one-click AI replies before sending them.",
   "Open tracking uses a standard invisible pixel, so opens are approximate: contacts using strict privacy tools or text-only inboxes may not be counted. Replies, bounces and sentiment are tracked accurately.",
   "Inbox placement depends partly on your own domain reputation. Our warm-up ramp protects you, but no tool can guarantee 100% inbox delivery.",
@@ -130,7 +131,7 @@ function HonestyPage() {
             ))}
           </ul>
           <p className="mt-5 border-t border-warning/20 pt-4 text-xs text-muted-foreground">
-            This page is updated whenever a limitation is fixed or discovered. Last update: August 2026.
+            This page is updated whenever a limitation is fixed or discovered. Last update: October 2026.
           </p>
         </div>
 
