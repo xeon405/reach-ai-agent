@@ -79,7 +79,7 @@ function Terms() {
 
           <section>
             <h2 className="text-lg font-semibold">8. Refund Policy (Right of Return)</h2>
-            <p className="mt-2">Every paid plan includes a <strong>14-day money-back guarantee</strong> — no questions asked and regardless of reason. To request a refund, email support within 14 days of your payment and it will be processed in full. Additionally, if a hidden defect is discovered that we cannot fix promptly, you are entitled to a full refund at any point during your subscription.</p>
+            <p className="mt-2">Every paid plan includes a <strong>14-day money-back guarantee on your first payment</strong> — no forms and no reason needed. To request a refund, email support within 14 days of your payment and it will be processed in full on an account in good standing (not suspended for spam or abuse). Additionally, if a hidden defect is discovered that we cannot fix promptly, you are entitled to a full refund at any point during your subscription.</p>
           </section>
 
           <section>

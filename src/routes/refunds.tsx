@@ -30,8 +30,9 @@ function RefundsPage() {
             <h2 className="font-semibold">14-day money-back guarantee</h2>
           </div>
           <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-            Every paid plan includes a full refund within <strong>14 calendar days of payment</strong> —
-            no questions asked, no reason required, no forms to fight with. One email is enough.
+            Every paid plan includes a full refund within <strong>14 calendar days of your first payment</strong> —
+            no forms, no phone calls, no arguing. One email is enough, and we process it in full. It
+            covers your first purchase, on an account in good standing (not suspended for spam or abuse).
           </p>
         </div>
 
@@ -60,10 +61,11 @@ function RefundsPage() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
-          <h2 className="font-semibold">Cancelling without a refund</h2>
+          <h2 className="font-semibold">Nothing to cancel</h2>
           <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-            You can cancel anytime from Settings → Billing. Cancellation stops all future charges immediately;
-            nothing else changes until your paid period ends.
+            Your plan is a <strong>one-time payment</strong> — we never auto-charge you, so there is
+            nothing to cancel. Your access runs until the end of the period you paid for; when it ends,
+            just buy again if you want to continue.
           </p>
         </div>
 

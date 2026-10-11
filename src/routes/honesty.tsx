@@ -54,7 +54,7 @@ const CHARTER = [
   {
     rule: "Your right of return is guaranteed",
     detail:
-      "14-day money-back guarantee, no questions asked — even without a hidden defect. Email us within 14 days of payment and receive a full refund.",
+      "14-day money-back guarantee on your first payment — even without a hidden defect. Email us within 14 days of payment for a full refund; no forms, no reason needed, as long as your account is in good standing.",
     link: { to: "/terms", label: "Refund policy" },
   },
   {

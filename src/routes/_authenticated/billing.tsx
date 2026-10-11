@@ -194,7 +194,7 @@ function BillingPage() {
         <span>No hidden fees · taxes shown at checkout before you pay</span>
         <span>Exact email caps — hard stop, never overage</span>
         <span>Prices never change based on your activity</span>
-        <span>14-day money-back, no questions asked</span>
+        <span>14-day money-back on your first purchase</span>
         <a
           href="/honesty"
           target="_blank"
@@ -269,8 +269,9 @@ function BillingPage() {
       {/* Guarantee */}
       <div className="rounded-lg border border-border bg-card p-4 text-center">
         <p className="text-sm text-muted-foreground">
-          <strong>14-day money back guarantee.</strong> No questions asked. Payments are one-time —
-          you are never auto-charged, and your plan runs until the end of the period you paid for.
+          <strong>14-day money-back guarantee</strong> on your first purchase — no forms, no reason
+          needed. Payments are one-time — you are never auto-charged, and your plan runs until the end
+          of the period you paid for.
         </p>
       </div>
 
