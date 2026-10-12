@@ -16,10 +16,43 @@ const INCLUDED = [
   { icon: "🛡️", title: "Spam protection", desc: "Safe sending limits, spam-word screening, and unsubscribe handling built in." },
 ];
 
+const STEPS = [
+  { n: 1, title: "Tell us your offer", desc: "Your industry, the country to target, and what you sell. A short email is enough." },
+  { n: 2, title: "We set everything up", desc: "We build your customer list and write the emails from your own address — live within 48 hours." },
+  { n: 3, title: "Warm replies land in your inbox", desc: "People who are interested reply to you. You take the call and close the deal." },
+];
+
+const FAQ = [
+  {
+    q: "Who is this for?",
+    a: "Small teams and business owners who want steady leads but don't want to run the software themselves. Our team operates it for you.",
+  },
+  {
+    q: "Do the emails come from my address?",
+    a: "Yes. We send from your own Gmail address, so replies and bookings come straight to you.",
+  },
+  {
+    q: "Is there a contract or lock-in?",
+    a: "No lock-in. Plans are monthly and you can cancel anytime. There's a one-time $199 setup fee to build your first campaign.",
+  },
+  {
+    q: "What does the monthly email number mean?",
+    a: "It's the sending volume included in your plan (Launch 500, Growth 2,000 per month). We keep safe sending limits so your address stays healthy.",
+  },
+  {
+    q: "What if I'm not happy?",
+    a: "We stand behind the work — see our refund policy for the guarantee on your first payment.",
+  },
+  {
+    q: "How is this different from the app?",
+    a: "The app is self-serve and starts at $37/month if you run it yourself. This service means our team runs it for you.",
+  },
+];
+
 function AgencyPage() {
   return (
     <div className="min-h-screen bg-background">
-        <EnOnlyNotice />
+      <EnOnlyNotice />
       <SiteHeader />
 
       <section className="mx-auto max-w-4xl px-4 pb-16 pt-10 text-center">
@@ -35,21 +68,41 @@ function AgencyPage() {
           <strong className="text-foreground">$299/month</strong>. No ads. No cold calls.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <a href="mailto:outshipai@gmail.com?subject=I%20want%20more%20sales%20calls&body=Tell%20me%20about%20your%20industry%2C%20target%20country%20and%20offer.%0A%0AIndustry:%0ACountry:%0AOffer:">
+          <a href="mailto:outshipai@gmail.com?subject=I%20want%20more%20sales%20calls&body=Tell%20me%20about%20your%20industry%2C%20target%20country%20and%20offer.%0A%0AIndustry:%0ACountry:%0AOffer:%0AMonthly%20email%20volume%20wanted:">
             <Button size="lg" className="bg-gradient-primary px-8 text-base shadow-lg">
               Start finding customers 🚀
             </Button>
           </a>
-          <a href="mailto:outshipai@gmail.com?subject=Question%20about%20DFY%20service">
+          <a href="#faq">
             <Button size="lg" variant="outline" className="px-8 text-base">Ask a question</Button>
           </a>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">Setup in 48 hours · Cancel anytime · Your data stays yours</p>
+        <p className="mt-4 text-xs text-muted-foreground">Setup in 48 hours · No lock-in, cancel anytime · Your data stays yours</p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          <a href="/#pricing" className="font-medium underline underline-offset-4 hover:text-foreground">
+            Rather run it yourself? Self-serve plans start at $37/month →
+          </a>
+        </p>
       </section>
 
       <section className="border-t border-border bg-muted/30 py-16">
         <div className="mx-auto max-w-5xl px-4">
-          <h2 className="mb-10 font-display text-center text-3xl font-bold tracking-tight">Everything handled for you</h2>
+          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">How it works</h2>
+          <div className="grid gap-5 sm:grid-cols-3">
+            {STEPS.map((s) => (
+              <div key={s.n} className="rounded-2xl border border-border bg-card p-6 shadow-card">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary font-bold text-white">{s.n}</div>
+                <h3 className="mt-4 font-semibold">{s.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16">
+        <div className="mx-auto max-w-5xl px-4">
+          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">Everything handled for you</h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {INCLUDED.map((f) => (
               <div key={f.title} className="rounded-2xl border border-border bg-card p-6 shadow-card">
@@ -62,7 +115,7 @@ function AgencyPage() {
         </div>
       </section>
 
-      <section className="py-16">
+      <section className="border-t border-border bg-muted/30 py-16">
         <div className="mx-auto max-w-4xl px-4 text-center">
           <h2 className="text-3xl font-bold">Simple pricing</h2>
           <div className="mx-auto mt-8 grid max-w-3xl gap-5 sm:grid-cols-2">
@@ -97,14 +150,48 @@ function AgencyPage() {
               </a>
             </div>
           </div>
-          <p className="mt-6 text-xs text-muted-foreground">One-time setup $199 · Prices in USD · Pause or cancel anytime</p>
+          <p className="mt-6 text-xs text-muted-foreground">
+            One-time setup $199 · Prices in USD · No lock-in, cancel anytime ·{" "}
+            <Link to="/refunds" className="underline">Refund policy</Link>
+          </p>
+        </div>
+      </section>
+
+      <section id="faq" className="scroll-mt-20 py-16">
+        <div className="mx-auto max-w-3xl px-4">
+          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">Frequently asked questions</h2>
+          <div className="space-y-3">
+            {FAQ.map((item) => (
+              <details key={item.q} className="group rounded-2xl border border-border bg-card p-5 shadow-card">
+                <summary className="cursor-pointer list-none font-semibold marker:content-none">
+                  <span className="flex items-center justify-between gap-4">
+                    {item.q}
+                    <span className="text-muted-foreground transition-transform group-open:rotate-45">+</span>
+                  </span>
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-border py-14 text-center">
+        <div className="mx-auto max-w-2xl px-4">
+          <h2 className="font-display text-2xl font-bold tracking-tight">Ready to fill your calendar?</h2>
+          <p className="mt-3 text-muted-foreground">Tell us your industry and target country — we'll set it up within 48 hours.</p>
+          <a href="mailto:outshipai@gmail.com?subject=I%20want%20more%20sales%20calls&body=Industry:%0ACountry:%0AOffer:">
+            <Button size="lg" className="mt-6 bg-gradient-primary px-8 text-base shadow-lg">Start finding customers 🚀</Button>
+          </a>
         </div>
       </section>
 
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} OutshipAi ·{" "}
-        <Link to="/privacy" className="underline">Privacy</Link>{" "}
+        <Link to="/privacy" className="underline">Privacy</Link>
         <Link to="/terms" className="ml-2 underline">Terms</Link>
+        <Link to="/refunds" className="ml-2 underline">Refunds</Link>
+        <Link to="/honesty" className="ml-2 underline">Honesty</Link>
       </footer>
     </div>
   );
