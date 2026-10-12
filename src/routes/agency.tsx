@@ -4,6 +4,16 @@ import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/agency")({
+  head: () => ({
+    meta: [
+      { title: "Hire a Done-For-You AI Sales Team | OutshipAi" },
+      {
+        name: "description",
+        content:
+          "We run cold email for you: customer research, personalized emails, follow-ups and reply handling. Warm conversations land in your inbox from $299/month.",
+      },
+    ],
+  }),
   component: AgencyPage,
 });
 

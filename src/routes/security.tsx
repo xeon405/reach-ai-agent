@@ -5,6 +5,16 @@ import { SiteHeader } from "@/components/site-header";
 import { ShieldCheck, Lock, KeyRound, Trash2, Eye, FileJson } from "lucide-react";
 
 export const Route = createFileRoute("/security")({
+  head: () => ({
+    meta: [
+      { title: "Security & Privacy — Your Gmail, Your Control | OutshipAi" },
+      {
+        name: "description",
+        content:
+          "Your Gmail stays yours: official OAuth, token vault isolation, RLS-protected storage, and instant disconnect anytime. How OutshipAi protects your data.",
+      },
+    ],
+  }),
   component: SecurityPage,
 });
 

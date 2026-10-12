@@ -4,7 +4,14 @@ import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
-    meta: [{ title: "Privacy Policy — OutshipAi" }],
+    meta: [
+      { title: "Privacy Policy — OutshipAi" },
+      {
+        name: "description",
+        content:
+          "How OutshipAi collects, uses, and protects your data: account data, Gmail OAuth tokens, email data, and usage telemetry. We never sell your data.",
+      },
+    ],
   }),
   component: Privacy,
 });

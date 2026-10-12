@@ -4,6 +4,16 @@ import { SiteHeader } from "@/components/site-header";
 import { Undo2, ShieldCheck, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/refunds")({
+  head: () => ({
+    meta: [
+      { title: "Return & Refund Policy — 14-Day Money-Back | OutshipAi" },
+      {
+        name: "description",
+        content:
+          "If you're not happy, you get your money back. 14-day money-back guarantee on your first payment, plus a hidden-defect guarantee anytime.",
+      },
+    ],
+  }),
   component: RefundsPage,
 });
 

@@ -4,7 +4,14 @@ import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
-    meta: [{ title: "Terms of Service — OutshipAi" }],
+    meta: [
+      { title: "Terms of Service — OutshipAi" },
+      {
+        name: "description",
+        content:
+          "The terms for using OutshipAi: your account, acceptable use, sending limits, billing, and liability — in plain English.",
+      },
+    ],
   }),
   component: Terms,
 });

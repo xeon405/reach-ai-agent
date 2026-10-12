@@ -4,6 +4,16 @@ import { SiteHeader } from "@/components/site-header";
 import { Compass } from "lucide-react";
 
 export const Route = createFileRoute("/about")({
+  head: () => ({
+    meta: [
+      { title: "About OutshipAi — Our Story & Principles" },
+      {
+        name: "description",
+        content:
+          "We build an AI sales agent so small teams can reach the world without hiring a sales department. Honesty, fair pricing, and respect for your data.",
+      },
+    ],
+  }),
   component: AboutPage,
 });
 

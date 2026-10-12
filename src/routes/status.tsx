@@ -7,6 +7,16 @@ import { SiteHeader } from "@/components/site-header";
 import { Activity, RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/status")({
+  head: () => ({
+    meta: [
+      { title: "System Status — OutshipAi" },
+      {
+        name: "description",
+        content:
+          "Live status of OutshipAi services: website, login, database, AI sending engine, reply engine, and follow-up autopilot.",
+      },
+    ],
+  }),
   component: StatusPage,
 });
 

@@ -4,6 +4,16 @@ import { SiteHeader } from "@/components/site-header";
 import { HeartHandshake, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/honesty")({
+  head: () => ({
+    meta: [
+      { title: "Honesty Charter — Our Flaws & Real Numbers | OutshipAi" },
+      {
+        name: "description",
+        content:
+          "Read our complete list of current limitations before you buy. Live numbers, no fake testimonials, no exaggeration — the full truth about OutshipAi.",
+      },
+    ],
+  }),
   component: HonestyPage,
 });
 
