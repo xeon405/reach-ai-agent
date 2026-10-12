@@ -14,7 +14,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { IosInstallBanner } from "@/components/ios-install-banner";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import { LangProvider } from "@/lib/i18n";
-import { supabase } from "@/integrations/supabase/client";
 
 const GA_ID = "G-95GHJXR7D4";
 const GA_INIT_SCRIPT = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GA_ID}');`;
@@ -164,13 +163,40 @@ function AuthListener() {
   const router = useRouter();
   const queryClient = useQueryClient();
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      router.invalidate();
-      queryClient.invalidateQueries();
-    });
-    return () => subscription.unsubscribe();
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    // Load supabase only when the browser is idle so the client library stays out
+    // of the initial bundle, then subscribe to auth changes.
+    const start = async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      if (cancelled) return;
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(() => {
+        router.invalidate();
+        queryClient.invalidateQueries();
+      });
+      cleanup = () => subscription.unsubscribe();
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(() => void start(), { timeout: 2500 });
+    } else {
+      timer = setTimeout(() => void start(), 1500);
+    }
+    return () => {
+      cancelled = true;
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") {
+        w.cancelIdleCallback(idleId);
+      }
+      if (timer) clearTimeout(timer);
+      cleanup?.();
+    };
   }, [router, queryClient]);
   return null;
 }

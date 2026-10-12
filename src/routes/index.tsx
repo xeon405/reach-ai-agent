@@ -4,14 +4,16 @@ import { ArrowRight, Bot, Mail, Repeat, Check, Inbox, Search, Send, Target, Cale
 import { Logo } from "@/components/Logo";
 import { SiteHeader } from "@/components/site-header";
 import { APP_BASE_URL } from "@/lib/app-config";
-import { SupportChat } from "@/components/support-chat";
 
-// three.js is big (~560 kB minified); load the orb only after first paint/idle
-// so the page's copy, CTAs and CSS render instantly. Vite splits it into its own chunk.
+// Heavy, non-critical UI is lazy-loaded and mounted only once the page is idle,
+// so the copy, CTAs and CSS become interactive immediately and the big chunks
+// (three.js ~560 kB, the supabase client, the support chat) stay out of the initial load.
 const HeroOrb = lazy(() => import("@/components/hero-orb").then((m) => ({ default: m.HeroOrb })));
+const SupportChat = lazy(() =>
+  import("@/components/support-chat").then((m) => ({ default: m.SupportChat })),
+);
 
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useLang } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
@@ -269,12 +271,42 @@ const plans = [
 function Landing() {
   const { lang, t } = useLang();
   const [stats, setStats] = useState<{ emails_sent: number; agents: number } | null>(null);
+  const [idle, setIdle] = useState(false);
+
+  // Flip to true once the browser is idle (or a short timeout as a fallback),
+  // then load the heavy extras. Keeps the initial main-thread work small.
+  useEffect(() => {
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(() => setIdle(true), { timeout: 3000 });
+    } else {
+      timer = setTimeout(() => setIdle(true), 2000);
+    }
+    return () => {
+      if (idleId !== undefined && typeof w.cancelIdleCallback === "function") {
+        w.cancelIdleCallback(idleId);
+      }
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
-    supabase.rpc("public_stats").then(({ data }) => {
-      if (data && data.length > 0) setStats(data[0]);
+    if (!idle) return;
+    let cancelled = false;
+    void import("@/integrations/supabase/client").then(({ supabase }) => {
+      supabase.rpc("public_stats").then(({ data }) => {
+        if (!cancelled && data && data.length > 0) setStats(data[0]);
+      });
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [idle]);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -346,9 +378,13 @@ function Landing() {
           </div>
 
           <div className="relative w-full h-[450px] md:h-[520px]">
-            <Suspense fallback={<div className="hero-orb hero-orb-loading" aria-hidden />}>
-              <HeroOrb />
-            </Suspense>
+            {idle ? (
+              <Suspense fallback={<div className="hero-orb hero-orb-loading" aria-hidden />}>
+                <HeroOrb />
+              </Suspense>
+            ) : (
+              <div className="hero-orb hero-orb-loading" aria-hidden />
+            )}
             <div className="float-email float1"><Mail className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> New lead found · Chicago</div>
             <div className="float-email float2"><Target className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Reply detected · Interested</div>
             <div className="float-email float3"><Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Meeting booked · Tomorrow 2pm</div>
@@ -696,7 +732,11 @@ function Landing() {
         </div>
       </footer>
 
-      <SupportChat />
+      {idle && (
+        <Suspense fallback={null}>
+          <SupportChat />
+        </Suspense>
+      )}
     </div>
   );
 }
