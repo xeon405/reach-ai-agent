@@ -7,11 +7,11 @@ import { ShieldCheck, Lock, KeyRound, Trash2, Eye, FileJson } from "lucide-react
 export const Route = createFileRoute("/security")({
   head: () => ({
     meta: [
-      { title: "Security & Privacy — Your Gmail, Your Control | OutshipAi" },
+      { title: "Security & Privacy — No inbox access | OutshipAi" },
       {
         name: "description",
         content:
-          "Your Gmail stays yours: official OAuth, token vault isolation, RLS-protected storage, and instant disconnect anytime. How OutshipAi protects your data.",
+          "OutshipAi never accesses your inbox: no OAuth, no mailbox permissions, no email password. See how your data is protected with RLS storage, export and delete.",
       },
     ],
   }),
@@ -21,22 +21,22 @@ export const Route = createFileRoute("/security")({
 const SECTIONS = [
   {
     icon: KeyRound,
-    title: "Your Gmail. Your control.",
+    title: "No inbox access. Ever.",
     points: [
-      "We never see or store your Google password — connection happens through Google's official OAuth flow.",
-      "We request only two permissions: send emails and read replies to your own sent messages.",
-      "Disconnect anytime in Settings → Connected accounts. This instantly revokes our access.",
-      "You can also revoke from your Google Account → Third-party access, anytime.",
+      "OutshipAi never connects to your email account and never asks for your Google password.",
+      "We request no mailbox permissions — there is no OAuth token, so there is nothing to leak or revoke.",
+      "Emails send from your own OutshipAi sending address on a domain we authenticate with DKIM and SPF.",
+      "Replies arrive through our own inbound webhook, not by reading anyone's inbox.",
     ],
   },
   {
     icon: Lock,
-    title: "Token vault isolation",
+    title: "How your data is protected",
     points: [
-      "Gmail access tokens are stored in an isolated vault table protected by Row Level Security.",
-      "Your regular login can NOT read this vault — not from the app, not from the API, not with any browser trickery.",
-      "Only the sending engine (server-side) can use them, and only to send the emails YOU ask it to send.",
-      "Tokens are rotated on every send session and old values are overwritten within seconds.",
+      "Your account data and sending history are stored with Row Level Security, scoped strictly to your user id.",
+      "Your login can only read your own data — not from the app, not from the API, not with browser trickery.",
+      "Only the server-side sending engine writes to the send queue, and only for the emails YOU ask it to send.",
+      "Sender reputation is protected with warm-up caps and automatic bounce/complaint suppression.",
     ],
   },
   {
@@ -44,7 +44,7 @@ const SECTIONS = [
     title: "What we see — and what we don't",
     points: [
       "Stored: your account email, your settings, the contact lists you create, the subject and body of every email your agent sends, and reply sentiment labels.",
-      "NOT stored: your Gmail password, emails from other senders in your inbox, your contacts outside our system, or your browsing history.",
+      "NOT stored: any email password, emails from other senders in your inbox (we can't see them), your contacts outside our system, or your browsing history.",
       "We never sell, rent, or share your data with third parties. Period.",
     ],
   },
@@ -53,7 +53,7 @@ const SECTIONS = [
     title: "Your data belongs to you",
     points: [
       "Export everything as JSON: Settings → Download my data. It's a single click, no support ticket needed.",
-      "Permanent deletion: Settings → Danger zone → Delete account removes your profile, contacts, email history AND token vault rows in one shot.",
+      "Permanent deletion: Settings → Danger zone → Delete account removes your profile, contacts and email history in one shot.",
       "Anyone who unsubscribes is permanently blocked from everything you send, automatically.",
     ],
   },
@@ -72,22 +72,28 @@ const SECTIONS = [
 function SecurityPage() {
   return (
     <div className="min-h-screen bg-background">
-        <EnOnlyNotice />
+      <EnOnlyNotice />
       <SiteHeader />
 
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-8 text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
           <ShieldCheck className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">Security at OutshipAi</h1>
+        <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">
+          Security at OutshipAi
+        </h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-          We treat your Gmail account like it's our own. Here is exactly how your data is protected — in plain English.
+          We never connect to your email account. Here is exactly how your data is protected — in
+          plain English.
         </p>
       </section>
 
       <section className="mx-auto max-w-3xl space-y-5 px-4 pb-20">
         {SECTIONS.map((s) => (
-          <div key={s.title} className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-7">
+          <div
+            key={s.title}
+            className="rounded-2xl border border-border bg-card p-6 shadow-card sm:p-7"
+          >
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
                 <s.icon className="h-5 w-5 text-primary" />
@@ -118,8 +124,14 @@ function SecurityPage() {
 
         <p className="pt-2 text-center text-xs text-muted-foreground">
           Read also our{" "}
-          <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link> and{" "}
-          <Link to="/terms" className="underline hover:text-foreground">Terms of Service</Link>.
+          <Link to="/privacy" className="underline hover:text-foreground">
+            Privacy Policy
+          </Link>{" "}
+          and{" "}
+          <Link to="/terms" className="underline hover:text-foreground">
+            Terms of Service
+          </Link>
+          .
         </p>
       </section>
     </div>

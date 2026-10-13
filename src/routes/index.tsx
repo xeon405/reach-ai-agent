@@ -1,6 +1,26 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Children, lazy, Suspense, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Inbox, Search, Send, Target, Calendar } from "lucide-react";
+import {
+  Children,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type CSSProperties,
+} from "react";
+import {
+  ArrowRight,
+  Bot,
+  Mail,
+  Repeat,
+  Check,
+  Inbox,
+  Search,
+  Send,
+  Target,
+  Calendar,
+} from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SiteHeader } from "@/components/site-header";
 import { APP_BASE_URL } from "@/lib/app-config";
@@ -80,7 +100,7 @@ export const Route = createFileRoute("/")({
                   name: "Will this work with my existing inbox?",
                   acceptedAnswer: {
                     "@type": "Answer",
-                    text: "Yes — you connect your own Gmail or Google Workspace account. Emails are sent from you, in your voice, and replies land directly in your real inbox.",
+                    text: "No inbox to connect. Emails are sent from your own OutshipAi sending address, written in your voice, and replies come straight to you.",
                   },
                 },
                 {
@@ -138,8 +158,14 @@ const features = [
 function FooterCol({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-foreground">{title}</h4>
-      <ul className="space-y-2.5 text-sm text-muted-foreground">{Children.map(children, (c) => <li>{c}</li>)}</ul>
+      <h4 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-foreground">
+        {title}
+      </h4>
+      <ul className="space-y-2.5 text-sm text-muted-foreground">
+        {Children.map(children, (c) => (
+          <li>{c}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -155,7 +181,7 @@ const faqs = [
   },
   {
     q: "Will this work with my existing inbox?",
-    a: "Yes — you connect your own Gmail or Google Workspace account. Emails are sent from you, in your voice, and replies land directly in your real inbox.",
+    a: "No inbox to connect. Emails are sent from your own OutshipAi sending address, written in your voice, and replies come straight to you.",
   },
   {
     q: "How fast will I see results?",
@@ -175,8 +201,8 @@ const steps = [
   {
     n: "01",
     icon: Inbox,
-    title: "Connect your inbox",
-    text: "Link Gmail or Google Workspace in minutes — no credit card needed.",
+    title: "Create your account",
+    text: "Sign up and go live in minutes — no inbox to connect, no credit card needed.",
   },
   {
     n: "02",
@@ -192,10 +218,28 @@ const steps = [
   },
 ];
 
-function Step({ n, icon: Icon, title, text, style }: { n: string; icon: typeof Inbox; title: string; text: string; style?: CSSProperties }) {
+function Step({
+  n,
+  icon: Icon,
+  title,
+  text,
+  style,
+}: {
+  n: string;
+  icon: typeof Inbox;
+  title: string;
+  text: string;
+  style?: CSSProperties;
+}) {
   return (
-    <li data-reveal style={style} className="reveal relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-lift md:p-10">
-      <span className="step-num" aria-hidden>{n}</span>
+    <li
+      data-reveal
+      style={style}
+      className="reveal relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-8 transition-all duration-300 hover:-translate-y-1 hover:border-border hover:shadow-lift md:p-10"
+    >
+      <span className="step-num" aria-hidden>
+        {n}
+      </span>
       <div className="relative">
         <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-sm">
           <Icon className="h-5 w-5" />
@@ -251,20 +295,20 @@ const plans = [
     nameKey: "plan_starter",
     price: 37,
     capKey: "cap_starter",
-    perkKeys: ["perk_ai","perk_fu","perk_warm","perk_spam"],
+    perkKeys: ["perk_ai", "perk_fu", "perk_warm", "perk_spam"],
   },
   {
     nameKey: "plan_growth",
     price: 79,
     capKey: "cap_growth",
-    perkKeys: ["perk_ai","perk_5camp","perk_reply","perk_ab","perk_tz"],
+    perkKeys: ["perk_ai", "perk_5camp", "perk_reply", "perk_ab", "perk_tz"],
     featured: true,
   },
   {
     nameKey: "plan_agency",
     price: 149,
     capKey: "cap_agency",
-    perkKeys: ["perk_unlim","perk_arabic","perk_bulk","perk_auto","badge_support"],
+    perkKeys: ["perk_unlim", "perk_arabic", "perk_bulk", "perk_auto", "badge_support"],
   },
 ];
 
@@ -358,7 +402,8 @@ function Landing() {
               Your AI sales agent <br /> finds, writes &amp; sends.
             </h1>
             <p className="text-base md:text-lg text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed max-w-[420px]">
-              OutshipAI builds your lead list, writes personalized cold emails with AI, and sends them on autopilot — while you focus on closing.
+              OutshipAI builds your lead list, writes personalized cold emails with AI, and sends
+              them on autopilot — while you focus on closing.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <a
@@ -385,52 +430,120 @@ function Landing() {
             ) : (
               <div className="hero-orb hero-orb-loading" aria-hidden />
             )}
-            <div className="float-email float1"><Mail className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> New lead found · Chicago</div>
-            <div className="float-email float2"><Target className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Reply detected · Interested</div>
-            <div className="float-email float3"><Calendar className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100" aria-hidden /> Meeting booked · Tomorrow 2pm</div>
+            <div className="float-email float1">
+              <Mail
+                className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100"
+                aria-hidden
+              />{" "}
+              New lead found · Chicago
+            </div>
+            <div className="float-email float2">
+              <Target
+                className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100"
+                aria-hidden
+              />{" "}
+              Reply detected · Interested
+            </div>
+            <div className="float-email float3">
+              <Calendar
+                className="h-3.5 w-3.5 shrink-0 text-neutral-900 dark:text-neutral-100"
+                aria-hidden
+              />{" "}
+              Meeting booked · Tomorrow 2pm
+            </div>
           </div>
         </div>
 
         <div className="mx-auto w-full max-w-5xl relative z-10">
           <div className="hero-mock">
             <span className="mock-accent" aria-hidden />
-            <div className="float-chip float-chip-a"><i aria-hidden />7.5% reply rate</div>
-            <div className="float-chip float-chip-b"><i aria-hidden />Booking requested</div>
+            <div className="float-chip float-chip-a">
+              <i aria-hidden />
+              7.5% reply rate
+            </div>
+            <div className="float-chip float-chip-b">
+              <i aria-hidden />
+              Booking requested
+            </div>
             <div className="mock-head">
               <span className="mock-title">Your outbound engine</span>
-              <span className="mock-live"><span className="mock-live-dot" />Running</span>
+              <span className="mock-live">
+                <span className="mock-live-dot" />
+                Running
+              </span>
             </div>
             <div className="mock-body">
               <div>
-                <div className="mock-num">{stats?.emails_sent ? stats.emails_sent.toLocaleString() : "8,940"}</div>
+                <div className="mock-num">
+                  {stats?.emails_sent ? stats.emails_sent.toLocaleString() : "8,940"}
+                </div>
                 <div className="mock-num-lbl">cold emails sent</div>
               </div>
               <div className="mock-bars">
-                <div className="mock-row"><span>Leads researched</span><span className="mock-track"><i className="mock-fill" style={{ width: "68%" }} /></span><b>1,240</b></div>
-                <div className="mock-row"><span>New replies</span><span className="mock-track"><i className="mock-fill" style={{ width: "42%" }} /></span><b>96</b></div>
-                <div className="mock-row"><span>Meetings booked</span><span className="mock-track"><i className="mock-fill" style={{ width: "18%" }} /></span><b>12</b></div>
+                <div className="mock-row">
+                  <span>Leads researched</span>
+                  <span className="mock-track">
+                    <i className="mock-fill" style={{ width: "68%" }} />
+                  </span>
+                  <b>1,240</b>
+                </div>
+                <div className="mock-row">
+                  <span>New replies</span>
+                  <span className="mock-track">
+                    <i className="mock-fill" style={{ width: "42%" }} />
+                  </span>
+                  <b>96</b>
+                </div>
+                <div className="mock-row">
+                  <span>Meetings booked</span>
+                  <span className="mock-track">
+                    <i className="mock-fill" style={{ width: "18%" }} />
+                  </span>
+                  <b>12</b>
+                </div>
               </div>
             </div>
             <div className="mock-foot">
-              <span className="mock-chip"><i aria-hidden />Personalized drafts by AI</span>
-              <span className="mock-chip"><i aria-hidden />Follow-ups on autopilot</span>
-              <span className="mock-chip"><i aria-hidden />One-click unsubscribe</span>
+              <span className="mock-chip">
+                <i aria-hidden />
+                Personalized drafts by AI
+              </span>
+              <span className="mock-chip">
+                <i aria-hidden />
+                Follow-ups on autopilot
+              </span>
+              <span className="mock-chip">
+                <i aria-hidden />
+                One-click unsubscribe
+              </span>
             </div>
           </div>
         </div>
 
         <div className="mx-auto w-full max-w-5xl flex flex-wrap items-center justify-center gap-12 md:gap-20 pt-14 z-10">
           <div className="text-center">
-            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50"><CountUp value={stats?.emails_sent ?? 8940} /></div>
-            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">Cold emails sent</div>
+            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">
+              <CountUp value={stats?.emails_sent ?? 8940} />
+            </div>
+            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">
+              Cold emails sent
+            </div>
           </div>
           <div className="text-center">
-            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">5%+</div>
-            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">Avg reply rate</div>
+            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">
+              5%+
+            </div>
+            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">
+              Avg reply rate
+            </div>
           </div>
           <div className="text-center">
-            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">3 min</div>
-            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">Setup to first send</div>
+            <div className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-950 dark:text-neutral-50">
+              3 min
+            </div>
+            <div className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">
+              Setup to first send
+            </div>
           </div>
         </div>
       </section>
@@ -485,7 +598,16 @@ function Landing() {
             </p>
           </div>
           <ol className="grid gap-5 md:grid-cols-3">
-            {steps.map((s, i) => <Step key={s.n} n={s.n} icon={s.icon} title={s.title} text={s.text} style={{ transitionDelay: `${i * 80}ms` }} />)}
+            {steps.map((s, i) => (
+              <Step
+                key={s.n}
+                n={s.n}
+                icon={s.icon}
+                title={s.title}
+                text={s.text}
+                style={{ transitionDelay: `${i * 80}ms` }}
+              />
+            ))}
           </ol>
         </div>
       </section>
@@ -494,20 +616,30 @@ function Landing() {
       <div data-reveal className="reveal stats-strip">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 text-center md:grid-cols-4 md:px-10">
           <div>
-            <div className="font-display text-4xl font-bold text-brand"><CountUp value={stats?.emails_sent ?? 8940} /></div>
-            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cold emails sent</div>
+            <div className="font-display text-4xl font-bold text-brand">
+              <CountUp value={stats?.emails_sent ?? 8940} />
+            </div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Cold emails sent
+            </div>
           </div>
           <div>
             <div className="font-display text-4xl font-bold text-brand">5%+</div>
-            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Avg reply rate</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Avg reply rate
+            </div>
           </div>
           <div>
             <div className="font-display text-4xl font-bold text-brand">24/7</div>
-            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Autopilot send + follow-up</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Autopilot send + follow-up
+            </div>
           </div>
           <div>
             <div className="font-display text-4xl font-bold text-brand">3 min</div>
-            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Setup to first send</div>
+            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Setup to first send
+            </div>
           </div>
         </div>
       </div>
@@ -521,12 +653,16 @@ function Landing() {
               <p className="kicker">{t("nav_pricing")}</p>
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
             </div>
-            <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">{t("sec_pricing_title")}</h2>
+            <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
+              {t("sec_pricing_title")}
+            </h2>
             <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted-foreground">
-            {t("sec_pricing_sub")}
+              {t("sec_pricing_sub")}
             </p>
           </div>
-          <p className="mb-10 text-center text-lg font-semibold text-primary">{t("pricing_anchor")}</p>
+          <p className="mb-10 text-center text-lg font-semibold text-primary">
+            {t("pricing_anchor")}
+          </p>
           <div className="grid gap-6 md:grid-cols-3">
             {plans.map((p, i) => (
               <div
@@ -534,9 +670,7 @@ function Landing() {
                 data-reveal
                 style={{ transitionDelay: `${i * 80}ms` }}
                 className={`reveal relative rounded-2xl border bg-card p-8 shadow-card md:p-10 ${
-                  p.featured
-                    ? "border-primary shadow-glow ring-1 ring-primary/40"
-                    : "border-border"
+                  p.featured ? "border-primary shadow-glow ring-1 ring-primary/40" : "border-border"
                 }`}
               >
                 {p.featured && (
@@ -551,7 +685,7 @@ function Landing() {
                 </div>
                 <p className="mt-2 text-sm font-medium text-primary">{t(p.capKey)}</p>
                 <ul className="mt-6 divide-y divide-border/40 text-sm">
-                  {(p.perkKeys).map((perkKey) => (
+                  {p.perkKeys.map((perkKey) => (
                     <li key={perkKey} className="flex items-start gap-2 py-3 first:pt-0 last:pb-0">
                       <Check className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
                       <span>{t(perkKey)}</span>
@@ -574,10 +708,15 @@ function Landing() {
             <span className="flex items-center gap-2">{t("badge_support")}</span>
           </div>
           <p className="mt-8 text-center text-sm text-muted-foreground">
-            {t("free_pre")}<strong className="text-foreground">{t("free_num")}</strong>{t("free_post")}
+            {t("free_pre")}
+            <strong className="text-foreground">{t("free_num")}</strong>
+            {t("free_post")}
           </p>
           <p className="mt-4 text-center text-sm">
-            <Link to="/security" className="text-primary underline underline-offset-4 hover:opacity-80">
+            <Link
+              to="/security"
+              className="text-primary underline underline-offset-4 hover:opacity-80"
+            >
               {t("security_link")}
             </Link>
           </p>
@@ -593,15 +732,37 @@ function Landing() {
             const [deal, setDeal] = useState(1000);
             const monthlyMeetings = Math.round(leads * 30 * (replyPct / 100) * (closePct / 100));
             const revenue = monthlyMeetings * deal;
-            const Slider = ({ label, value, set, min, max, suffix }: { label: string; value: number; set: (n: number) => void; min: number; max: number; suffix: string }) => (
+            const Slider = ({
+              label,
+              value,
+              set,
+              min,
+              max,
+              suffix,
+            }: {
+              label: string;
+              value: number;
+              set: (n: number) => void;
+              min: number;
+              max: number;
+              suffix: string;
+            }) => (
               <div>
                 <div className="mb-1.5 flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{label}</span>
-                  <span className="font-semibold text-primary">{value}{suffix}</span>
+                  <span className="font-semibold text-primary">
+                    {value}
+                    {suffix}
+                  </span>
                 </div>
-                <input type="range" min={min} max={max} value={value}
+                <input
+                  type="range"
+                  min={min}
+                  max={max}
+                  value={value}
                   onChange={(e) => set(Number(e.target.value))}
-                  className="slider-mono w-full" />
+                  className="slider-mono w-full"
+                />
               </div>
             );
             return (
@@ -612,19 +773,56 @@ function Landing() {
                     <p className="kicker">Calculator</p>
                     <span className="h-px w-8 bg-foreground/20" aria-hidden />
                   </div>
-                  <h2 className="font-display text-2xl font-black tracking-tight md:text-3xl">What could this <span className="italic font-semibold">do for you?</span></h2>
-                  <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">{t("roi_sub")}</p>
+                  <h2 className="font-display text-2xl font-black tracking-tight md:text-3xl">
+                    What could this <span className="italic font-semibold">do for you?</span>
+                  </h2>
+                  <p className="mx-auto mt-3 max-w-xl leading-relaxed text-muted-foreground">
+                    {t("roi_sub")}
+                  </p>
                 </div>
-                <div data-reveal className="reveal grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2 md:p-10">
+                <div
+                  data-reveal
+                  className="reveal grid gap-8 rounded-2xl border border-border bg-card p-8 shadow-card md:grid-cols-2 md:p-10"
+                >
                   <div className="space-y-6">
-                    <Slider label="Leads contacted per day" value={leads} set={setLeads} min={10} max={200} suffix="" />
-                    <Slider label="Expected reply rate" value={replyPct} set={setReplyPct} min={1} max={15} suffix="%" />
-                    <Slider label="Replies that become meetings" value={closePct} set={setClosePct} min={5} max={60} suffix="%" />
-                    <Slider label="Average deal value" value={deal} set={setDeal} min={100} max={10000} suffix="$" />
+                    <Slider
+                      label="Leads contacted per day"
+                      value={leads}
+                      set={setLeads}
+                      min={10}
+                      max={200}
+                      suffix=""
+                    />
+                    <Slider
+                      label="Expected reply rate"
+                      value={replyPct}
+                      set={setReplyPct}
+                      min={1}
+                      max={15}
+                      suffix="%"
+                    />
+                    <Slider
+                      label="Replies that become meetings"
+                      value={closePct}
+                      set={setClosePct}
+                      min={5}
+                      max={60}
+                      suffix="%"
+                    />
+                    <Slider
+                      label="Average deal value"
+                      value={deal}
+                      set={setDeal}
+                      min={100}
+                      max={10000}
+                      suffix="$"
+                    />
                   </div>
                   <div className="flex flex-col justify-center rounded-2xl bg-gradient-primary p-8 text-center text-primary-foreground">
                     <div className="text-sm font-medium opacity-80">{t("roi_result")}</div>
-                    <div className="mt-4 text-5xl font-extrabold tracking-tight">{monthlyMeetings}</div>
+                    <div className="mt-4 text-5xl font-extrabold tracking-tight">
+                      {monthlyMeetings}
+                    </div>
                     <div className="text-sm opacity-90">{t("roi_meetings")}</div>
                     <div className="mt-6 border-t border-white/20 pt-5">
                       <div className="text-2xl font-bold">${revenue.toLocaleString()}</div>
@@ -632,9 +830,7 @@ function Landing() {
                     </div>
                   </div>
                 </div>
-                <p className="mt-6 text-center text-xs text-muted-foreground">
-                  {t("roi_note")}
-                </p>
+                <p className="mt-6 text-center text-xs text-muted-foreground">{t("roi_note")}</p>
               </>
             );
           })()}
@@ -647,7 +843,9 @@ function Landing() {
             &ldquo;{t("founder_quote")}&rdquo;
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-primary font-bold text-primary-foreground">O</div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-primary font-bold text-primary-foreground">
+              O
+            </div>
             <div className="text-left">
               <div className="text-sm font-semibold">{t("founder_role")}</div>
               <div className="text-xs text-muted-foreground">{t("founder_note")}</div>
@@ -665,7 +863,9 @@ function Landing() {
               <p className="kicker">FAQ</p>
               <span className="h-px w-8 bg-foreground/20" aria-hidden />
             </div>
-            <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">Questions, <span className="italic font-semibold">answered</span></h2>
+            <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">
+              Questions, <span className="italic font-semibold">answered</span>
+            </h2>
           </div>
           <div data-reveal className="reveal space-y-3">
             {faqs.map((f) => (
@@ -681,12 +881,19 @@ function Landing() {
       {/* CTA */}
       <section className="px-6 pb-24 pt-4">
         <div data-reveal className="reveal cta-band">
-          <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">Ready to outsource your cold outreach?</h2>
+          <h2 className="font-display text-3xl font-black tracking-tight md:text-4xl">
+            Ready to outsource your cold outreach?
+          </h2>
           <p className="mx-auto mt-3 max-w-xl text-sm text-white/70 md:text-base">
-            OutshipAi finds the leads, writes the emails, follows up, and hands you ready-to-talk leads — so you only close.
+            OutshipAi finds the leads, writes the emails, follows up, and hands you ready-to-talk
+            leads — so you only close.
           </p>
           <div className="mt-8 flex justify-center">
-            <Button asChild size="lg" className="h-12 bg-white px-8 text-black hover:bg-white/90 hover:shadow-lg">
+            <Button
+              asChild
+              size="lg"
+              className="h-12 bg-white px-8 text-black hover:bg-white/90 hover:shadow-lg"
+            >
               <Link to="/auth">
                 Start free today <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -701,33 +908,70 @@ function Landing() {
             <div>
               <Logo />
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Your AI sales agent — finds the leads, writes the cold emails, follows up, and surfaces hot replies. On autopilot.
+                Your AI sales agent — finds the leads, writes the cold emails, follows up, and
+                surfaces hot replies. On autopilot.
               </p>
             </div>
             <FooterCol title="Product">
-              <a href="#features" className="nav-link hover:text-foreground">{t("nav_features")}</a>
-              <a href="#pricing" className="nav-link hover:text-foreground">{t("nav_pricing")}</a>
-              <a href="#how" className="nav-link hover:text-foreground">How it works</a>
-              <a href="#faq" className="nav-link hover:text-foreground">FAQ</a>
+              <a href="#features" className="nav-link hover:text-foreground">
+                {t("nav_features")}
+              </a>
+              <a href="#pricing" className="nav-link hover:text-foreground">
+                {t("nav_pricing")}
+              </a>
+              <a href="#how" className="nav-link hover:text-foreground">
+                How it works
+              </a>
+              <a href="#faq" className="nav-link hover:text-foreground">
+                FAQ
+              </a>
             </FooterCol>
             <FooterCol title="Company">
-              <Link to="/about" className="nav-link hover:text-foreground">About</Link>
-              <Link to="/agency" className="nav-link hover:text-foreground">{t("nav_hire")}</Link>
-              <Link to="/tools" className="nav-link hover:text-foreground">Free tools</Link>
-              <Link to="/stats" className="nav-link hover:text-foreground">Live stats</Link>
-              <Link to="/status" className="nav-link hover:text-foreground">{t("footer_status")}</Link>
-              <Link to="/honesty" className="nav-link hover:text-foreground">Honesty</Link>
+              <Link to="/about" className="nav-link hover:text-foreground">
+                About
+              </Link>
+              <Link to="/agency" className="nav-link hover:text-foreground">
+                {t("nav_hire")}
+              </Link>
+              <Link to="/tools" className="nav-link hover:text-foreground">
+                Free tools
+              </Link>
+              <Link to="/stats" className="nav-link hover:text-foreground">
+                Live stats
+              </Link>
+              <Link to="/status" className="nav-link hover:text-foreground">
+                {t("footer_status")}
+              </Link>
+              <Link to="/honesty" className="nav-link hover:text-foreground">
+                Honesty
+              </Link>
             </FooterCol>
             <FooterCol title="Legal">
-              <Link to="/security" className="nav-link hover:text-foreground">{t("footer_security")}</Link>
-              <Link to="/terms" className="nav-link hover:text-foreground">{t("footer_terms")}</Link>
-              <Link to="/privacy" className="nav-link hover:text-foreground">{t("footer_privacy")}</Link>
-              <Link to="/refunds" className="nav-link hover:text-foreground">Refunds</Link>
+              <Link to="/security" className="nav-link hover:text-foreground">
+                {t("footer_security")}
+              </Link>
+              <Link to="/terms" className="nav-link hover:text-foreground">
+                {t("footer_terms")}
+              </Link>
+              <Link to="/privacy" className="nav-link hover:text-foreground">
+                {t("footer_privacy")}
+              </Link>
+              <Link to="/refunds" className="nav-link hover:text-foreground">
+                Refunds
+              </Link>
             </FooterCol>
           </div>
           <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-border/50 pt-6 text-xs text-muted-foreground md:flex-row">
             <span>© 2026 OutshipAi. All rights reserved.</span>
-            <span className="flex items-center gap-2"><Link to="/status" className="nav-link hover:text-foreground">System status</Link> · <Link to="/auth" className="nav-link hover:text-foreground">{t("nav_login")}</Link></span>
+            <span className="flex items-center gap-2">
+              <Link to="/status" className="nav-link hover:text-foreground">
+                System status
+              </Link>{" "}
+              ·{" "}
+              <Link to="/auth" className="nav-link hover:text-foreground">
+                {t("nav_login")}
+              </Link>
+            </span>
           </div>
         </div>
       </footer>

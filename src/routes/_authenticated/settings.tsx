@@ -6,7 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
@@ -18,7 +24,9 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function CopyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="mt-1.5 flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2">
-      <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
       <code className="min-w-0 flex-1 truncate text-[11px]">{value}</code>
       <button
         type="button"
@@ -65,8 +73,6 @@ function SettingsPage() {
   const push = usePushNotifications();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [gmail, setGmail] = useState(false);
-  const [gmailEmail, setGmailEmail] = useState("");
   const [notify, setNotify] = useState(true);
   const [booking, setBooking] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
@@ -111,7 +117,7 @@ function SettingsPage() {
       ]);
       const bundle = {
         exported_at: new Date().toISOString(),
-        note: "Full export of your OutshipAi data. Gmail access tokens are intentionally excluded — disconnect in Settings or via Google Account to revoke them.",
+        note: "Full export of your OutshipAi data — your profile, campaigns, leads, sent emails and referrals.",
         profile: profile.data ?? [],
         campaigns: campaigns.data ?? [],
         leads: leads.data ?? [],
@@ -143,8 +149,6 @@ function SettingsPage() {
         .single();
       if (p) {
         setName(p.name ?? "");
-        setGmail(p.gmail_connected ?? false);
-        setGmailEmail(p.gmail_email ?? "");
         setNotify(p.notify_replies ?? true);
         setBooking(p.booking_link ?? "");
         setWebsiteUrl(p.website_url ?? "");
@@ -249,53 +253,95 @@ function SettingsPage() {
         </div>
         <div className="space-y-1.5">
           <Label>Company</Label>
-          <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
+          <Input
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Acme Inc."
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Email</Label>
           <Input value={email} disabled />
         </div>
         <div className="space-y-1.5">
-          <Label>Phone <span className="text-muted-foreground">(shown to clients when the AI hands off a conversation to you)</span></Label>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 1234" />
+          <Label>
+            Phone{" "}
+            <span className="text-muted-foreground">
+              (shown to clients when the AI hands off a conversation to you)
+            </span>
+          </Label>
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+1 555 000 1234"
+          />
         </div>
       </Section>
 
       <Section title="Business Intelligence">
-        <p className="text-xs text-muted-foreground -mt-2 mb-2">The AI uses everything below to write personalized outreach. It will not invent facts — only use what you tell it here.</p>
+        <p className="text-xs text-muted-foreground -mt-2 mb-2">
+          The AI uses everything below to write personalized outreach. It will not invent facts —
+          only use what you tell it here.
+        </p>
         <div className="space-y-1.5">
           <Label>What is your business?</Label>
-          <Textarea rows={2} value={businessDescription} onChange={(e) => setBusinessDescription(e.target.value)}
-            placeholder="e.g. We build AI-powered sales automation software for B2B companies." />
+          <Textarea
+            rows={2}
+            value={businessDescription}
+            onChange={(e) => setBusinessDescription(e.target.value)}
+            placeholder="e.g. We build AI-powered sales automation software for B2B companies."
+          />
         </div>
         <div className="space-y-1.5">
           <Label>What product or service are you selling?</Label>
-          <Textarea rows={2} value={offer} onChange={(e) => setOffer(e.target.value)}
-            placeholder="e.g. A monthly SaaS subscription that automates cold email outreach." />
+          <Textarea
+            rows={2}
+            value={offer}
+            onChange={(e) => setOffer(e.target.value)}
+            placeholder="e.g. A monthly SaaS subscription that automates cold email outreach."
+          />
         </div>
         <div className="space-y-1.5">
           <Label>What problem does it solve?</Label>
-          <Textarea rows={2} value={problemSolved} onChange={(e) => setProblemSolved(e.target.value)}
-            placeholder="e.g. Sales teams waste hours writing cold emails that get ignored." />
+          <Textarea
+            rows={2}
+            value={problemSolved}
+            onChange={(e) => setProblemSolved(e.target.value)}
+            placeholder="e.g. Sales teams waste hours writing cold emails that get ignored."
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Who is your ideal customer?</Label>
-          <Textarea rows={2} value={targetCustomer} onChange={(e) => setTargetCustomer(e.target.value)}
-            placeholder="e.g. Marketing directors at mid-size SaaS companies." />
+          <Textarea
+            rows={2}
+            value={targetCustomer}
+            onChange={(e) => setTargetCustomer(e.target.value)}
+            placeholder="e.g. Marketing directors at mid-size SaaS companies."
+          />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Job titles</Label>
-            <Input value={jobTitles} onChange={(e) => setJobTitles(e.target.value)} placeholder="e.g. Marketing Manager, CEO" />
+            <Input
+              value={jobTitles}
+              onChange={(e) => setJobTitles(e.target.value)}
+              placeholder="e.g. Marketing Manager, CEO"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Industries</Label>
-            <Input value={industries} onChange={(e) => setIndustries(e.target.value)} placeholder="e.g. SaaS, E-commerce" />
+            <Input
+              value={industries}
+              onChange={(e) => setIndustries(e.target.value)}
+              placeholder="e.g. SaaS, E-commerce"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Company size</Label>
             <Select value={companySize} onValueChange={setCompanySize}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="1-10">1-10</SelectItem>
                 <SelectItem value="10-50">10-50</SelectItem>
@@ -306,18 +352,30 @@ function SettingsPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Cities (optional)</Label>
-            <Input value={cities} onChange={(e) => setCities(e.target.value)} placeholder="New York, London" />
+            <Input
+              value={cities}
+              onChange={(e) => setCities(e.target.value)}
+              placeholder="New York, London"
+            />
           </div>
         </div>
         <div className="space-y-1.5">
           <Label>What should OutshipAi communicate?</Label>
-          <Textarea rows={2} value={communicationStyle} onChange={(e) => setCommunicationStyle(e.target.value)}
-            placeholder="e.g. Be direct, focus on results, sound like a peer." />
+          <Textarea
+            rows={2}
+            value={communicationStyle}
+            onChange={(e) => setCommunicationStyle(e.target.value)}
+            placeholder="e.g. Be direct, focus on results, sound like a peer."
+          />
         </div>
         <div className="space-y-1.5">
           <Label>What should OutshipAi NEVER claim?</Label>
-          <Textarea rows={2} value={dontClaim} onChange={(e) => setDontClaim(e.target.value)}
-            placeholder="e.g. Never promise specific revenue numbers." />
+          <Textarea
+            rows={2}
+            value={dontClaim}
+            onChange={(e) => setDontClaim(e.target.value)}
+            placeholder="e.g. Never promise specific revenue numbers."
+          />
         </div>
       </Section>
 
@@ -354,7 +412,8 @@ function SettingsPage() {
             onChange={(e) => setBooking(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Have a website or app? Add it below — the AI will read it, answer lead questions itself, and send them to your site.
+            Have a website or app? Add it below — the AI will read it, answer lead questions itself,
+            and send them to your site.
           </p>
           <Label htmlFor="websiteUrl">Your website or app (optional)</Label>
           <Input
@@ -366,7 +425,9 @@ function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             Added to every email — interested leads can book a meeting with one click.
           </p>
-          <Label htmlFor="signature" className="pt-2">Email signature (optional)</Label>
+          <Label htmlFor="signature" className="pt-2">
+            Email signature (optional)
+          </Label>
           <textarea
             id="signature"
             rows={3}
@@ -376,23 +437,32 @@ function SettingsPage() {
             className="w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           />
           <p className="text-xs text-muted-foreground">
-            Appended at the end of every email your agent sends — looks professional and builds recognition.
+            Appended at the end of every email your agent sends — looks professional and builds
+            recognition.
           </p>
         </div>
         <div className="rounded-xl border border-border bg-background/40 p-4">
           <div className="font-medium">Calendly bookings</div>
           <p className="mt-1 text-xs text-muted-foreground">
-            When a lead books a meeting on your Calendly page, it's recorded on your dashboard, follow-ups stop, and you get a high-priority alert. This only tracks Calendly accounts wired to the webhook below — other booking links stay untracked.
+            When a lead books a meeting on your Calendly page, it's recorded on your dashboard,
+            follow-ups stop, and you get a high-priority alert. This only tracks Calendly accounts
+            wired to the webhook below — other booking links stay untracked.
           </p>
           {calendly ? (
             <ol className="mt-3 space-y-1 text-xs text-muted-foreground">
               <li>1. Calendly → Settings → Webhooks → Webhook subscriptions → Add subscription</li>
-              <li>2. Signing key: <strong>HMAC (option 1)</strong>, then paste these two values:</li>
+              <li>
+                2. Signing key: <strong>HMAC (option 1)</strong>, then paste these two values:
+              </li>
               <CopyField label="Webhook URL" value={calendly.url} />
               <CopyField label="Signing key" value={calendly.secret} />
-              <li>3. Subscribe to events: <code>invitee.created</code> and <code>invitee.canceled</code></li>
               <li>
-                4. Point the <strong>Booking link</strong> above at this same Calendly account — that's how meetings are attributed to you.
+                3. Subscribe to events: <code>invitee.created</code> and{" "}
+                <code>invitee.canceled</code>
+              </li>
+              <li>
+                4. Point the <strong>Booking link</strong> above at this same Calendly account —
+                that's how meetings are attributed to you.
               </li>
             </ol>
           ) : (
@@ -408,7 +478,8 @@ function SettingsPage() {
           <div>
             <div className="font-medium">Discoverable by other businesses</div>
             <div className="text-xs text-muted-foreground">
-              Let other OutshipAi users find your business in their AI lead search and request a warm intro. Your email and phone are never shown — you approve every intro first.
+              Let other OutshipAi users find your business in their AI lead search and request a
+              warm intro. Your email and phone are never shown — you approve every intro first.
             </div>
           </div>
           <Switch checked={networkMode} onCheckedChange={setNetworkMode} />
@@ -427,7 +498,8 @@ function SettingsPage() {
             <div>
               <div className="font-medium">Fully autonomous outreach</div>
               <div className="text-xs text-muted-foreground">
-                The agent finds fresh leads daily, tops up your campaign, and sends within safe limits. You just read replies.
+                The agent finds fresh leads daily, tops up your campaign, and sends within safe
+                limits. You just read replies.
               </div>
             </div>
             <Switch checked={autopilot} onCheckedChange={setAutopilot} />
@@ -464,7 +536,8 @@ function SettingsPage() {
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
           <div className="font-medium">Your invite link</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Every friend who joins through your link earns you 7 days of free starter access — stack them. Your friends still start free, no catch.
+            Every friend who joins through your link earns you 7 days of free starter access — stack
+            them. Your friends still start free, no catch.
           </div>
           {rewardPlan && rewardUntil && new Date(rewardUntil).getTime() > Date.now() && (
             <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
@@ -476,7 +549,9 @@ function SettingsPage() {
             <>
               <div className="mt-3 flex items-center gap-2">
                 <code className="flex-1 truncate rounded-md border bg-background px-3 py-2 text-xs">
-                  {typeof window !== "undefined" ? `${window.location.origin}/auth?ref=${referral}` : ""}
+                  {typeof window !== "undefined"
+                    ? `${window.location.origin}/auth?ref=${referral}`
+                    : ""}
                 </code>
                 <Button
                   size="sm"
@@ -505,7 +580,8 @@ function SettingsPage() {
               {push.active && <Badge className="bg-green-600">On</Badge>}
             </div>
             <div className="text-xs text-muted-foreground">
-              Get notified when a lead replies, books a call, or sends an intro request — even when the app is closed.
+              Get notified when a lead replies, books a call, or sends an intro request — even when
+              the app is closed.
             </div>
           </div>
           <Switch
@@ -528,7 +604,8 @@ function SettingsPage() {
           />
         </div>
         <p className="mt-2 px-1 text-xs text-muted-foreground">
-          Works on desktop browsers, Android, and the installed app (iOS needs the app icon on your home screen).
+          Works on desktop browsers, Android, and the installed app (iOS needs the app icon on your
+          home screen).
         </p>
       </Section>
 
@@ -540,7 +617,13 @@ function SettingsPage() {
               Export your profile, campaigns, leads, and email history as a JSON file.
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={exportData} disabled={exporting} className="shrink-0 self-start sm:self-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportData}
+            disabled={exporting}
+            className="shrink-0 self-start sm:self-auto"
+          >
             {exporting ? "Exporting…" : "Export"}
           </Button>
         </div>

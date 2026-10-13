@@ -7,7 +7,7 @@ const SUGGESTIONS = [
   "How do I start sending?",
   "Why aren't my emails sending?",
   "How do follow-ups work?",
-  "Is my Gmail safe?",
+  "Is my email safe?",
   "How do I handle replies?",
   "What are the pricing plans?",
 ];
@@ -18,7 +18,7 @@ const SUPPORT_EMAIL = "outshipai@gmail.com";
 
 const WELCOME: Msg = {
   role: "assistant",
-  content: `Hey! I'm your OutshipAi guide. I can help with anything — how the app works, finding leads, launching campaigns, follow-ups, Gmail setup, billing, and more.
+  content: `Hey! I'm your OutshipAi guide. I can help with anything — how the app works, finding leads, launching campaigns, follow-ups, email setup, billing, and more.
 
 Just exploring? Ask what OutshipAi does or what the free plan includes.
 
@@ -47,23 +47,35 @@ function loadMessages(): Msg[] {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
-  } catch { /* corrupted → reset */ }
+  } catch {
+    /* corrupted → reset */
+  }
   return [WELCOME];
 }
 
 function loadThreadId(): string | null {
-  try { return localStorage.getItem(THREAD_KEY); } catch { return null; }
+  try {
+    return localStorage.getItem(THREAD_KEY);
+  } catch {
+    return null;
+  }
 }
 
 function storeThreadId(id: string | null) {
   try {
     if (id) localStorage.setItem(THREAD_KEY, id);
     else localStorage.removeItem(THREAD_KEY);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function persistMessages(msgs: Msg[]) {
-  try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-40))); } catch { /* quota — trim oldest */ }
+  try {
+    localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-40)));
+  } catch {
+    /* quota — trim oldest */
+  }
 }
 
 export function SupportChat() {
@@ -86,7 +98,9 @@ export function SupportChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open]);
 
-  useEffect(() => { persistMessages(messages); }, [messages]);
+  useEffect(() => {
+    persistMessages(messages);
+  }, [messages]);
 
   // Rehydrate a previously started conversation from the server so chat state
   // survives reloads and works across devices.
@@ -97,23 +111,27 @@ export function SupportChat() {
     (async () => {
       const headers = await authHeaders();
       try {
-        const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
-          {
-            method: "POST",
-            headers: {
-              ...headers,
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ thread_id: threadId, action: "history" }),
-          }
-        );
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`, {
+          method: "POST",
+          headers: {
+            ...headers,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ thread_id: threadId, action: "history" }),
+        });
         const data = await res.json();
         if (res.ok && data.messages?.length) {
-          setMessages(data.messages.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })));
+          setMessages(
+            data.messages.map((m: { role: string; content: string }) => ({
+              role: m.role,
+              content: m.content,
+            })),
+          );
         }
-      } catch { /* keep local copy */ }
+      } catch {
+        /* keep local copy */
+      }
     })();
   }, [open]);
 
@@ -126,18 +144,15 @@ export function SupportChat() {
     setLoading(true);
     try {
       const headers = await authHeaders();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
-        {
-          method: "POST",
-          headers: {
-            ...headers,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ thread_id: loadThreadId(), text: q }),
-        }
-      );
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`, {
+        method: "POST",
+        headers: {
+          ...headers,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ thread_id: loadThreadId(), text: q }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
       storeThreadId(data.thread_id ?? null);
@@ -147,8 +162,7 @@ export function SupportChat() {
         ...next,
         {
           role: "assistant",
-          content:
-            e instanceof Error ? e.message : "Hmm, something went wrong. Try again?",
+          content: e instanceof Error ? e.message : "Hmm, something went wrong. Try again?",
         },
       ]);
     } finally {
@@ -163,20 +177,19 @@ export function SupportChat() {
     try {
       if (threadId) {
         const headers = await authHeaders();
-        await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
-          {
-            method: "POST",
-            headers: {
-              ...headers,
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ thread_id: threadId, action: "delete" }),
-          }
-        );
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`, {
+          method: "POST",
+          headers: {
+            ...headers,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ thread_id: threadId, action: "delete" }),
+        });
       }
-    } catch { /* still clear locally even if the request failed */ }
+    } catch {
+      /* still clear locally even if the request failed */
+    }
     storeThreadId(null);
     persistMessages([WELCOME]);
     setMessages([WELCOME]);
@@ -235,7 +248,12 @@ export function SupportChat() {
                 aria-label="Close"
               >
                 <svg width="16" height="16" viewBox="0 0 12 12" fill="none">
-                  <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path
+                    d="M1 1L11 11M11 1L1 11"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </button>
             </div>

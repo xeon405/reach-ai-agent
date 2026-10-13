@@ -29,7 +29,7 @@ const DICT: Record<string, { en: string; ar: string }> = {
   badge_guarantee: { en: "✅ 14-day money-back guarantee", ar: "✅ ضمان استرداد الأموال لمدة 14 يوماً" },
   badge_cancel: { en: "✅ Cancel anytime, keep your data", ar: "✅ ألغِ في أي وقت واحتفظ ببياناتك" },
   badge_support: { en: "✅ Human support within 24h", ar: "✅ دعم بشري خلال 24 ساعة" },
-  security_link: { en: "🔒 See exactly how we protect your Gmail account", ar: "🔒 تعرّف على كيف نحمي حساب Gmail الخاص بك" },
+  security_link: { en: "🔒 See exactly how we protect your data", ar: "🔒 تعرّف على كيف نحمي بياناتك" },
   plan_popular: { en: "Most popular", ar: "الأكثر شيوعاً" },
   per_month: { en: "/mo", ar: "/شهرياً" },
   start_free: { en: "Start free", ar: "ابدأ مجاناً" },
