@@ -19,22 +19,10 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 
-const FUNNEL_COLORS = [
-  "#6366f1",
-  "#8b5cf6",
-  "#a855f7",
-  "#d946ef",
-  "#ec4899",
-  "#f43f5e",
-  "#f97316",
-  "#f59e0b",
-  "#10b981",
-];
-
 export type FunnelPoint = { label: string; value: number; pct: number };
 
 export function OutreachFunnelChart({ data }: { data: FunnelPoint[] }) {
-  const config = { value: { label: "Count", color: "#6366f1" } } satisfies ChartConfig;
+  const config = { value: { label: "Count", color: "var(--primary)" } } satisfies ChartConfig;
   return (
     <ChartContainer config={config} className="aspect-auto h-[330px] w-full">
       <BarChart data={data} layout="vertical" margin={{ left: 4, right: 44, top: 4, bottom: 4 }}>
@@ -53,7 +41,11 @@ export function OutreachFunnelChart({ data }: { data: FunnelPoint[] }) {
         />
         <Bar dataKey="value" radius={4} maxBarSize={26} isAnimationActive={false}>
           {data.map((_, i) => (
-            <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
+            <Cell
+              key={i}
+              fill="var(--primary)"
+              fillOpacity={data.length > 1 ? 1 - (i / (data.length - 1)) * 0.62 : 1}
+            />
           ))}
           <LabelList
             dataKey="value"
@@ -72,28 +64,28 @@ export type TrendPoint = { label: string; sends: number; opens: number; replies:
 
 export function PerformanceTrendChart({ data }: { data: TrendPoint[] }) {
   const config = {
-    sends: { label: "Sends", color: "#6366f1" },
-    opens: { label: "Opens", color: "#06b6d4" },
-    replies: { label: "Replies", color: "#10b981" },
+    sends: { label: "Sends", color: "var(--primary)" },
+    opens: { label: "Opens", color: "var(--chart-3)" },
+    replies: { label: "Replies", color: "var(--success)" },
   } satisfies ChartConfig;
   return (
     <ChartContainer config={config} className="aspect-auto h-[280px] w-full">
       <AreaChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="fillSends" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-sends)" stopOpacity={0.55} />
-            <stop offset="95%" stopColor="var(--color-sends)" stopOpacity={0.05} />
+            <stop offset="5%" stopColor="var(--color-sends)" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="var(--color-sends)" stopOpacity={0.03} />
           </linearGradient>
           <linearGradient id="fillOpens" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-opens)" stopOpacity={0.55} />
-            <stop offset="95%" stopColor="var(--color-opens)" stopOpacity={0.05} />
+            <stop offset="5%" stopColor="var(--color-opens)" stopOpacity={0.4} />
+            <stop offset="95%" stopColor="var(--color-opens)" stopOpacity={0.03} />
           </linearGradient>
           <linearGradient id="fillReplies" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-replies)" stopOpacity={0.6} />
-            <stop offset="95%" stopColor="var(--color-replies)" stopOpacity={0.05} />
+            <stop offset="5%" stopColor="var(--color-replies)" stopOpacity={0.5} />
+            <stop offset="95%" stopColor="var(--color-replies)" stopOpacity={0.03} />
           </linearGradient>
         </defs>
-        <CartesianGrid vertical={false} strokeOpacity={0.4} />
+        <CartesianGrid vertical={false} strokeOpacity={0.35} />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
         <YAxis hide allowDecimals={false} />
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
@@ -123,24 +115,24 @@ export function PerformanceTrendChart({ data }: { data: TrendPoint[] }) {
   );
 }
 
-export type SentimentPoint = { key: string; label: string; value: number; color: string };
+export type DistributionPoint = { key: string; label: string; value: number; color: string };
 
-export function SentimentDonut({ data }: { data: SentimentPoint[] }) {
+export function IntentDonut({ data }: { data: DistributionPoint[] }) {
   const config: ChartConfig = {};
   data.forEach((d) => {
     config[d.key] = { label: d.label, color: d.color };
   });
   const total = data.reduce((sum, d) => sum + d.value, 0);
   return (
-    <ChartContainer config={config} className="mx-auto aspect-square h-[240px]">
+    <ChartContainer config={config} className="mx-auto aspect-square h-[200px] shrink-0">
       <PieChart>
         <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
         <Pie
           data={data}
           dataKey="value"
           nameKey="key"
-          innerRadius={58}
-          outerRadius={92}
+          innerRadius={50}
+          outerRadius={80}
           paddingAngle={2}
           strokeWidth={2}
           isAnimationActive={false}

@@ -37,9 +37,9 @@ import { toast } from "sonner";
 import {
   OutreachFunnelChart,
   PerformanceTrendChart,
-  SentimentDonut,
+  IntentDonut,
+  type DistributionPoint,
   type FunnelPoint,
-  type SentimentPoint,
   type TrendPoint,
 } from "@/components/dashboard-charts";
 
@@ -186,6 +186,18 @@ const INTENT_META: Record<string, { label: string; icon: React.ReactNode; color:
     color: "text-purple-600 dark:text-purple-400",
   },
   other: { label: "Other", icon: <Shield className="h-3.5 w-3.5" />, color: "text-gray-400" },
+};
+
+const INTENT_COLORS: Record<string, string> = {
+  interested: "#10b981",
+  booking: "#f97316",
+  question: "#3b82f6",
+  objection: "#f59e0b",
+  not_interested: "#ef4444",
+  unsubscribe: "#b91c1c",
+  unclear: "#6b7280",
+  autoresponder: "#a855f7",
+  other: "#9ca3af",
 };
 
 function Dashboard() {
@@ -547,27 +559,21 @@ function Dashboard() {
     return [...buckets.values()].sort((a, b) => a.ts - b.ts);
   }, [fEmails, dateRange]);
 
-  const sentimentData = useMemo<SentimentPoint[]>(() => {
-    const META: Record<string, { label: string; color: string }> = {
-      positive: { label: "Positive", color: "#10b981" },
-      neutral: { label: "Neutral", color: "#64748b" },
-      mixed: { label: "Mixed", color: "#f59e0b" },
-      negative: { label: "Negative", color: "#ef4444" },
-      other: { label: "Other", color: "#8b5cf6" },
-      unknown: { label: "Unlabeled", color: "#94a3b8" },
-    };
+  const intentData = useMemo<DistributionPoint[]>(() => {
     const counts: Record<string, number> = {};
-    for (const e of fEmails.filter((x) => x.replied)) {
-      const raw = (e.reply_sentiment ?? "unknown").toLowerCase();
-      const key = raw in META ? raw : "other";
+    for (const c of fCls) {
+      const key = c.intent ?? "other";
       counts[key] = (counts[key] || 0) + 1;
     }
     return Object.entries(counts)
-      .map(([key, value]) => ({ key, value, label: META[key].label, color: META[key].color }))
-      .sort((a, b) => b.value - a.value);
-  }, [fEmails]);
-
-  const hasReplyData = useMemo(() => fEmails.some((e) => e.replied), [fEmails]);
+      .sort(([, a], [, b]) => b - a)
+      .map(([key, value]) => ({
+        key,
+        value,
+        label: INTENT_META[key]?.label ?? key,
+        color: INTENT_COLORS[key] ?? INTENT_COLORS.other,
+      }));
+  }, [fCls]);
 
   if (loading) {
     return (
@@ -909,37 +915,6 @@ function Dashboard() {
           </Section>
         </div>
         <div className="flex min-h-0 flex-col gap-4">
-          {/* Reply Breakdown */}
-          <Section title="Reply Breakdown" icon={<Reply className="h-4 w-4" />}>
-            {sentimentData.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                {hasReplyData ? "No sentiment labels yet." : "No replies in this period."}
-              </p>
-            ) : (
-              <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-                <SentimentDonut data={sentimentData} />
-                <div className="space-y-1.5">
-                  {sentimentData.map((d) => {
-                    const total = sentimentData.reduce((s, x) => s + x.value, 0);
-                    return (
-                      <div key={d.key} className="flex items-center gap-2 text-sm">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: d.color }}
-                        />
-                        <span className="min-w-24 flex-1">{d.label}</span>
-                        <span className="font-medium tabular-nums">{d.value}</span>
-                        <span className="w-10 text-right text-xs text-muted-foreground">
-                          {total > 0 ? Math.round((d.value / total) * 100) : 0}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </Section>
-
           {/* AI Performance + Reply Intelligence */}
           <div className="flex flex-col gap-4">
             <Section title="AI Performance" icon={<Bot className="h-4 w-4" />}>
@@ -961,28 +936,28 @@ function Dashboard() {
                     <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
                       Intent Distribution
                     </h3>
-                    <div className="space-y-1.5">
-                      {Object.entries(aiPerf.intentDist)
-                        .sort(([, a], [, b]) => b - a)
-                        .map(([intent, count]) => {
-                          const meta = INTENT_META[intent] ?? INTENT_META.other;
-                          const pct = Math.round((count / aiPerf.totalCls) * 100);
-                          return (
-                            <div key={intent} className="flex items-center gap-2">
-                              <span className={`w-4 ${meta.color}`}>{meta.icon}</span>
-                              <span className="text-sm flex-1">{meta.label}</span>
-                              <div className="w-24">
-                                <Progress value={pct} className="h-2" />
+                    <div className="flex flex-col items-center gap-4 sm:flex-row">
+                      <IntentDonut data={intentData} />
+                      <div className="w-full space-y-1.5 sm:flex-1">
+                        {Object.entries(aiPerf.intentDist)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([intent, count]) => {
+                            const meta = INTENT_META[intent] ?? INTENT_META.other;
+                            const pct = Math.round((count / aiPerf.totalCls) * 100);
+                            return (
+                              <div key={intent} className="flex items-center gap-2">
+                                <span className={`w-4 ${meta.color}`}>{meta.icon}</span>
+                                <span className="flex-1 text-sm">{meta.label}</span>
+                                <span className="w-10 text-right text-xs text-muted-foreground">
+                                  {count}
+                                </span>
+                                <span className="w-10 text-right text-xs text-muted-foreground">
+                                  {pct}%
+                                </span>
                               </div>
-                              <span className="w-10 text-right text-xs text-muted-foreground">
-                                {count}
-                              </span>
-                              <span className="w-10 text-right text-xs text-muted-foreground">
-                                {pct}%
-                              </span>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                      </div>
                     </div>
                   </div>
                 )}
