@@ -93,9 +93,6 @@ Deno.serve(async (req) => {
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
     if (!profile) throw new Error("Profile not found");
 
-    const { data: tokenRow } = await supabase.from("gmail_tokens").select("refresh_token").eq("profile_id", userId).single();
-    if (!profile.gmail_connected || !tokenRow?.refresh_token) throw new Error("Gmail not connected. Connect it in Settings first.");
-
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const daysWarm = Math.max(0, Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000));
     const dailyCap = Math.min(limits.dailyEmails, 5 + daysWarm * 5);

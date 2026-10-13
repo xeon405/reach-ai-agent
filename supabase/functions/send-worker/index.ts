@@ -10,7 +10,8 @@ import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { buildBIContext } from "../_shared/business-context.ts";
 import { openAiCall, type AiCallHandle } from "../_shared/ai-cost-gate.ts";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
-import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmail.ts";
+import { sendEmail } from "../_shared/email-provider.ts";
+import { inboundReplyTo } from "../_shared/reply-address.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
 import { resolveDailyCap, type CapProfile } from "../_shared/sender-health.ts";
@@ -141,13 +142,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function toBase64Url(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -180,48 +174,6 @@ async function wrapUrlsForTracking(html: string, trackingBase: string, signer: (
 function buildHtmlBody(plain: string, pixel?: string): string {
   const html = escapeHtml(plain).replace(/\n/g, "<br>");
   return `<html><body style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222">${html}${pixel ?? ""}</body></html>`;
-}
-
-function buildRawEmail(
-  to: string,
-  subject: string,
-  plainBody: string,
-  htmlBody: string,
-  fromEmail: string,
-  unsubUrl: string,
-  threadId?: string | null
-): string {
-  const boundary = "oai-alt-" + Math.random().toString(36).slice(2);
-  const headers = [
-    `To: ${to}`,
-    `Subject: ${encodeHeaderValue(subject)}`,
-    `MIME-Version: 1.0`,
-    `List-Unsubscribe: <${unsubUrl}>, <mailto:${fromEmail}?subject=unsubscribe>`,
-    `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
-    ...(threadId ? [`In-Reply-To: ${threadId}`, `References: ${threadId}`] : []),
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
-  ];
-  const email = [
-    ...headers,
-    `--${boundary}`,
-    `Content-Type: text/plain; charset=utf-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    ``,
-    plainBody,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/html; charset=utf-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    ``,
-    htmlBody,
-    ``,
-    `--${boundary}--`,
-    ``,
-    `--`,
-    `You received this one-time email. Reply with UNSUBSCRIBE or use the link above to opt out.`,
-  ].join("\n");
-  return toBase64Url(email);
 }
 
 const ARAB_COUNTRIES = new Set([
@@ -494,7 +446,7 @@ Deno.serve(async (req) => {
           let ctx = ctxs.get(job.user_id);
           if (!ctx) {
             const fresh = await getUserCtx(supabase, job.user_id).catch(() => null);
-            if (!fresh) { await failJob(supabase, job, "gmail_disconnected", MAX_ATTEMPTS); failed++; continue; }
+            if (!fresh) { await failJob(supabase, job, "sender_unavailable", MAX_ATTEMPTS); failed++; continue; }
             ctx = fresh; ctxs.set(job.user_id, ctx);
           }
           if (ctx.exhausted) {
@@ -558,9 +510,7 @@ Deno.serve(async (req) => {
   // ------------------------------------------------------------------
   async function getUserCtx(db: ReturnType<typeof createClient<any>>, uid: string): Promise<UserCtx | null> {
     const { data: profile } = await db.from("profiles").select("*").eq("id", uid).single();
-    if (!profile?.gmail_connected) return null;
-    const tok = await getAccessToken(db, uid).catch(() => null);
-    if (!tok) return null;
+    if (!profile) return null;
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const ceil = profile.gmail_account_type === "workspace" ? 2000 : 500;
     const dailyCap = await resolveDailyCap(db, profile, limits.dailyEmails, ceil);
@@ -604,7 +554,6 @@ Deno.serve(async (req) => {
     const { data: sup } = await db.from("suppressions").select("id")
       .eq("user_id", job.user_id).ilike("email", lead.email).limit(1).maybeSingle();
     if (sup) return "lead_suppressed_db";                                                  // 5/7 (DB truth)
-    if (!profile.gmail_connected) return "gmail_disconnected";                             // 1/2
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const cap = await resolveDailyCap(db, profile as CapProfile, limits.dailyEmails, profile.gmail_account_type === "workspace" ? 2000 : 500);
     const today = new Date().toISOString().split("T")[0];
@@ -647,9 +596,6 @@ Deno.serve(async (req) => {
       await db.from("send_queue").update({ status: "cancelled", last_error: "mx_fail", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
       return false;
     }
-
-    const tok = await getAccessToken(db, job.user_id);
-    if (!tok) throw new Error("gmail_token_mint_failed");
 
     const biCtx = buildBIContext(ctx.profile);
 
@@ -747,10 +693,15 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     try {
       const htmlBody = buildHtmlBody(bodyText, pixel);
       const trackedHtml = destLink2 ? await wrapUrlsForTracking(htmlBody, trackingBase, async (u) => signToken(`${trackingId}|${u}`)) : htmlBody;
-      ids = await sendGmailRaw(
-        tok.accessToken,
-        buildRawEmail(lead.email, gen.subject, bodyText, trackedHtml, String(ctx.profile.gmail_email ?? ""), unsubUrl)
-      );
+      const res = await sendEmail({
+        to: lead.email,
+        subject: gen.subject,
+        text: bodyText,
+        html: trackedHtml,
+        replyTo: inboundReplyTo(lead.id) ?? (ctx.profile.gmail_email ? String(ctx.profile.gmail_email) : undefined),
+        headers: { "List-Unsubscribe": `<${unsubUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+      });
+      ids = { id: res.id, threadId: null };
     } catch (sendErr) {
       // Send failed — DELETE pending row so retry can try again cleanly.
       await db.from("emails_sent").delete().eq("id", trackingId);
@@ -1003,20 +954,6 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
           continue;
         }
 
-        // ── GMAIL TOKEN ── (skipped in dry-run: token presence is a read)
-        const tok = dry
-          ? ({ accessToken: "" } as Awaited<ReturnType<typeof getAccessToken>>)
-          : await getAccessToken(db, campaign.user_id).catch(() => null);
-        if (!tok) {
-          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", reason: "gmail_disconnected" });
-          else {
-            await db.rpc("release_send_slot", { p_user: campaign.user_id });
-            await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "cancelled" });
-          }
-          followupsCancelled++;
-          continue;
-        }
-
         // ── GATHER CONTEXT FOR AI ──
         const biCtx = buildBIContext(profile);
         const firstName = (lead.name ?? "there").split(" ")[0];
@@ -1164,10 +1101,16 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
           // fall through — the loop-end pacing delay still applies (PASS 2 parity)
         } else {
         // ── SEND ──
-        const ids = await sendGmailRaw(
-          tok.accessToken,
-          buildRawEmail(lead.email, subject, bodyText, trackedHtml, String(profile.gmail_email ?? ""), unsubUrl),
-        );
+        // ── SEND VIA PROVIDER ──
+        const res = await sendEmail({
+          to: lead.email,
+          subject,
+          text: bodyText,
+          html: trackedHtml,
+          replyTo: inboundReplyTo(lead.id) ?? (profile.gmail_email ? String(profile.gmail_email) : undefined),
+          headers: { "List-Unsubscribe": `<${unsubUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+        });
+        const ids = { id: res.id, threadId: null };
 
         // ── RECORD SENT ──
         await db.from("emails_sent").insert({
