@@ -1,8 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
-import { sendEmail } from "../_shared/email-provider.ts";
-import { inboundReplyTo } from "../_shared/reply-address.ts";
+import { getAccessToken, sendGmailRaw, buildRawEmail } from "../_shared/gmail.ts";
 import { nextLifecycle } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { APP_BASE_URL } from "../_shared/app-base-url.ts";
@@ -19,6 +18,72 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function toBase64Url(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function extractGmailBody(payload: unknown, depth = 0): string {
+  if (!payload || depth > 6) return "";
+  const p = payload as { mimeType?: string; body?: { data?: string }; parts?: unknown[] };
+  if (p.body?.data) {
+    try {
+      const b64 = p.body.data.replace(/-/g, "+").replace(/_/g, "/");
+      let text = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+      if ((p.mimeType ?? "").includes("html")) {
+        text = text.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+      }
+      if (text.trim()) return text.trim();
+    } catch (_e) { /* skip malformed */ }
+  }
+  for (const part of p.parts ?? []) {
+    const inner = extractGmailBody(part, depth + 1);
+    if (inner) return inner;
+  }
+  return "";
+}
+
+function stripQuoted(s: string): string {
+  return String(s ?? "").split("\n").filter((l) => !/^\s*(>|\u2016|On \w).*$/i.test(l.trim()) && !/^(On .+ wrote:?)$/i.test(l.trim())).join("\n");
+}
+
+async function fetchThreadHistory(
+  tok: { accessToken: string },
+  threadId: string | null | undefined,
+  leadEmail: string,
+  senderEmail: string,
+  maxMsgs = 5,
+): Promise<string> {
+  if (!threadId) return "";
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
+      { headers: { Authorization: `Bearer ${tok.accessToken}` } },
+    );
+    if (!res.ok) return "";
+    const data = await res.json();
+    const msgs = (data.messages ?? []) as Array<{ payload?: unknown }>;
+    if (msgs.length < 2) return "";
+    const priors = msgs.slice(0, -1).slice(-maxMsgs);
+    const senderNorm = String(senderEmail || "").toLowerCase();
+    const lines: string[] = [];
+    for (const m of priors) {
+      const from = (m.payload as { headers?: Array<{ name: string; value: string }> })?.headers
+        ?.find((h) => h.name === "From")?.value ?? "";
+      const fromEmail = (from.match(/<([^>]+)>/) ?? ["", from])[1].toLowerCase();
+      const body = stripQuoted(extractGmailBody((m.payload as { payload?: unknown }) ?? m.payload)).slice(0, 700);
+      if (!body) continue;
+      const who = fromEmail.includes(senderNorm) ? "You" : "Lead";
+      lines.push(`${who}: ${body}`);
+    }
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
 }
 
 serve(async (req) => {
@@ -72,21 +137,45 @@ serve(async (req) => {
     const toEmail = leadRow?.email;
     if (!toEmail) throw new Error("Lead email missing");
 
-    // Load sender profile
+    // Load sender profile + Gmail credentials (decrypted transparently)
     const { data: profile } = await admin
       .from("profiles")
-      .select("name, email, gmail_email")
+      .select("gmail_connected, name, email, gmail_email")
       .eq("id", userId)
       .single();
+    if (!profile?.gmail_connected) throw new Error("Gmail not connected. Connect it in Settings first.");
+
+    const tok = await getAccessToken(admin, userId);
+    if (!tok) throw new Error("Gmail not connected. Connect it in Settings first.");
+    const accessToken = tok.accessToken;
 
     // ✨ Regenerate: write a FRESH reply from the lead's latest actual message
     let replyBody = customBody;
     if (!replyBody && regenerate) {
       const { data: prof } = await admin.from("profiles").select("offer, booking_link, name").eq("id", userId).maybeSingle();
-      // Inbound replies are captured by the provider webhook (inbound-email fn)
-      // and stored on the lead; until a reply is on file we write a gentle nudge.
-      const theirWords = "";
-      const threadHistory = "";
+      const afterEpoch = Math.floor(new Date(row.sent_at ?? Date.now()).getTime() / 1000);
+      const q = `from:${toEmail} is:inbox after:${afterEpoch}`;
+      const searchRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=1`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      let theirWords = "";
+      let msgThreadId: string | null = null;
+      if (searchRes.ok) {
+        const hits = (await searchRes.json()).messages ?? [];
+        if (hits[0]?.id) {
+          const mRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${hits[0].id}?format=full`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (mRes.ok) {
+            const mData = await mRes.json();
+            theirWords = extractGmailBody(mData?.payload).slice(0, 900);
+            msgThreadId = mData?.threadId ?? null;
+          }
+        }
+      }
+      const threadHistory = await fetchThreadHistory(tok, msgThreadId, toEmail, profile?.gmail_email ?? "");
       const fresh = await groqChat([{
         role: "user",
         content: `A reply arrived to a cold email you sent.
@@ -113,16 +202,10 @@ IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft,
 
     const SITE = APP_BASE_URL;
     const leadIdForUnsub = leadRow?.id ?? row.lead_id;
-    const unsubUrl = leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}&t=${await signToken(leadIdForUnsub)}` : undefined;
-    const ids = await sendEmail({
-      to: toEmail,
-      subject,
-      text: replyBody,
-      replyTo: inboundReplyTo(String(leadIdForUnsub ?? "")) ?? (profile?.gmail_email ? String(profile.gmail_email) : undefined),
-      ...(unsubUrl ? { headers: { "List-Unsubscribe": `<${unsubUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
-    });
+    const raw = buildRawEmail(toEmail, subject, replyBody, profile.gmail_email ?? "", leadIdForUnsub ? `${SITE}/unsubscribe?l=${leadIdForUnsub}&t=${await signToken(leadIdForUnsub)}` : undefined);
+    const ids = await sendGmailRaw(accessToken, raw);
 
-    await admin.from("emails_sent").update({ ai_draft: null, gmail_message_id: ids.id, gmail_thread_id: null }).eq("id", emailId);
+    await admin.from("emails_sent").update({ ai_draft: null, gmail_message_id: ids.id, gmail_thread_id: ids.threadId }).eq("id", emailId);
 
     // A manual owner send is an explicit HUMAN takeover of this conversation
     const { data: leadFull } = await admin.from("leads").select("id, lifecycle").eq("email", toEmail).eq("user_id", userId).maybeSingle();
