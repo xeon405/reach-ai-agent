@@ -17,6 +17,7 @@ import {
   Hand,
   Eye,
   TrendingUp,
+  ArrowRight,
   BarChart3,
   Bell,
   Clock,
@@ -34,14 +35,7 @@ import {
   Globe,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  OutreachFunnelChart,
-  PerformanceTrendChart,
-  IntentDonut,
-  type DistributionPoint,
-  type FunnelPoint,
-  type TrendPoint,
-} from "@/components/dashboard-charts";
+import { ReplyTrendChart, type ReplyTrendPoint } from "@/components/dashboard-charts";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -186,18 +180,6 @@ const INTENT_META: Record<string, { label: string; icon: React.ReactNode; color:
     color: "text-purple-600 dark:text-purple-400",
   },
   other: { label: "Other", icon: <Shield className="h-3.5 w-3.5" />, color: "text-gray-400" },
-};
-
-const INTENT_COLORS: Record<string, string> = {
-  interested: "#10b981",
-  booking: "#f97316",
-  question: "#3b82f6",
-  objection: "#f59e0b",
-  not_interested: "#ef4444",
-  unsubscribe: "#b91c1c",
-  unclear: "#6b7280",
-  autoresponder: "#a855f7",
-  other: "#9ca3af",
 };
 
 function Dashboard() {
@@ -407,7 +389,7 @@ function Dashboard() {
     };
   }, [fAudit, fEmails, fMeetings]);
 
-  const funnel = useMemo<FunnelPoint[]>(() => {
+  const funnel = useMemo(() => {
     const found = fLeads.length;
     const verified = fLeads.filter(
       (l) => l.email_status === "verified" || l.email_status === "risky",
@@ -511,12 +493,12 @@ function Dashboard() {
 
   const unreadAlerts = useMemo(() => alerts.filter((a) => !a.read).length, [alerts]);
 
-  const trendData = useMemo<TrendPoint[]>(() => {
+  const replyTrendData = useMemo<ReplyTrendPoint[]>(() => {
     const mode: "day" | "week" | "month" =
       dateRange <= 31 ? "day" : dateRange <= 180 ? "week" : "month";
     const buckets = new Map<
       string,
-      { ts: number; label: string; sends: number; opens: number; replies: number }
+      { ts: number; label: string; replies: number; interested: number }
     >();
     const bucketOf = (iso: string) => {
       const d = new Date(iso);
@@ -549,31 +531,32 @@ function Dashboard() {
       const b = bucketOf(e.sent_at);
       let row = buckets.get(b.key);
       if (!row) {
-        row = { ts: b.ts, label: b.label, sends: 0, opens: 0, replies: 0 };
+        row = { ts: b.ts, label: b.label, replies: 0, interested: 0 };
         buckets.set(b.key, row);
       }
-      row.sends++;
-      if (e.opened) row.opens++;
       if (e.replied) row.replies++;
+      if ((e.reply_sentiment ?? "").toUpperCase() === "INTERESTED") row.interested++;
     }
     return [...buckets.values()].sort((a, b) => a.ts - b.ts);
   }, [fEmails, dateRange]);
 
-  const intentData = useMemo<DistributionPoint[]>(() => {
-    const counts: Record<string, number> = {};
-    for (const c of fCls) {
-      const key = c.intent ?? "other";
-      counts[key] = (counts[key] || 0) + 1;
+  const replyStats = useMemo(() => {
+    const rate = (list: EmailRow[]) =>
+      list.length ? list.filter((e) => e.replied).length / list.length : 0;
+    const current = rate(fEmails);
+    let delta: number | null = null;
+    if (dateRange < 3650) {
+      const prevStart = new Date(Date.now() - 2 * dateRange * 86400000).toISOString();
+      const prevEmails = emails.filter(
+        (e) =>
+          e.sent_at >= prevStart &&
+          e.sent_at < cutoff &&
+          (campaignFilter === "all" || e.campaign_id === campaignFilter),
+      );
+      if (prevEmails.length > 0) delta = (current - rate(prevEmails)) * 100;
     }
-    return Object.entries(counts)
-      .sort(([, a], [, b]) => b - a)
-      .map(([key, value]) => ({
-        key,
-        value,
-        label: INTENT_META[key]?.label ?? key,
-        color: INTENT_COLORS[key] ?? INTENT_COLORS.other,
-      }));
-  }, [fCls]);
+    return { rate: current, delta };
+  }, [fEmails, emails, cutoff, dateRange, campaignFilter]);
 
   if (loading) {
     return (
@@ -738,14 +721,44 @@ function Dashboard() {
         />
       </div>
 
-      {/* Performance Over Time */}
-      <Section title="Performance Over Time" icon={<TrendingUp className="h-4 w-4" />}>
-        {trendData.length === 0 ? (
+      {/* Reply Trend — the single graph */}
+      <Section title="Reply Trend" icon={<TrendingUp className="h-4 w-4" />}>
+        {replyTrendData.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground">
-            No sending activity in this period.
+            No emails sent in this period yet.
           </p>
         ) : (
-          <PerformanceTrendChart data={trendData} />
+          <>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-foreground" /> Replies
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Interested
+                </span>
+              </div>
+              <div>
+                Reply rate{" "}
+                <span className="font-semibold text-foreground">
+                  {(replyStats.rate * 100).toFixed(1)}%
+                </span>
+                {replyStats.delta != null && (
+                  <span
+                    className={
+                      replyStats.delta >= 0
+                        ? "ml-1.5 text-emerald-600 dark:text-emerald-400"
+                        : "ml-1.5 text-red-600 dark:text-red-400"
+                    }
+                  >
+                    {replyStats.delta >= 0 ? "▲" : "▼"} {Math.abs(replyStats.delta).toFixed(1)} pts
+                    vs prev
+                  </span>
+                )}
+              </div>
+            </div>
+            <ReplyTrendChart data={replyTrendData} />
+          </>
         )}
       </Section>
 
@@ -754,12 +767,23 @@ function Dashboard() {
         <div className="flex min-h-0 flex-col gap-4">
           {/* Conversion Funnel */}
           <Section title="Conversion Funnel" icon={<TrendingUp className="h-4 w-4" />}>
-            {funnel[0].value === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
+            <div className="space-y-3">
+              {funnel.map((stage) => (
+                <div key={stage.label} className="flex items-center gap-4">
+                  <div className="w-36 shrink-0 text-sm text-muted-foreground">{stage.label}</div>
+                  <div className="flex-1">
+                    <Progress value={stage.pct} className="h-3" />
+                  </div>
+                  <div className="w-20 text-right text-sm font-medium">{stage.value}</div>
+                  <div className="w-14 text-right text-xs text-muted-foreground">{stage.pct}%</div>
+                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                </div>
+              ))}
+            </div>
+            {funnel[0].value === 0 && (
+              <p className="mt-4 text-center text-sm text-muted-foreground">
                 Nothing found in this period. Start a campaign to see your results.
               </p>
-            ) : (
-              <OutreachFunnelChart data={funnel} />
             )}
           </Section>
 
@@ -936,28 +960,28 @@ function Dashboard() {
                     <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
                       Intent Distribution
                     </h3>
-                    <div className="flex flex-col items-center gap-4 sm:flex-row">
-                      <IntentDonut data={intentData} />
-                      <div className="w-full space-y-1.5 sm:flex-1">
-                        {Object.entries(aiPerf.intentDist)
-                          .sort(([, a], [, b]) => b - a)
-                          .map(([intent, count]) => {
-                            const meta = INTENT_META[intent] ?? INTENT_META.other;
-                            const pct = Math.round((count / aiPerf.totalCls) * 100);
-                            return (
-                              <div key={intent} className="flex items-center gap-2">
-                                <span className={`w-4 ${meta.color}`}>{meta.icon}</span>
-                                <span className="flex-1 text-sm">{meta.label}</span>
-                                <span className="w-10 text-right text-xs text-muted-foreground">
-                                  {count}
-                                </span>
-                                <span className="w-10 text-right text-xs text-muted-foreground">
-                                  {pct}%
-                                </span>
+                    <div className="space-y-1.5">
+                      {Object.entries(aiPerf.intentDist)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([intent, count]) => {
+                          const meta = INTENT_META[intent] ?? INTENT_META.other;
+                          const pct = Math.round((count / aiPerf.totalCls) * 100);
+                          return (
+                            <div key={intent} className="flex items-center gap-2">
+                              <span className={`w-4 ${meta.color}`}>{meta.icon}</span>
+                              <span className="flex-1 text-sm">{meta.label}</span>
+                              <div className="w-24">
+                                <Progress value={pct} className="h-2" />
                               </div>
-                            );
-                          })}
-                      </div>
+                              <span className="w-10 text-right text-xs text-muted-foreground">
+                                {count}
+                              </span>
+                              <span className="w-10 text-right text-xs text-muted-foreground">
+                                {pct}%
+                              </span>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
                 )}
