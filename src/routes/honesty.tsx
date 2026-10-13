@@ -75,7 +75,7 @@ const CHARTER = [
   {
     rule: "Your data is a sacred trust",
     detail:
-      "We never sell, rent, or share your data, and we never access your inbox. Export or permanently delete everything with one click, anytime.",
+      "We never sell, rent, or share your data. Gmail tokens live in an isolated vault. Export or permanently delete everything with one click, anytime.",
     link: { to: "/security", label: "How we protect data" },
   },
 ];
@@ -94,16 +94,14 @@ const LIMITATIONS = [
 function HonestyPage() {
   return (
     <div className="min-h-screen bg-background">
-      <EnOnlyNotice />
+        <EnOnlyNotice />
       <SiteHeader />
 
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-8 text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow">
           <HeartHandshake className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">
-          Our Honesty Charter
-        </h1>
+        <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">Our Honesty Charter</h1>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
           Ten binding rules we hold ourselves to — written down so you can hold us to them.
         </p>
@@ -117,15 +115,10 @@ function HonestyPage() {
                 <CheckCircle2 className="h-4 w-4 text-success" />
               </div>
               <div className="min-w-0">
-                <h2 className="font-semibold">
-                  {i + 1}. {c.rule}
-                </h2>
+                <h2 className="font-semibold">{i + 1}. {c.rule}</h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{c.detail}</p>
                 {c.link && (
-                  <Link
-                    to={c.link.to}
-                    className="mt-2 inline-block text-sm font-medium text-primary underline underline-offset-4 hover:opacity-80"
-                  >
+                  <Link to={c.link.to} className="mt-2 inline-block text-sm font-medium text-primary underline underline-offset-4 hover:opacity-80">
                     {c.link.label} →
                   </Link>
                 )}
@@ -148,20 +141,12 @@ function HonestyPage() {
             ))}
           </ul>
           <p className="mt-5 border-t border-warning/20 pt-4 text-xs text-muted-foreground">
-            This page is updated whenever a limitation is fixed or discovered. Last update: October
-            2026.
+            This page is updated whenever a limitation is fixed or discovered. Last update: October 2026.
           </p>
         </div>
 
         <p className="pt-2 text-center text-xs text-muted-foreground">
-          Found us falling short of any rule?{" "}
-          <a
-            href="mailto:outshipai@gmail.com?subject=Falling%20short%20of%20the%20Charter"
-            className="underline hover:text-foreground"
-          >
-            contact our team
-          </a>{" "}
-          and we will make it right.
+          Found us falling short of any rule? <a href="mailto:outshipai@gmail.com?subject=Falling%20short%20of%20the%20Charter" className="underline hover:text-foreground">contact our team</a> and we will make it right.
         </p>
       </section>
     </div>

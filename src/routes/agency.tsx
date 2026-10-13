@@ -18,54 +18,18 @@ export const Route = createFileRoute("/agency")({
 });
 
 const INCLUDED = [
-  {
-    icon: "🎯",
-    title: "Customer research",
-    desc: "We build your ideal-customer list every week — country, niche, company size, you choose.",
-  },
-  {
-    icon: "✍️",
-    title: "AI-personalized emails",
-    desc: "Every person gets an email written just for them. No templates that read like spam.",
-  },
-  {
-    icon: "🔁",
-    title: "Automated follow-ups",
-    desc: "Gentle persistence until they answer — up to 5 touches, perfectly timed.",
-  },
-  {
-    icon: "🤖",
-    title: "AI reply handling",
-    desc: "Replies sorted and answered instantly; the interested ones surface on your radar the moment they reply.",
-  },
-  {
-    icon: "📊",
-    title: "Weekly report",
-    desc: "Emails sent, opens, replies, booking-intent conversations — one clean email every Monday.",
-  },
-  {
-    icon: "🛡️",
-    title: "Spam protection",
-    desc: "Safe sending limits, spam-word screening, and unsubscribe handling built in.",
-  },
+  { icon: "🎯", title: "Customer research", desc: "We build your ideal-customer list every week — country, niche, company size, you choose." },
+  { icon: "✍️", title: "AI-personalized emails", desc: "Every person gets an email written just for them. No templates that read like spam." },
+  { icon: "🔁", title: "Automated follow-ups", desc: "Gentle persistence until they answer — up to 5 touches, perfectly timed." },
+  { icon: "🤖", title: "AI reply handling", desc: "Replies sorted and answered instantly; the interested ones surface on your radar the moment they reply." },
+  { icon: "📊", title: "Weekly report", desc: "Emails sent, opens, replies, booking-intent conversations — one clean email every Monday." },
+  { icon: "🛡️", title: "Spam protection", desc: "Safe sending limits, spam-word screening, and unsubscribe handling built in." },
 ];
 
 const STEPS = [
-  {
-    n: 1,
-    title: "Tell us your offer",
-    desc: "Your industry, the country to target, and what you sell. A short email is enough.",
-  },
-  {
-    n: 2,
-    title: "We set everything up",
-    desc: "We build your customer list and write the emails from your own address — live within 48 hours.",
-  },
-  {
-    n: 3,
-    title: "Warm replies land in your inbox",
-    desc: "People who are interested reply to you. You take the call and close the deal.",
-  },
+  { n: 1, title: "Tell us your offer", desc: "Your industry, the country to target, and what you sell. A short email is enough." },
+  { n: 2, title: "We set everything up", desc: "We build your customer list and write the emails from your own address — live within 48 hours." },
+  { n: 3, title: "Warm replies land in your inbox", desc: "People who are interested reply to you. You take the call and close the deal." },
 ];
 
 const FAQ = [
@@ -75,7 +39,7 @@ const FAQ = [
   },
   {
     q: "Do the emails come from my address?",
-    a: "Yes. Emails are sent from your own OutshipAi sending address, so replies and bookings come straight to you.",
+    a: "Yes. We send from your own Gmail address, so replies and bookings come straight to you.",
   },
   {
     q: "Is there a contract or lock-in?",
@@ -106,13 +70,11 @@ function AgencyPage() {
           Done-For-You Service
         </div>
         <h1 className="font-display text-4xl font-black tracking-tight sm:text-5xl">
-          Warm conversations land in your inbox.
-          <br />
+          Warm conversations land in your inbox.<br />
           <span className="text-gradient">You close.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-          Our AI sales team finds your ideal customers worldwide, writes them personal emails from
-          your own address, follows up automatically, and hands you warm conversations — starting at{" "}
+          Our AI sales team finds your ideal customers worldwide, writes them personal emails from your own address, follows up automatically, and hands you warm conversations — starting at{" "}
           <strong className="text-foreground">$299/month</strong>. No ads. No cold calls.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -122,19 +84,12 @@ function AgencyPage() {
             </Button>
           </a>
           <a href="#faq">
-            <Button size="lg" variant="outline" className="px-8 text-base">
-              Ask a question
-            </Button>
+            <Button size="lg" variant="outline" className="px-8 text-base">Ask a question</Button>
           </a>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Setup in 48 hours · No lock-in, cancel anytime · Your data stays yours
-        </p>
+        <p className="mt-4 text-xs text-muted-foreground">Setup in 48 hours · No lock-in, cancel anytime · Your data stays yours</p>
         <p className="mt-3 text-sm text-muted-foreground">
-          <a
-            href="/#pricing"
-            className="font-medium underline underline-offset-4 hover:text-foreground"
-          >
+          <a href="/#pricing" className="font-medium underline underline-offset-4 hover:text-foreground">
             Rather run it yourself? Self-serve plans start at $37/month →
           </a>
         </p>
@@ -142,15 +97,11 @@ function AgencyPage() {
 
       <section className="border-t border-border bg-muted/30 py-16">
         <div className="mx-auto max-w-5xl px-4">
-          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">
-            How it works
-          </h2>
+          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">How it works</h2>
           <div className="grid gap-5 sm:grid-cols-3">
             {STEPS.map((s) => (
               <div key={s.n} className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary font-bold text-white">
-                  {s.n}
-                </div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary font-bold text-white">{s.n}</div>
                 <h3 className="mt-4 font-semibold">{s.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.desc}</p>
               </div>
@@ -161,15 +112,10 @@ function AgencyPage() {
 
       <section className="py-16">
         <div className="mx-auto max-w-5xl px-4">
-          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">
-            Everything handled for you
-          </h2>
+          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">Everything handled for you</h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {INCLUDED.map((f) => (
-              <div
-                key={f.title}
-                className="rounded-2xl border border-border bg-card p-6 shadow-card"
-              >
+              <div key={f.title} className="rounded-2xl border border-border bg-card p-6 shadow-card">
                 <div className="text-2xl">{f.icon}</div>
                 <h3 className="mt-3 font-semibold">{f.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
@@ -184,12 +130,8 @@ function AgencyPage() {
           <h2 className="text-3xl font-bold">Simple pricing</h2>
           <div className="mx-auto mt-8 grid max-w-3xl gap-5 sm:grid-cols-2">
             <div className="rounded-3xl border border-border bg-card p-8 shadow-card">
-              <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Launch
-              </div>
-              <div className="mt-3 text-4xl font-extrabold">
-                $299<span className="text-base font-medium text-muted-foreground">/mo</span>
-              </div>
+              <div className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Launch</div>
+              <div className="mt-3 text-4xl font-extrabold">$299<span className="text-base font-medium text-muted-foreground">/mo</span></div>
               <ul className="mt-6 space-y-2.5 text-left text-sm">
                 <li>✅ 500 AI emails / month</li>
                 <li>✅ Weekly customer research</li>
@@ -197,21 +139,15 @@ function AgencyPage() {
                 <li>✅ Weekly report</li>
               </ul>
               <a href="mailto:outshipai@gmail.com?subject=Launch%20plan%20—%20$299/mo">
-                <Button className="mt-7 w-full" variant="outline">
-                  Start Launch
-                </Button>
+                <Button className="mt-7 w-full" variant="outline">Start Launch</Button>
               </a>
             </div>
             <div className="relative rounded-3xl border-2 border-primary bg-card p-8 shadow-glow">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-primary px-3 py-1 text-xs font-bold text-white">
                 MOST POPULAR
               </div>
-              <div className="text-sm font-semibold uppercase tracking-wide text-primary">
-                Growth
-              </div>
-              <div className="mt-3 text-4xl font-extrabold">
-                $699<span className="text-base font-medium text-muted-foreground">/mo</span>
-              </div>
+              <div className="text-sm font-semibold uppercase tracking-wide text-primary">Growth</div>
+              <div className="mt-3 text-4xl font-extrabold">$699<span className="text-base font-medium text-muted-foreground">/mo</span></div>
               <ul className="mt-6 space-y-2.5 text-left text-sm">
                 <li>✅ 2,000 AI emails / month</li>
                 <li>✅ Multi-country targeting</li>
@@ -226,30 +162,21 @@ function AgencyPage() {
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
             One-time setup $199 · Prices in USD · No lock-in, cancel anytime ·{" "}
-            <Link to="/refunds" className="underline">
-              Refund policy
-            </Link>
+            <Link to="/refunds" className="underline">Refund policy</Link>
           </p>
         </div>
       </section>
 
       <section id="faq" className="scroll-mt-20 py-16">
         <div className="mx-auto max-w-3xl px-4">
-          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">
-            Frequently asked questions
-          </h2>
+          <h2 className="mb-10 text-center font-display text-3xl font-bold tracking-tight">Frequently asked questions</h2>
           <div className="space-y-3">
             {FAQ.map((item) => (
-              <details
-                key={item.q}
-                className="group rounded-2xl border border-border bg-card p-5 shadow-card"
-              >
+              <details key={item.q} className="group rounded-2xl border border-border bg-card p-5 shadow-card">
                 <summary className="cursor-pointer list-none font-semibold marker:content-none">
                   <span className="flex items-center justify-between gap-4">
                     {item.q}
-                    <span className="text-muted-foreground transition-transform group-open:rotate-45">
-                      +
-                    </span>
+                    <span className="text-muted-foreground transition-transform group-open:rotate-45">+</span>
                   </span>
                 </summary>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.a}</p>
@@ -261,34 +188,20 @@ function AgencyPage() {
 
       <section className="border-t border-border py-14 text-center">
         <div className="mx-auto max-w-2xl px-4">
-          <h2 className="font-display text-2xl font-bold tracking-tight">
-            Ready to fill your calendar?
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            Tell us your industry and target country — we'll set it up within 48 hours.
-          </p>
+          <h2 className="font-display text-2xl font-bold tracking-tight">Ready to fill your calendar?</h2>
+          <p className="mt-3 text-muted-foreground">Tell us your industry and target country — we'll set it up within 48 hours.</p>
           <a href="mailto:outshipai@gmail.com?subject=I%20want%20more%20sales%20calls&body=Industry:%0ACountry:%0AOffer:">
-            <Button size="lg" className="mt-6 bg-gradient-primary px-8 text-base shadow-lg">
-              Start finding customers 🚀
-            </Button>
+            <Button size="lg" className="mt-6 bg-gradient-primary px-8 text-base shadow-lg">Start finding customers 🚀</Button>
           </a>
         </div>
       </section>
 
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
         © {new Date().getFullYear()} OutshipAi ·{" "}
-        <Link to="/privacy" className="underline">
-          Privacy
-        </Link>
-        <Link to="/terms" className="ml-2 underline">
-          Terms
-        </Link>
-        <Link to="/refunds" className="ml-2 underline">
-          Refunds
-        </Link>
-        <Link to="/honesty" className="ml-2 underline">
-          Honesty
-        </Link>
+        <Link to="/privacy" className="underline">Privacy</Link>
+        <Link to="/terms" className="ml-2 underline">Terms</Link>
+        <Link to="/refunds" className="ml-2 underline">Refunds</Link>
+        <Link to="/honesty" className="ml-2 underline">Honesty</Link>
       </footer>
     </div>
   );
