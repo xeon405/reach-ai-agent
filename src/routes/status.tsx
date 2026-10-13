@@ -47,7 +47,7 @@ function StatusPage() {
 
   async function runAll() {
     setRows((r) => r.map((x) => ({ ...x, state: "checking" as const, ms: null })));
-    const key = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` };
+    const key = { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string, Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` };
 
     await Promise.allSettled([
       ping(0, () => fetch(window.location.origin).then((res) => { if (!res.ok) throw new Error(); })),

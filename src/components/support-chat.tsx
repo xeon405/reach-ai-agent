@@ -103,7 +103,7 @@ export function SupportChat() {
             method: "POST",
             headers: {
               ...headers,
-              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ thread_id: threadId, action: "history" }),
@@ -132,7 +132,7 @@ export function SupportChat() {
           method: "POST",
           headers: {
             ...headers,
-            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ thread_id: loadThreadId(), text: q }),
@@ -169,7 +169,7 @@ export function SupportChat() {
             method: "POST",
             headers: {
               ...headers,
-              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ thread_id: threadId, action: "delete" }),

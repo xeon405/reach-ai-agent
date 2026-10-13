@@ -16,7 +16,7 @@ function UnsubscribePage() {
     const t = params.get("t") ?? "";
     fetch(
       `https://zvohdvopmvzsujktrdmu.supabase.co/functions/v1/unsubscribe?l=${encodeURIComponent(l)}&c=${encodeURIComponent(params.get("c") ?? "")}&t=${encodeURIComponent(t)}`,
-      { method: "POST", headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string } }
+      { method: "POST", headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string } }
     )
       .then((r) => setState(r.ok ? "done" : "error"))
       .catch(() => setState("error"));
