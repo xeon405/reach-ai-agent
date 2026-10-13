@@ -24,6 +24,7 @@ import { Route as AgencyRouteImport } from './routes/agency'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GmailCallbackRouteImport } from './routes/gmail.callback'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
@@ -111,6 +112,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GmailCallbackRoute = GmailCallbackRouteImport.update({
+  id: '/gmail/callback',
+  path: '/gmail/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -212,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gmail/callback': typeof GmailCallbackRoute
   '/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
   '/campaign-review/$campaignId': typeof AuthenticatedCampaignReviewCampaignIdRoute
   '/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
@@ -242,6 +249,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gmail/callback': typeof GmailCallbackRoute
   '/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
   '/campaign-review/$campaignId': typeof AuthenticatedCampaignReviewCampaignIdRoute
   '/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
@@ -274,6 +282,7 @@ export interface FileRoutesById {
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/gmail/callback': typeof GmailCallbackRoute
   '/_authenticated/campaign-edit/$campaignId': typeof AuthenticatedCampaignEditCampaignIdRoute
   '/_authenticated/campaign-review/$campaignId': typeof AuthenticatedCampaignReviewCampaignIdRoute
   '/_authenticated/lead-edit/$leadId': typeof AuthenticatedLeadEditLeadIdRoute
@@ -306,6 +315,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/settings'
     | '/auth/callback'
+    | '/gmail/callback'
     | '/campaign-edit/$campaignId'
     | '/campaign-review/$campaignId'
     | '/lead-edit/$leadId'
@@ -336,6 +346,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/settings'
     | '/auth/callback'
+    | '/gmail/callback'
     | '/campaign-edit/$campaignId'
     | '/campaign-review/$campaignId'
     | '/lead-edit/$leadId'
@@ -367,6 +378,7 @@ export interface FileRouteTypes {
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
     | '/auth/callback'
+    | '/gmail/callback'
     | '/_authenticated/campaign-edit/$campaignId'
     | '/_authenticated/campaign-review/$campaignId'
     | '/_authenticated/lead-edit/$leadId'
@@ -389,6 +401,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   ToolsRoute: typeof ToolsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  GmailCallbackRoute: typeof GmailCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -496,6 +509,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gmail/callback': {
+      id: '/gmail/callback'
+      path: '/gmail/callback'
+      fullPath: '/gmail/callback'
+      preLoaderRoute: typeof GmailCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -663,6 +683,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   ToolsRoute: ToolsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  GmailCallbackRoute: GmailCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

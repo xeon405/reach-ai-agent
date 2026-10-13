@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { buildGmailAuthUrl } from "@/lib/gmail-oauth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,6 +189,25 @@ function SettingsPage() {
       .catch(() => {});
   }, []);
 
+  function connectGmail() {
+    window.location.href = buildGmailAuthUrl();
+  }
+
+  async function disconnectGmail() {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return;
+    const { error } = await supabase.functions.invoke("gmail-oauth", {
+      body: { action: "disconnect" },
+    });
+    if (error) {
+      toast.error("Could not disconnect Gmail. Try again.");
+      return;
+    }
+    setGmail(false);
+    setGmailEmail("");
+    toast.success("Gmail disconnected");
+  }
+
   async function save() {
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
@@ -324,14 +344,32 @@ function SettingsPage() {
       <Section title="Connected accounts">
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="font-medium">Email sending</div>
+            <div className="font-medium">Gmail</div>
             <div className="text-xs text-muted-foreground">
-              Automated through your OutshipAi sending domain — no account to connect.
+              {gmail && gmailEmail
+                ? `Connected as ${gmailEmail}`
+                : "Send cold emails from your inbox."}
             </div>
           </div>
-          <Badge className="bg-success/15 text-success" variant="secondary">
-            <Check className="mr-1 h-3 w-3" /> Active
-          </Badge>
+          {gmail ? (
+            <div className="flex items-center gap-2">
+              <Badge className="bg-success/15 text-success" variant="secondary">
+                <Check className="mr-1 h-3 w-3" /> Connected
+              </Badge>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive text-xs"
+                onClick={disconnectGmail}
+              >
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={connectGmail}>
+              Connect Gmail
+            </Button>
+          )}
         </div>
       </Section>
 
@@ -453,7 +491,7 @@ function SettingsPage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                Saved when you press Save changes. Runs daily while your account is active.
+                Saved when you press Save changes. Runs daily while Gmail stays connected.
               </p>
             </div>
           )}

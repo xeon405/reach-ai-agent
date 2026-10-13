@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { buildGmailAuthUrl } from "@/lib/gmail-oauth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ function Onboarding() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
 
   // Step 1: Your Business
   const [businessDescription, setBusinessDescription] = useState("");
@@ -63,6 +65,7 @@ function Onboarding() {
         setWebsiteUrl(p.website_url ?? "");
         setBookingLink(p.booking_link ?? "");
         setSignature(p.signature ?? "");
+        setGmailConnected(p.gmail_connected ?? false);
         setBusinessDescription(p.business_description ?? "");
         setProblemSolved(p.problem_solved ?? "");
         setTargetCustomer(p.target_customer ?? "");
@@ -274,9 +277,11 @@ function Onboarding() {
                 <div className="text-xs text-muted-foreground">You can upload it later in Settings.</div>
               </div>
             </div>
-            <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-sm text-muted-foreground">
-              Nothing to connect. Your emails send automatically through your OutshipAi sending domain — you'll never see a Google permission prompt.
-            </div>
+            <Button variant={gmailConnected ? "secondary" : "outline"} className="w-full"
+              onClick={() => { window.location.href = buildGmailAuthUrl(); }}>
+              <Mail className="mr-2 h-4 w-4" />
+              {gmailConnected ? "Gmail Connected" : "Connect Gmail"}
+            </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
               <Button className="flex-1 bg-primary" onClick={() => setStep(4)}>
@@ -342,8 +347,10 @@ function Onboarding() {
               <Row label="Booking link">{bookingLink || "—"}</Row>
               <Row label="Voice">{communicationStyle || "Default (professional, direct)"}</Row>
               <Row label="Never claim">{dontClaim || "None set"}</Row>
-              <Row label="Sending">
-                <span className="inline-flex items-center gap-1 text-success"><Check className="h-3.5 w-3.5" /> Automatic — no setup needed</span>
+              <Row label="Gmail">
+                {gmailConnected
+                  ? <span className="inline-flex items-center gap-1 text-success"><Check className="h-3.5 w-3.5" /> Connected</span>
+                  : "Not connected — you can do this later"}
               </Row>
             </div>
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">

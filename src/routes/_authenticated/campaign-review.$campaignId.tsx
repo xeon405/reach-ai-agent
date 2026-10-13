@@ -471,7 +471,7 @@ function CampaignReviewPage() {
             <p className="text-muted-foreground text-xs">
               {stats.invalid > 0 && `${stats.invalid} invalid excluded. `}
               {stats.risky > 0 && `${stats.risky} risky will be sent with caution. `}
-              Emails send one by one during business hours.
+              Gmail sends one by one during business hours.
             </p>
           </div>
           <Button

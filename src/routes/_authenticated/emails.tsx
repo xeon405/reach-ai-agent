@@ -347,7 +347,7 @@ function EmailsPage() {
                   <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400">
                     {selectedEmail.lead.conv_mode === "HUMAN"
                       ? "AI has stopped replying — you took over this conversation manually."
-                      : "Booking intent detected but no website link configured. AI stepped back — reply manually."}
+                      : "Booking intent detected but no website link configured. AI stepped back — reply from your Gmail."}
                   </div>
                 )}
               </div>
@@ -450,7 +450,7 @@ function EmailsPage() {
                   >
                     {sending === selectedEmail.id
                       ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
-                      : <><Send className="mr-2 h-4 w-4" /> Send reply</>}
+                      : <><Send className="mr-2 h-4 w-4" /> Send from my Gmail</>}
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
                     This marks you as the conversation owner. AI will stop auto-replying.
@@ -465,7 +465,7 @@ function EmailsPage() {
                   <p className="text-sm font-medium text-amber-700 dark:text-amber-400">AI Paused</p>
                   <p className="text-xs text-muted-foreground">
                     {selectedEmail.lead?.conv_mode === "AI_OVERRIDDEN"
-                      ? "Booking detected without a website link. Reply manually."
+                      ? "Booking detected without a website link. Reply from your Gmail."
                       : "Owner took over or turn budget exhausted. AI is standing down."}
                   </p>
                 </div>

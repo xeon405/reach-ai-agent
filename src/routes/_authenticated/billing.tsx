@@ -25,7 +25,7 @@ const PLANS = [
     badge: null,
     features: [
       "AI Lead Finder (open directories)",
-      "Email sending (no setup)",
+      "Gmail integration",
       "Auto follow-ups (day 3)",
       "Personalized AI emails",
       "CSV import & export",
