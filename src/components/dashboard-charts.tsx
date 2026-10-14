@@ -46,6 +46,7 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           type="monotone"
           stroke="var(--color-interested)"
           strokeWidth={2}
+          strokeDasharray="5 4"
           dot={false}
         />
       </LineChart>
