@@ -1,4 +1,4 @@
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
 
 import {
   ChartContainer,
@@ -22,10 +22,6 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
             <stop offset="5%" stopColor="var(--color-replies)" stopOpacity={0.35} />
             <stop offset="95%" stopColor="var(--color-replies)" stopOpacity={0.03} />
           </linearGradient>
-          <linearGradient id="fillInterested" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-interested)" stopOpacity={0.5} />
-            <stop offset="95%" stopColor="var(--color-interested)" stopOpacity={0.03} />
-          </linearGradient>
         </defs>
         <CartesianGrid vertical={false} strokeOpacity={0.35} />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
@@ -38,12 +34,12 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           stroke="var(--color-replies)"
           strokeWidth={2}
         />
-        <Area
+        <Line
           dataKey="interested"
           type="monotone"
-          fill="url(#fillInterested)"
           stroke="var(--color-interested)"
           strokeWidth={2}
+          dot={false}
         />
       </AreaChart>
     </ChartContainer>
