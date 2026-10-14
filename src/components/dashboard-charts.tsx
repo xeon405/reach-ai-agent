@@ -1,4 +1,4 @@
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
   ChartContainer,
@@ -22,33 +22,50 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
   } satisfies ChartConfig;
   return (
     <ChartContainer config={config} className="aspect-auto h-[260px] w-full">
-      <LineChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
-        <CartesianGrid vertical={false} strokeOpacity={0.35} />
+      <AreaChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
+        <defs>
+          <linearGradient id="fillSends" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--color-sends)" stopOpacity={0.18} />
+            <stop offset="95%" stopColor="var(--color-sends)" stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="fillReplies" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--color-replies)" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="var(--color-replies)" stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="fillInterested" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--color-interested)" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="var(--color-interested)" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.3} />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
         <YAxis hide allowDecimals={false} />
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-        <Line
+        <Area
           dataKey="sends"
           type="monotone"
           stroke="var(--color-sends)"
           strokeWidth={2}
+          fill="url(#fillSends)"
           dot={false}
         />
-        <Line
+        <Area
           dataKey="replies"
           type="monotone"
           stroke="var(--color-replies)"
           strokeWidth={3}
+          fill="url(#fillReplies)"
           dot={false}
         />
-        <Line
+        <Area
           dataKey="interested"
           type="monotone"
           stroke="var(--color-interested)"
           strokeWidth={2}
+          fill="url(#fillInterested)"
           dot={false}
         />
-      </LineChart>
+      </AreaChart>
     </ChartContainer>
   );
 }
