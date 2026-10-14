@@ -1,4 +1,4 @@
-import { Area, AreaChart, CartesianGrid, Line, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 
 import {
   ChartContainer,
@@ -16,7 +16,7 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
   } satisfies ChartConfig;
   return (
     <ChartContainer config={config} className="aspect-auto h-[260px] w-full">
-      <AreaChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
+      <ComposedChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="fillReplies" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="var(--color-replies)" stopOpacity={0.35} />
@@ -41,7 +41,7 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           strokeWidth={2}
           dot={false}
         />
-      </AreaChart>
+      </ComposedChart>
     </ChartContainer>
   );
 }
