@@ -289,7 +289,9 @@ LANGUAGE REQUIREMENT — WRITE IN ARABIC:
 - The subject must be FULLY IN ARABIC with no English words — a foreign brand/company name may appear in Latin inside the Arabic subject, but never write an English subject or mix English and Arabic in the same phrase.
 - Keep company names and technical terms in Latin script where natural.
 - The JSON keys stay "subject" and "body"; values are Arabic.` : "";
-  const openerDirective = pickOpenerDirective(`${leadName}-${leadCompany}-${leadJobTitle}`);
+  const openerDirective = pickOpenerDirective(`${leadName}-${leadCompany}-${leadJobTitle}`, {
+    hasLeadFacts: Boolean(lead.category && lead.city),
+  });
   const promptContent = `${biContext}${buildLeadFacts(lead)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 A booking link is added automatically AFTER your text — do NOT type any URL yourself.
@@ -307,6 +309,9 @@ Rules for subject:
 Rules for body:
 - 60-120 words max. Short paragraphs (1-3 sentences each).
 - Open with the ATTENTION angle above, made specific using the LEAD FACTS — reference something real about them, never invent.
+- Use ONLY the facts in the LEAD FACTS block above. NEVER invent a detail — not their city, not their industry, not a rating, not a problem they are known to have, not a company size or revenue, not an award or news item, not a personal life event. If a fact is not listed there, you do not know it — so do not write it.
+- When no LEAD FACTS block is present, personalise using ONLY the person's name, company and job title as given, and nothing more. A vague but honest email beats a specific but invented one, always.
+- NEVER claim to have researched, visited, reviewed or noticed anything about them, and never assert what they currently have, use, lack or are missing ("I noticed you don't have X").
 - Explain our offer in one clear sentence tied to THEIR pain.
 - Sell plainly in this first message and end with one clear call-to-action pointing to the auto-added booking link, or a one-word reply ("yes") opening.
 - Sign off with the sender's ACTUAL name, never a placeholder.
@@ -1034,7 +1039,9 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         // ── AI GENERATE FOLLOW-UP ──
         const destLink = String(profile.website_url || profile.booking_link || "");
         const leadLang = detectLeadLanguage(lead, profile);
-        const fuOpener = pickOpenerDirective(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`);
+        const fuOpener = pickOpenerDirective(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`, {
+          hasLeadFacts: Boolean(lead.category && lead.city),
+        });
         const fuSeqHint = await sequenceHintFor(db, campaign.id);
         const fuSeqSuffix = fuSeqHint ? sequenceHintSuffix(fuSeqHint.hint) : "";
         const fuGate = dry

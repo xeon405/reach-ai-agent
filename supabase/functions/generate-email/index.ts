@@ -70,7 +70,6 @@ serve(async (req) => {
     const bookingLink = sanitizeForPrompt(prof?.booking_link ?? "", 300);
 
     const arabic = containsArabic(leadName) || containsArabic(leadCompany);
-    const openerDirective = pickOpenerDirective(`${sanitizeForPrompt(leadName, 80)}-${sanitizeForPrompt(leadCompany, 120)}`);
 
     // Real, verified lead facts so the writer personalises from data instead of
     // inventing it. Scoped to the caller's own leads: leadId is client-supplied,
@@ -79,15 +78,23 @@ serve(async (req) => {
     // widen what the caller may see, because the name/company/title the email is
     // written from are still the ones the caller supplied.
     let leadFacts = "";
+    let leadCategory: string | null = null;
+    let leadCity: string | null = null;
     if (typeof leadId === "string" && leadId) {
       const { data: lead } = await supabase
         .from("leads")
-        .select("category, city, rating, website, email_status, email_is_role")
+        .select("category, city, country, rating, website, email_status, email_is_role")
         .eq("id", leadId)
         .eq("user_id", userId)
         .maybeSingle();
       leadFacts = buildLeadFacts(lead ?? {});
+      leadCategory = lead?.category ?? null;
+      leadCity = lead?.city ?? null;
     }
+
+    const openerDirective = pickOpenerDirective(`${sanitizeForPrompt(leadName, 80)}-${sanitizeForPrompt(leadCompany, 120)}`, {
+      hasLeadFacts: Boolean(leadCategory && leadCity),
+    });
 
     const content = await groqChat([{
       role: "user",

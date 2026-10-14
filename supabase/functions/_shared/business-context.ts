@@ -109,7 +109,7 @@ export function buildBIContext(profile: Record<string, unknown>): string {
   }
   const usable = parts.filter((p): p is string => typeof p === "string" && p.length > 0);
   if (usable.length === 0) return "";
-  return `BUSINESS CONTEXT (saved by the owner in Settings — this is the source of truth about their business):\n${usable.join("\n")}\n\n`;
+  return `BUSINESS CONTEXT (saved by the owner in Settings — this is the source of truth about their business; these are NOT facts about the lead/recipient. "Ideal customer", "Cities they sell in" and "Chosen niche" describe who the sender TARGETS — never state or imply them about the recipient):\n${usable.join("\n")}\n\n`;
 }
 
 // ---------------------------------------------------------------------------

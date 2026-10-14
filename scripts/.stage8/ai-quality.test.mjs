@@ -4,7 +4,7 @@
 //
 // Run: node scripts/.stage8/ai-quality.test.mjs
 import { readFileSync } from "node:fs";
-import { buildLeadFacts, COLD_EMAIL_FEWSHOTS, REPLY_CONTINUITY_RULES } from "../../supabase/functions/_shared/ai-lib.ts";
+import { buildLeadFacts, COLD_EMAIL_FEWSHOTS, REPLY_CONTINUITY_RULES, pickOpenerDirective } from "../../supabase/functions/_shared/ai-lib.ts";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const src = (p) => readFileSync(ROOT + p, "utf8");
@@ -37,6 +37,21 @@ const lib = src("supabase/functions/_shared/ai-lib.ts");
   // A field present but nonsense must not be passed through as if it were a fact.
   check(buildLeadFacts({ rating: "excellent" }).includes("excellent") === false,
     "free-text 'rating' is not trusted as a real fact");
+
+  // Country is real ground-truth: without it the model invents a plausible city
+  // (it wrote "New York" for a lead whose country was India).
+  check(buildLeadFacts({ country: "India" }).includes("India"),
+    "real country is carried into the facts");
+
+  // The "specificity" opener example names a {category} in a {city}. With no real
+  // facts the model filled those from the sender's own target market and stated
+  // them as facts about the lead. It must be withheld when the lead has neither.
+  const specificityExample = /the only \{category\} in \{city\}/;
+  const safeSeeds = ["lead-a", "lead-b", "lead-c", "asma-your company-", "x-y-z"];
+  const leaked = safeSeeds.filter((s) => specificityExample.test(pickOpenerDirective(s, { hasLeadFacts: false })));
+  check(leaked.length === 0, "specificity opener withheld when the lead has no city/category", leaked.join(","));
+  check(specificityExample.test(pickOpenerDirective("asma-your company-")),
+    "specificity opener still available when facts exist");
 }
 
 // ---- every lead-facing writer must import the shared fact block ----------
@@ -62,6 +77,7 @@ for (const name of ["send-worker", "generate-email", "send-reply"]) {
 
   const sw = fn("send-worker");
   check(/never invent/.test(sw), "send-worker: never-invent rule present");
+  check(/When no LEAD FACTS block is present/.test(sw), "send-worker: has the no-facts fallback rule");
   check(/do NOT type any URL/.test(sw), "send-worker: forbids typing its own URL");
   check(/free, guarantee, act now/.test(sw), "send-worker: banned-word list present");
 

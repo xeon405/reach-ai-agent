@@ -85,9 +85,21 @@ export const ATTENTION_OPENERS: Array<{ key: string; style: string; example: str
 
 const OPENERS_BY_KEY = new Map(ATTENTION_OPENERS.map((o) => [o.key, o]));
 
-/** Deterministic attention angle for a lead+step seed. */
-export function pickOpenerDirective(seed: string): string {
-  const o = OPENERS_BY_KEY.get(seed) ?? ATTENTION_OPENERS[hashString(seed) % ATTENTION_OPENERS.length];
+/** Deterministic attention angle for a lead+step seed.
+ *  Pass hasLeadFacts=false (the lead has no category AND no city) to drop the
+ *  "specificity" angle: its example names a {category} in a {city}, and with no
+ *  real facts the model invents them — e.g. it pulled "consultant"/"New York"
+ *  from the sender's own target market and stated them as facts about the lead. */
+export function pickOpenerDirective(seed: string, opts?: { hasLeadFacts?: boolean }): string {
+  const pool =
+    opts?.hasLeadFacts === false
+      ? ATTENTION_OPENERS.filter((o) => o.key !== "specificity")
+      : ATTENTION_OPENERS;
+  const direct = OPENERS_BY_KEY.get(seed);
+  const o =
+    direct && !(opts?.hasLeadFacts === false && direct.key === "specificity")
+      ? direct
+      : pool[hashString(seed) % pool.length];
   return `ATTENTION-GRABBING OPENER — you must use this exact angle (adapt the IDEA to the lead with the facts provided; DO NOT copy the example words):\nANGLE: ${o.style}\nEXAMPLE of the energy, not the words: ${o.example}`;
 }
 
@@ -108,6 +120,9 @@ export function buildLeadFacts(lead: Record<string, any>): string {
   const bits: string[] = [];
   if (lead.category) bits.push(`- Category/industry: ${sanitizeForPrompt(String(lead.category), 120)}`);
   if (lead.city) bits.push(`- City: ${sanitizeForPrompt(String(lead.city), 80)}`);
+  // Real country ground-truth: without it the model guesses a plausible locale
+  // (it wrote "New York" for a lead whose country is India).
+  if (lead.country) bits.push(`- Country: ${sanitizeForPrompt(String(lead.country), 60)}`);
   // Rating must be a real number. A free-text value here would be scraped text,
   // not a measurement, and "Local rating: excellent / 5" is a fabrication.
   if (lead.rating != null && lead.rating !== "" && Number.isFinite(Number(lead.rating))) {

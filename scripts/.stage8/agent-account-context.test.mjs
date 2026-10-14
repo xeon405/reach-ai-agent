@@ -73,6 +73,7 @@ const check = (label, ok, detail) => {
     dont_claim: "Never claim we are Gas Safe registered",
   });
   check("business block is produced", full.startsWith("BUSINESS CONTEXT (saved by the owner"), full.slice(0, 40));
+  check("business context is labelled as NOT facts about the lead", full.includes("NOT facts about the lead"));
   check("business name is carried", full.includes("Bolt Plumbing Ltd"));
   check("product is carried", full.includes("Emergency boiler repair"));
   check("ideal customer is carried", full.includes("Homeowners and letting agents"));
