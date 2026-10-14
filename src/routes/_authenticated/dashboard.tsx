@@ -204,7 +204,6 @@ function Dashboard() {
   const [dateRange, setDateRange] = useState<number>(3650);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
-  const [trendMode, setTrendMode] = useState<"counts" | "rate">("counts");
 
   useEffect(() => {
     loadAll();
@@ -547,34 +546,8 @@ function Dashboard() {
       if (e.replied) row.replies++;
       if ((e.reply_sentiment ?? "").toUpperCase() === "INTERESTED") row.interested++;
     }
-
-    // Zero-fill a continuous axis so the line reads as a true trend instead of
-    // skipping empty days. Day/week windows fill from the range start; the
-    // all-time (month) window fills from the first month with data so a new
-    // account doesn't produce years of empty buckets.
-    if (buckets.size > 0) {
-      const now = new Date();
-      let cursor =
-        mode === "month"
-          ? new Date(Math.min(...[...buckets.values()].map((r) => r.ts)))
-          : new Date(cutoff);
-      while (cursor <= now) {
-        const b = bucketOf(cursor.toISOString());
-        if (!buckets.has(b.key)) {
-          buckets.set(b.key, { ts: b.ts, label: b.label, sends: 0, replies: 0, interested: 0 });
-        }
-        if (mode === "day") {
-          cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
-        } else if (mode === "week") {
-          cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 7);
-        } else {
-          cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-        }
-      }
-    }
-
     return [...buckets.values()].sort((a, b) => a.ts - b.ts);
-  }, [fEmails, dateRange, cutoff]);
+  }, [fEmails, dateRange]);
 
   const replyStats = useMemo(() => {
     const rate = (list: EmailRow[]) =>
@@ -767,73 +740,36 @@ function Dashboard() {
           <>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-4">
-                {trendMode === "counts" ? (
-                  <>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground" /> Sent
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-foreground" /> Replies
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" /> Interested
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-foreground" /> Reply rate
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" /> Interested rate
-                    </span>
-                  </>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground" /> Sent
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-foreground" /> Replies
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Interested
+                </span>
+              </div>
+              <div>
+                Reply rate{" "}
+                <span className="font-semibold text-foreground">
+                  {(replyStats.rate * 100).toFixed(1)}%
+                </span>
+                {replyStats.delta != null && (
+                  <span
+                    className={
+                      replyStats.delta >= 0
+                        ? "ml-1.5 text-emerald-600 dark:text-emerald-400"
+                        : "ml-1.5 text-red-600 dark:text-red-400"
+                    }
+                  >
+                    {replyStats.delta >= 0 ? "▲" : "▼"} {Math.abs(replyStats.delta).toFixed(1)} pts
+                    vs prev
+                  </span>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
-                  <button
-                    onClick={() => setTrendMode("counts")}
-                    className={`rounded-md px-2 py-0.5 font-medium transition-colors ${
-                      trendMode === "counts"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    Counts
-                  </button>
-                  <button
-                    onClick={() => setTrendMode("rate")}
-                    className={`rounded-md px-2 py-0.5 font-medium transition-colors ${
-                      trendMode === "rate"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    % Rate
-                  </button>
-                </div>
-                <div>
-                  Reply rate{" "}
-                  <span className="font-semibold text-foreground">
-                    {(replyStats.rate * 100).toFixed(1)}%
-                  </span>
-                  {replyStats.delta != null && (
-                    <span
-                      className={
-                        replyStats.delta >= 0
-                          ? "ml-1.5 text-emerald-600 dark:text-emerald-400"
-                          : "ml-1.5 text-red-600 dark:text-red-400"
-                      }
-                    >
-                      {replyStats.delta >= 0 ? "▲" : "▼"} {Math.abs(replyStats.delta).toFixed(1)} pts
-                      vs prev
-                    </span>
-                  )}
-                </div>
-              </div>
             </div>
-            <ReplyTrendChart data={replyTrendData} mode={trendMode} />
+            <ReplyTrendChart data={replyTrendData} />
           </>
         )}
       </Section>
