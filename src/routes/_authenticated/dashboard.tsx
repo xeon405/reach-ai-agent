@@ -173,13 +173,21 @@ const INTENT_META: Record<string, { label: string; icon: React.ReactNode; color:
     icon: <ShieldX className="h-3.5 w-3.5" />,
     color: "text-red-600 dark:text-red-400",
   },
-  unclear: { label: "Unclear", icon: <Eye className="h-3.5 w-3.5" />, color: "text-gray-500" },
+  unclear: {
+    label: "Unclear",
+    icon: <Eye className="h-3.5 w-3.5" />,
+    color: "text-gray-500 dark:text-gray-400",
+  },
   autoresponder: {
     label: "Auto-reply",
     icon: <Bot className="h-3.5 w-3.5" />,
     color: "text-purple-600 dark:text-purple-400",
   },
-  other: { label: "Other", icon: <Shield className="h-3.5 w-3.5" />, color: "text-gray-400" },
+  other: {
+    label: "Other",
+    icon: <Shield className="h-3.5 w-3.5" />,
+    color: "text-gray-400 dark:text-gray-500",
+  },
 };
 
 function Dashboard() {
@@ -1240,7 +1248,7 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-lg border p-2.5 ${warn ? "border-amber-200 dark:border-amber-800 bg-amber-50/30" : "border-border bg-card"}`}
+      className={`rounded-lg border p-2.5 ${warn ? "border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-950/20" : "border-border bg-card"}`}
     >
       <div className="text-[11px] text-muted-foreground">{label}</div>
       <div
