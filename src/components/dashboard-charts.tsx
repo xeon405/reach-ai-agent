@@ -47,7 +47,8 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           stroke="var(--color-sends)"
           strokeWidth={2}
           fill="url(#fillSends)"
-          dot={false}
+          dot={{ r: 2.5, strokeWidth: 0, fillOpacity: 0.7 }}
+          activeDot={{ r: 4 }}
         />
         <Area
           dataKey="replies"
@@ -55,7 +56,8 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           stroke="var(--color-replies)"
           strokeWidth={3}
           fill="url(#fillReplies)"
-          dot={false}
+          dot={{ r: 3, strokeWidth: 0, fillOpacity: 0.9 }}
+          activeDot={{ r: 5 }}
         />
         <Area
           dataKey="interested"
@@ -63,7 +65,8 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           stroke="var(--color-interested)"
           strokeWidth={2}
           fill="url(#fillInterested)"
-          dot={false}
+          dot={{ r: 2.5, strokeWidth: 0, fillOpacity: 0.85 }}
+          activeDot={{ r: 5 }}
         />
       </AreaChart>
     </ChartContainer>
