@@ -1,4 +1,4 @@
-import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { Area, Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 
 import {
   ChartContainer,
@@ -7,10 +7,16 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 
-export type ReplyTrendPoint = { label: string; replies: number; interested: number };
+export type ReplyTrendPoint = {
+  label: string;
+  sends: number;
+  replies: number;
+  interested: number;
+};
 
 export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
   const config = {
+    sends: { label: "Sent", color: "var(--muted-foreground)" },
     replies: { label: "Replies", color: "var(--primary)" },
     interested: { label: "Interested", color: "var(--success)" },
   } satisfies ChartConfig;
@@ -27,6 +33,13 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
         <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
         <YAxis hide allowDecimals={false} />
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+        <Bar
+          dataKey="sends"
+          fill="var(--color-sends)"
+          fillOpacity={0.22}
+          radius={[3, 3, 0, 0]}
+          maxBarSize={26}
+        />
         <Area
           dataKey="replies"
           type="monotone"

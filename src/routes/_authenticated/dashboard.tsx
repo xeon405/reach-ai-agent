@@ -498,7 +498,7 @@ function Dashboard() {
       dateRange <= 31 ? "day" : dateRange <= 180 ? "week" : "month";
     const buckets = new Map<
       string,
-      { ts: number; label: string; replies: number; interested: number }
+      { ts: number; label: string; sends: number; replies: number; interested: number }
     >();
     const bucketOf = (iso: string) => {
       const d = new Date(iso);
@@ -531,9 +531,10 @@ function Dashboard() {
       const b = bucketOf(e.sent_at);
       let row = buckets.get(b.key);
       if (!row) {
-        row = { ts: b.ts, label: b.label, replies: 0, interested: 0 };
+        row = { ts: b.ts, label: b.label, sends: 0, replies: 0, interested: 0 };
         buckets.set(b.key, row);
       }
+      row.sends++;
       if (e.replied) row.replies++;
       if ((e.reply_sentiment ?? "").toUpperCase() === "INTERESTED") row.interested++;
     }
@@ -731,6 +732,9 @@ function Dashboard() {
           <>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-sm bg-muted-foreground/50" /> Sent
+                </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-foreground" /> Replies
                 </span>
