@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Children, lazy, Suspense, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { ArrowRight, Bot, Mail, Repeat, Check, Inbox, Search, Send, Target, Calendar } from "lucide-react";
+import { ArrowRight, Bot, Mail, Repeat, Check, Inbox, Search, Send, Target, Calendar, ShieldCheck, Ban, Lock, CreditCard, Sparkles, Reply } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SiteHeader } from "@/components/site-header";
 import { APP_BASE_URL } from "@/lib/app-config";
@@ -358,7 +358,7 @@ function Landing() {
               Your AI sales agent <br /> finds, writes &amp; sends.
             </h1>
             <p className="text-base md:text-lg text-neutral-500 dark:text-neutral-400 font-normal leading-relaxed max-w-[420px]">
-              OutshipAI builds your lead list, writes personalized cold emails with AI, and sends them on autopilot — while you focus on closing.
+              OutshipAi builds your lead list, writes personalized cold emails with AI, and sends them on autopilot — while you focus on closing.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <a
@@ -435,6 +435,16 @@ function Landing() {
         </div>
       </section>
 
+      {/* Trust strip */}
+      <section className="border-y border-border/50 bg-card/30">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-4 px-6 py-6 text-sm text-muted-foreground md:px-10">
+          <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-foreground" aria-hidden /> Sent from your own Gmail — as you</span>
+          <span className="flex items-center gap-2"><Ban className="h-4 w-4 text-foreground" aria-hidden /> One-click unsubscribe, honored instantly</span>
+          <span className="flex items-center gap-2"><Lock className="h-4 w-4 text-foreground" aria-hidden /> Your data stays private</span>
+          <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-foreground" aria-hidden /> Start free — no card needed</span>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24 md:px-10">
         <div data-reveal className="reveal mb-16 text-center">
@@ -487,6 +497,65 @@ function Landing() {
           <ol className="grid gap-5 md:grid-cols-3">
             {steps.map((s, i) => <Step key={s.n} n={s.n} icon={s.icon} title={s.title} text={s.text} style={{ transitionDelay: `${i * 80}ms` }} />)}
           </ol>
+        </div>
+      </section>
+
+      {/* See it in action */}
+      <section id="example" className="border-t border-border/50">
+        <div className="mx-auto max-w-6xl px-6 py-24 md:px-10">
+          <div data-reveal className="reveal mb-14 text-center">
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+              <p className="kicker">See it in action</p>
+              <span className="h-px w-8 bg-foreground/20" aria-hidden />
+            </div>
+            <h2 className="font-display text-4xl font-black tracking-tight text-balance md:text-5xl">
+              Written for one person, <span className="italic font-semibold">not blasted to thousands</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+              Each email is researched and written for that specific prospect. When they reply, it lands in your real inbox.
+            </p>
+          </div>
+          <div className="grid items-start gap-6 md:grid-cols-2">
+            <div data-reveal className="reveal overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+              <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">The email we send</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background"><Sparkles className="h-3 w-3" aria-hidden />Personalized</span>
+              </div>
+              <div className="px-6 py-5">
+                <div className="space-y-1 border-b border-border/50 pb-4 text-sm">
+                  <div className="text-muted-foreground">To: <span className="text-foreground">sarah@brightloop.co</span></div>
+                  <div className="font-semibold">Quick idea for BrightLoop&#39;s onboarding</div>
+                </div>
+                <div className="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground">
+                  <p>Hi Sarah — I saw BrightLoop just opened self-serve signups. At that stage the first-week drop-off is usually the thing quietly capping growth.</p>
+                  <p>We help teams at your stage turn more of those signups into active accounts without adding headcount. Worth a quick look?</p>
+                  <p className="text-foreground">— Alex, sent from your own inbox</p>
+                </div>
+                <div className="mt-4 border-t border-border/50 pt-3 text-xs text-muted-foreground">One-click unsubscribe included · sent as you, at safe volumes</div>
+              </div>
+            </div>
+            <div data-reveal className="reveal overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+              <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">The reply you get</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-[11px] font-semibold text-success"><Reply className="h-3 w-3" aria-hidden />Interested</span>
+              </div>
+              <div className="px-6 py-5">
+                <div className="space-y-1 border-b border-border/50 pb-4 text-sm">
+                  <div className="text-muted-foreground">From: <span className="text-foreground">sarah@brightloop.co</span></div>
+                  <div className="font-semibold">Re: Quick idea for BrightLoop&#39;s onboarding</div>
+                </div>
+                <div className="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground">
+                  <p>Hi Alex — this is actually spot on. We&#39;re reworking onboarding next month. Can you send over some times for a quick call?</p>
+                </div>
+                <div className="mt-4 rounded-xl bg-muted/60 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Autopilot next step</div>
+                  <p className="mt-2 text-sm text-foreground">Booking link sent automatically · moved to &ldquo;Hot leads&rdquo;</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="mt-6 text-center text-xs text-muted-foreground">Sample shown for illustration.</p>
         </div>
       </section>
 
