@@ -1,0 +1,1635 @@
+{
+  "commit": "21138da771445bf1fc877a6bf689ffdaa8dff29d",
+  "generated_at": "2026-10-23T04:29:47.136Z",
+  "split_arg": "all",
+  "by_split": {
+    "dev": {
+      "rows": 25,
+      "scored": 23,
+      "ambiguous": 2,
+      "outcomes": {
+        "abstained": 15,
+        "correct": 4,
+        "wrong_intent": 0,
+        "right_intent_wrong_params": 4
+      },
+      "coverage": {
+        "num": 8,
+        "den": 23,
+        "pct": "34.8%"
+      },
+      "rule_precision": {
+        "num": 8,
+        "den": 8,
+        "pct": "100.0%"
+      },
+      "intent_params_accuracy": {
+        "num": 4,
+        "den": 8,
+        "pct": "50.0%"
+      },
+      "also_acceptable_rescued": 1
+    },
+    "dev2": {
+      "rows": 10,
+      "scored": 10,
+      "ambiguous": 0,
+      "outcomes": {
+        "abstained": 6,
+        "correct": 1,
+        "wrong_intent": 2,
+        "right_intent_wrong_params": 1
+      },
+      "coverage": {
+        "num": 4,
+        "den": 10,
+        "pct": "40.0%"
+      },
+      "rule_precision": {
+        "num": 2,
+        "den": 4,
+        "pct": "50.0%"
+      },
+      "intent_params_accuracy": {
+        "num": 1,
+        "den": 4,
+        "pct": "25.0%"
+      },
+      "also_acceptable_rescued": 0
+    },
+    "control": {
+      "rows": 18,
+      "scored": 18,
+      "ambiguous": 0,
+      "outcomes": {
+        "abstained": 4,
+        "correct": 4,
+        "wrong_intent": 2,
+        "right_intent_wrong_params": 8
+      },
+      "coverage": {
+        "num": 14,
+        "den": 18,
+        "pct": "77.8%"
+      },
+      "rule_precision": {
+        "num": 12,
+        "den": 14,
+        "pct": "85.7%"
+      },
+      "intent_params_accuracy": {
+        "num": 4,
+        "den": 14,
+        "pct": "28.6%"
+      },
+      "also_acceptable_rescued": 0
+    },
+    "probe": {
+      "rows": 7,
+      "scored": 7,
+      "ambiguous": 0,
+      "outcomes": {
+        "abstained": 0,
+        "correct": 1,
+        "wrong_intent": 3,
+        "right_intent_wrong_params": 3
+      },
+      "coverage": {
+        "num": 7,
+        "den": 7,
+        "pct": "100.0%"
+      },
+      "rule_precision": {
+        "num": 4,
+        "den": 7,
+        "pct": "57.1%"
+      },
+      "intent_params_accuracy": {
+        "num": 1,
+        "den": 7,
+        "pct": "14.3%"
+      },
+      "also_acceptable_rescued": 0
+    },
+    "test": {
+      "rows": 0,
+      "scored": 0,
+      "ambiguous": 0,
+      "outcomes": {
+        "abstained": 0,
+        "correct": 0,
+        "wrong_intent": 0,
+        "right_intent_wrong_params": 0
+      },
+      "coverage": {
+        "num": 0,
+        "den": 0,
+        "pct": "n/a"
+      },
+      "rule_precision": {
+        "num": 0,
+        "den": 0,
+        "pct": "n/a"
+      },
+      "intent_params_accuracy": {
+        "num": 0,
+        "den": 0,
+        "pct": "n/a"
+      },
+      "also_acceptable_rescued": 0
+    }
+  },
+  "detail": [
+    {
+      "id": 1,
+      "split": "dev",
+      "message": "pzze the diwali campaign",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "typo"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 2,
+      "split": "dev",
+      "message": "hw many ppl opened last mail",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "slang"
+      ],
+      "noise_types": [
+        "slang"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 3,
+      "split": "dev",
+      "message": "find contacts in hyderabad salons",
+      "expected_intent": "find_contacts",
+      "also_acceptable": [],
+      "expected_params": {
+        "category": "salons",
+        "location": "hyderabad"
+      },
+      "tags": [],
+      "noise_types": [],
+      "source": "seed_15",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "city": "hyderabad salons",
+        "category": "contacts"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "find"
+    },
+    {
+      "id": 4,
+      "split": "dev",
+      "message": "stop sending to the restaurant list",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "indirect"
+      ],
+      "noise_types": [
+        "synonym"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 5,
+      "split": "dev",
+      "message": "wats my sender health rn",
+      "expected_intent": "sender_health",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "slang"
+      ],
+      "noise_types": [
+        "slang"
+      ],
+      "source": "seed_15",
+      "handled": true,
+      "got": "sender_health",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "sender health"
+    },
+    {
+      "id": 6,
+      "split": "dev",
+      "message": "nye campaign banao for diwali sale",
+      "expected_intent": "create_campaign_draft",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali sale"
+      },
+      "tags": [
+        "typo",
+        "hinglish"
+      ],
+      "noise_types": [
+        "typo",
+        "synonym",
+        "hinglish"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 7,
+      "split": "dev",
+      "message": "add these ppl to summer camp",
+      "expected_intent": "add_contacts_to_campaign",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "slang"
+      ],
+      "noise_types": [
+        "slang",
+        "typo"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 8,
+      "split": "dev",
+      "message": "y did monsoon campaign stop",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [
+        "sender_health"
+      ],
+      "expected_params": null,
+      "tags": [
+        "slang"
+      ],
+      "noise_types": [
+        "slang"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 9,
+      "split": "dev",
+      "message": "chk compliance for new list",
+      "expected_intent": "compliance_check",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "seed_15",
+      "handled": true,
+      "got": "compliance_check",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "compliance"
+    },
+    {
+      "id": 10,
+      "split": "dev",
+      "message": "suggest ppl to target near kukatpally",
+      "expected_intent": "suggest_targeting",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "slang"
+      ],
+      "noise_types": [
+        "slang"
+      ],
+      "source": "seed_15",
+      "handled": true,
+      "got": "suggest_targeting",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "suggest"
+    },
+    {
+      "id": 11,
+      "split": "dev",
+      "message": "halt diwali",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "indirect"
+      ],
+      "noise_types": [
+        "synonym"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 12,
+      "split": "dev",
+      "message": "is this spam safe",
+      "expected_intent": "compliance_check",
+      "also_acceptable": [
+        "sender_health"
+      ],
+      "expected_params": null,
+      "tags": [
+        "esl"
+      ],
+      "noise_types": [],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 13,
+      "split": "dev",
+      "message": "target salon owners hyd",
+      "expected_intent": "suggest_targeting",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "slang",
+        "indirect"
+      ],
+      "noise_types": [
+        "slang"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 14,
+      "split": "dev",
+      "message": "list all",
+      "expected_intent": "ambiguous",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "indirect"
+      ],
+      "noise_types": [],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "ambiguous",
+      "matched_pattern": ""
+    },
+    {
+      "id": 15,
+      "split": "dev",
+      "message": "skip karo yeh wala",
+      "expected_intent": "ambiguous",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "hinglish",
+        "slang"
+      ],
+      "noise_types": [
+        "slang",
+        "hinglish"
+      ],
+      "source": "seed_15",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "ambiguous",
+      "matched_pattern": ""
+    },
+    {
+      "id": 16,
+      "split": "dev",
+      "message": "close  diwali campagin",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "typo"
+      ],
+      "noise_types": [
+        "typo",
+        "synonym"
+      ],
+      "source": "owner_typed",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 17,
+      "split": "dev",
+      "message": "how manyu poeple opened email is et yesterday",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "esl"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": true,
+      "got": "campaign_stats",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "how many"
+    },
+    {
+      "id": 18,
+      "split": "dev",
+      "message": "i want saloons emails how to iund ?",
+      "expected_intent": "find_contacts",
+      "also_acceptable": [],
+      "expected_params": {
+        "category": "salons"
+      },
+      "tags": [
+        "typo",
+        "esl"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "category": "saloons emails how"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "want"
+    },
+    {
+      "id": 19,
+      "split": "dev",
+      "message": "is my account is okay my mails are gping in soma in others maikls",
+      "expected_intent": "sender_health",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "esl"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 20,
+      "split": "dev",
+      "message": "start new campaign nmed diwali sla e",
+      "expected_intent": "create_campaign_draft",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali sale"
+      },
+      "tags": [
+        "typo"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": true,
+      "got": "create_campaign_draft",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "new"
+    },
+    {
+      "id": 21,
+      "split": "dev",
+      "message": "improt my new emails i aadded and mil them",
+      "expected_intent": "add_contacts_to_campaign",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "esl"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 22,
+      "split": "dev",
+      "message": "check the maisl verify the are they safe or not ?",
+      "expected_intent": "compliance_check",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "esl"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 23,
+      "split": "dev",
+      "message": "how to find people for y shop near kuktatpally mail them near of kukatpally",
+      "expected_intent": "suggest_targeting",
+      "also_acceptable": [
+        "find_contacts"
+      ],
+      "expected_params": {
+        "location": "kukatpally"
+      },
+      "tags": [
+        "typo",
+        "esl"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "company": "y shop",
+        "city": "kuktatpally mail them",
+        "category": "people"
+      },
+      "intent_correct": true,
+      "via_acceptable": true,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "find"
+    },
+    {
+      "id": 24,
+      "split": "dev",
+      "message": "i wanna see compleet whole overall  status",
+      "expected_intent": "list_campaigns",
+      "also_acceptable": [
+        "campaign_stats"
+      ],
+      "expected_params": null,
+      "tags": [
+        "typo",
+        "slang",
+        "indirect"
+      ],
+      "noise_types": [
+        "typo",
+        "slang"
+      ],
+      "source": "owner_typed",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 25,
+      "split": "dev",
+      "message": "my mosnosnn emails stopped why?",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [
+        "sender_health"
+      ],
+      "expected_params": {
+        "campaign_name": "monsoon"
+      },
+      "tags": [
+        "typo"
+      ],
+      "noise_types": [
+        "typo"
+      ],
+      "source": "owner_typed",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 26,
+      "split": "control",
+      "message": "pause the diwali campaign",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "pause_campaign",
+      "params": {
+        "campaignName": "the diwali campaign"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "pause"
+    },
+    {
+      "id": 27,
+      "split": "control",
+      "message": "please stop the monsoon campaign",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "monsoon"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 28,
+      "split": "control",
+      "message": "how many people opened my last email",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "campaign_stats",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "how many"
+    },
+    {
+      "id": 29,
+      "split": "control",
+      "message": "what is the open rate of the diwali campaign",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "list_campaigns",
+      "params": {},
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "wrong_intent",
+      "matched_pattern": "what"
+    },
+    {
+      "id": 30,
+      "split": "control",
+      "message": "find contacts for salons in Hyderabad",
+      "expected_intent": "find_contacts",
+      "also_acceptable": [],
+      "expected_params": {
+        "category": "salons",
+        "location": "hyderabad"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "company": "salons",
+        "city": "hyderabad",
+        "category": "contacts"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "find"
+    },
+    {
+      "id": 31,
+      "split": "control",
+      "message": "I need email addresses of restaurant owners in Pune",
+      "expected_intent": "find_contacts",
+      "also_acceptable": [],
+      "expected_params": {
+        "category": "restaurants",
+        "location": "pune"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "city": "pune",
+        "category": "email addresses of restaurant owners"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "need"
+    },
+    {
+      "id": 32,
+      "split": "control",
+      "message": "what is my sender health",
+      "expected_intent": "sender_health",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "sender_health",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "sender health"
+    },
+    {
+      "id": 33,
+      "split": "control",
+      "message": "is my email account in good shape",
+      "expected_intent": "sender_health",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 34,
+      "split": "control",
+      "message": "create a new campaign for my diwali sale",
+      "expected_intent": "create_campaign_draft",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali sale"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "create_campaign_draft",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "create"
+    },
+    {
+      "id": 35,
+      "split": "control",
+      "message": "make a campaign draft for my winter sale",
+      "expected_intent": "create_campaign_draft",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "winter sale"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "create_campaign_draft",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "make"
+    },
+    {
+      "id": 36,
+      "split": "control",
+      "message": "add these contacts to the summer camp campaign",
+      "expected_intent": "add_contacts_to_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "summer camp"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "add_contacts_to_campaign",
+      "params": {
+        "campaignName": "the summer camp campaign",
+        "query": "these contacts to the summer camp campaign"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "add"
+    },
+    {
+      "id": 37,
+      "split": "control",
+      "message": "put my new leads into the diwali campaign",
+      "expected_intent": "add_contacts_to_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "add_contacts_to_campaign",
+      "params": {
+        "campaignName": "the diwali campaign"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "put"
+    },
+    {
+      "id": 38,
+      "split": "control",
+      "message": "run a compliance check on my new list",
+      "expected_intent": "compliance_check",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "compliance_check",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "compliance"
+    },
+    {
+      "id": 39,
+      "split": "control",
+      "message": "is this contact list safe to email",
+      "expected_intent": "compliance_check",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 40,
+      "split": "control",
+      "message": "suggest who I should target near Kukatpally",
+      "expected_intent": "suggest_targeting",
+      "also_acceptable": [],
+      "expected_params": {
+        "location": "kukatpally"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "suggest_targeting",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "suggest"
+    },
+    {
+      "id": 41,
+      "split": "control",
+      "message": "who should I send emails to for my shop in Banjara Hills",
+      "expected_intent": "suggest_targeting",
+      "also_acceptable": [],
+      "expected_params": {
+        "location": "banjara hills"
+      },
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 42,
+      "split": "control",
+      "message": "list all my campaigns",
+      "expected_intent": "list_campaigns",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "list_campaigns",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "list"
+    },
+    {
+      "id": 43,
+      "split": "control",
+      "message": "show me everything I have set up",
+      "expected_intent": "list_campaigns",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [],
+      "noise_types": [
+        "clean"
+      ],
+      "source": "control_written_by_claude",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "category": "everything i have set up"
+      },
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "wrong_intent",
+      "matched_pattern": "show me"
+    },
+    {
+      "id": 44,
+      "split": "probe",
+      "message": "i want to pause the diwali campaign",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "pause_campaign",
+      "params": {
+        "campaignName": "the diwali campaign"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "pause"
+    },
+    {
+      "id": 45,
+      "split": "probe",
+      "message": "i want to see how many people opened my email",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "campaign_stats",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "how many"
+    },
+    {
+      "id": 46,
+      "split": "probe",
+      "message": "i want to check if my sending account is healthy",
+      "expected_intent": "sender_health",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {},
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "wrong_intent",
+      "matched_pattern": "want"
+    },
+    {
+      "id": 47,
+      "split": "probe",
+      "message": "new list of contacts, add them to the diwali campaign",
+      "expected_intent": "add_contacts_to_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "list_campaigns",
+      "params": {},
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "wrong_intent",
+      "matched_pattern": "list"
+    },
+    {
+      "id": 48,
+      "split": "probe",
+      "message": "find out why my monsoon emails stopped",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [
+        "sender_health"
+      ],
+      "expected_params": {
+        "campaign_name": "monsoon"
+      },
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "category": "out why my monsoon emails stopped"
+      },
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "wrong_intent",
+      "matched_pattern": "find"
+    },
+    {
+      "id": 49,
+      "split": "probe",
+      "message": "find my diwali campaign stats",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "campaign_stats",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "stats"
+    },
+    {
+      "id": 50,
+      "split": "probe",
+      "message": "check my diwali campaign stats",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "hard_negative"
+      ],
+      "noise_types": [
+        "hard_negative"
+      ],
+      "source": "probe_written_by_claude",
+      "handled": true,
+      "got": "campaign_stats",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "stats"
+    },
+    {
+      "id": 51,
+      "split": "dev2",
+      "message": "Plz stop sending mails i have some other plan",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "slang"
+      ],
+      "noise_types": [
+        "synonym",
+        "slang"
+      ],
+      "source": "friend_1",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 52,
+      "split": "dev2",
+      "message": "Plz look my yesterday’s email how many vendors have seen",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "slang",
+        "esl"
+      ],
+      "noise_types": [
+        "synonym",
+        "grammar",
+        "slang"
+      ],
+      "source": "friend_1",
+      "handled": true,
+      "got": "campaign_stats",
+      "params": {},
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "correct",
+      "matched_pattern": "how many"
+    },
+    {
+      "id": 53,
+      "split": "dev2",
+      "message": "Find out email addresses of much barber shops in Hyd",
+      "expected_intent": "find_contacts",
+      "also_acceptable": [],
+      "expected_params": {
+        "category": "barber shops",
+        "location": "hyderabad"
+      },
+      "tags": [
+        "slang",
+        "esl"
+      ],
+      "noise_types": [
+        "slang",
+        "grammar"
+      ],
+      "source": "friend_1",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "city": "hyd",
+        "category": "out email addresses of much barber shops"
+      },
+      "intent_correct": true,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "right_intent_wrong_params",
+      "matched_pattern": "find"
+    },
+    {
+      "id": 54,
+      "split": "dev2",
+      "message": "Check if my mails are landing in junk",
+      "expected_intent": "sender_health",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "slang"
+      ],
+      "noise_types": [
+        "synonym"
+      ],
+      "source": "friend_1",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 55,
+      "split": "dev2",
+      "message": "I got a plan to send Diwali sale emails 🥱😴😴",
+      "expected_intent": "create_campaign_draft",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali sale"
+      },
+      "tags": [
+        "indirect",
+        "slang"
+      ],
+      "noise_types": [
+        "synonym",
+        "emoji",
+        "indirect"
+      ],
+      "source": "friend_1",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 56,
+      "split": "dev2",
+      "message": "I have list of new peoples to get join in summer camp emails",
+      "expected_intent": "add_contacts_to_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "summer camp"
+      },
+      "tags": [
+        "esl",
+        "indirect"
+      ],
+      "noise_types": [
+        "synonym",
+        "grammar",
+        "indirect"
+      ],
+      "source": "friend_1",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 57,
+      "split": "dev2",
+      "message": "I paid for contact list now find out it is no illegal to email",
+      "expected_intent": "compliance_check",
+      "also_acceptable": [],
+      "expected_params": null,
+      "tags": [
+        "esl",
+        "indirect"
+      ],
+      "noise_types": [
+        "grammar",
+        "synonym",
+        "indirect"
+      ],
+      "source": "friend_1",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "company": "contact list now find out it is no illegal to email",
+        "category": "out it is no illegal"
+      },
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "wrong_intent",
+      "matched_pattern": "find"
+    },
+    {
+      "id": 58,
+      "split": "dev2",
+      "message": "I am about to commence a business soon in Kukatpally and which kind of persons to reach",
+      "expected_intent": "suggest_targeting",
+      "also_acceptable": [],
+      "expected_params": {
+        "location": "kukatpally"
+      },
+      "tags": [
+        "esl",
+        "indirect"
+      ],
+      "noise_types": [
+        "synonym",
+        "grammar",
+        "indirect"
+      ],
+      "source": "friend_1",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 59,
+      "split": "dev2",
+      "message": "Unveil my setup so far",
+      "expected_intent": "list_campaigns",
+      "also_acceptable": [
+        "campaign_stats"
+      ],
+      "expected_params": null,
+      "tags": [
+        "indirect"
+      ],
+      "noise_types": [
+        "synonym"
+      ],
+      "source": "friend_1",
+      "handled": false,
+      "got": null,
+      "params": null,
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": null,
+      "outcome": "abstained",
+      "matched_pattern": ""
+    },
+    {
+      "id": 60,
+      "split": "dev2",
+      "message": "Weather update emails stopped find out issue",
+      "expected_intent": "campaign_stats",
+      "also_acceptable": [
+        "sender_health"
+      ],
+      "expected_params": {
+        "campaign_name": "weather update"
+      },
+      "tags": [
+        "esl"
+      ],
+      "noise_types": [
+        "synonym",
+        "grammar"
+      ],
+      "source": "friend_1",
+      "handled": true,
+      "got": "find_contacts",
+      "params": {
+        "category": "out issue"
+      },
+      "intent_correct": false,
+      "via_acceptable": false,
+      "param_correct": false,
+      "outcome": "wrong_intent",
+      "matched_pattern": "find"
+    }
+  ]
+}

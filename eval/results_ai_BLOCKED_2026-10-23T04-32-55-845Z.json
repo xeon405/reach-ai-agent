@@ -1,0 +1,40 @@
+{
+  "commit": "unknown",
+  "generated_at": "2026-10-23T04:32:55.848Z",
+  "blocked": true,
+  "blocked_reason": "Every call failed before a usable Understanding. The only GROQ secret exposed to this environment is a 64-hex hash, not a gsk_ key; Groq returns 401 invalid_api_key.",
+  "model_config": "openai/gpt-oss-120b",
+  "temperature": 0.2,
+  "cost_rates_usd_per_1m": {
+    "input": 0.2,
+    "output": 0.8
+  },
+  "results": [
+    {
+      "id": 1,
+      "split": "dev",
+      "message": "pzze the diwali campaign",
+      "expected_intent": "pause_campaign",
+      "also_acceptable": [],
+      "expected_params": {
+        "campaign_name": "diwali"
+      },
+      "tags": [
+        "typo"
+      ],
+      "ai_kind": "error",
+      "ai_intent": null,
+      "ai_params": {},
+      "intent_ok": null,
+      "params_ok": null,
+      "both_ok": false,
+      "model": "openai/gpt-oss-20b",
+      "status": 401,
+      "latency_ms": 432,
+      "input_tokens": null,
+      "output_tokens": null,
+      "est_cost_usd": null,
+      "error": "understand() returned null (last HTTP 401)"
+    }
+  ]
+}
