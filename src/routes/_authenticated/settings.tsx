@@ -371,6 +371,16 @@ function SettingsPage() {
             </Button>
           )}
         </div>
+        {!gmail && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Google will show an "unverified app" warning — that is normal for a new app and
+            does not affect your security. Click{" "}
+            <span className="font-medium text-foreground">Advanced</span>, then{" "}
+            <span className="font-medium text-foreground">Go to OutshipAi (unsafe)</span> to
+            continue. We only ask for permission to send emails as you and to read replies to
+            those emails.
+          </p>
+        )}
       </Section>
 
       <Section title="Notifications">
