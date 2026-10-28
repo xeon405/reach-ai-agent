@@ -20,7 +20,7 @@ import {
 } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { signToken } from "../_shared/crypto.ts";
-import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
+import { REPLY_CONTINUITY_RULES, stripFabricatedPhones } from "../_shared/ai-lib.ts";
 import { resolveAgentConfig, replyPolicySuffix, type AgentConfig } from "../_shared/agent-config.ts";
 import { openAiCall, type AiCallHandle, type GateContext } from "../_shared/ai-cost-gate.ts";
 import {
@@ -419,7 +419,13 @@ async function gatedChat(
   const gate = await openAiCall(db, { ...ctx, groqChat });
   if (gate.mode !== "ai") return null;
   const promptText = messages.map((m) => (m.role === "system" ? "SYSTEM:\n" : "") + m.content).join("\n---\n");
-  return gate.run(promptText, opts);
+  const out = await gate.run(promptText, opts);
+  if (!out) return out;
+  // Hard backstop: the model may only ever repeat contact details it was
+  // actually given (settings / knowledge base / the lead's own words). Anything
+  // it invents — e.g. a made-up phone number — is stripped before it is used.
+  const { text } = stripFabricatedPhones(out, promptText);
+  return text;
 }
 
 Deno.serve(async (req) => {
@@ -677,7 +683,7 @@ Deno.serve(async (req) => {
                   kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
                 }, [{
                   role: "user",
-                  content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
+                  content: `${buildBIContext(profile, { sharePhone: true })}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 600)}"
 Conversation so far (do not repeat any link, offer, or CTA already there):
@@ -738,7 +744,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                 kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
               }, [{
                 role: "user",
-                content: `${buildBIContext(profile)}A reply arrived to a cold email you sent.
+                content: `${buildBIContext(profile, { sharePhone: true })}A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}
 Their exact words: "${sanitizeForPrompt(fullReplyText || snippet, 900)}"
 Your original email (read it — do not repeat its offer, link, or CTA):
@@ -1093,7 +1099,7 @@ const siteKnowledge = await fetchSiteKnowledge(profile.website_url);
                     kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
                   }, [{
                     role: "user",
-                    content: `${buildBIContext(profile)}A lead just replied asking how to get started / book a meeting.
+                    content: `${buildBIContext(profile, { sharePhone: true })}A lead just replied asking how to get started / book a meeting.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)}
 Their newest message: "${sanitizeForPrompt(theirWords, 600)}"
 Conversation so far (do not repeat any link, offer or CTA already there):
@@ -1152,7 +1158,7 @@ Write a short warm reply (2-3 sentences) on behalf of ${sanitizeForPrompt(profil
                     kind: "escalate", plan: profile?.plan ?? null, fn: "inbox-agent",
                   }, [{
                     role: "user",
-                    content: `${buildBIContext(profile)}A lead in an ongoing email conversation has asked something that needs the owner (${sanitizeForPrompt(profile.name ?? "the owner", 40)}) to answer personally — it should not be answered by automation.
+                    content: `${buildBIContext(profile, { sharePhone: true })}A lead in an ongoing email conversation has asked something that needs the owner (${sanitizeForPrompt(profile.name ?? "the owner", 40)}) to answer personally — it should not be answered by automation.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}.
 Their newest message: "${sanitizeForPrompt(theirWords, 700)}"
 Conversation so far (do not repeat anything already shared):
@@ -1211,7 +1217,7 @@ Write a short (2-3 sentence) reply: (1) thank them / acknowledge their point, (2
                   kind: "reply_draft", plan: profile?.plan ?? null, fn: "inbox-agent",
                 }, [{
                   role: "user",
-                  content: `${buildBIContext(profile)}Ongoing email conversation with a lead.
+                  content: `${buildBIContext(profile, { sharePhone: true })}Ongoing email conversation with a lead.
 Lead: ${sanitizeForPrompt(lead.name ?? lead.email, 80)} (${sanitizeForPrompt(lead.job_title, 80) || "professional"}) at ${sanitizeForPrompt(lead.company, 120)}${lead.country ? `, ${sanitizeForPrompt(lead.country, 40)}` : ""}.
 Their newest message: "${sanitizeForPrompt(theirWords, 900)}"
 Thread topic: ${sanitizeForPrompt(t.subject ?? "our services", 100)}

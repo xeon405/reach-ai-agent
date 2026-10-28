@@ -129,7 +129,7 @@ export async function searchGoogleMaps(
   extraPhrases?: string[],
   extraAreas?: SearchRegionSpec[],
   enrichmentBudget?: number,
-  enrich = true,
+  enrich: boolean | number = true,
 ): Promise<SearchResult> {
   const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
   if (!apiKey) return { leads: [], quotaHit: false, apiCalls: 0 };
@@ -138,6 +138,17 @@ export async function searchGoogleMaps(
   const phrases = [jobTitle, ...(extraPhrases ?? []).filter((p) => String(p).trim().toLowerCase() !== jobTitle.toLowerCase())]
     .slice(0, 3);
   const budget = enrichmentBudget ?? Math.max(limit, 25) * 2;
+
+  // `enrich` may be true (crawl every site), false (crawl none), or a number =
+  // the max number of websites to crawl inline. A numeric cap keeps the live
+  // request under the worker's CPU limit (HTTP 546): the businesses beyond the
+  // cap are still returned, just email-less, and filled in later by the
+  // background website-crawl job.
+  const enrichCap = enrich === true
+    ? Number.POSITIVE_INFINITY
+    : enrich === false
+    ? 0
+    : Math.max(0, Math.floor(enrich));
 
   // Prefer explicit areas (AI-suggested), then the typed location, then sampled
   // metros so country-wide searches vary between requests.
@@ -149,7 +160,7 @@ export async function searchGoogleMaps(
 
   const seenEmails = new Set<string>();
   const seenPlaceIds = new Set<string>();
-  const shared = { set: seenEmails, seenPlaceIds, enrichmentsUsed: 0, quotaHit: false, apiCalls: 0, enrich };
+  const shared = { set: seenEmails, seenPlaceIds, enrichmentsUsed: 0, quotaHit: false, apiCalls: 0, enrichCap };
   const leads: GoogleMapsLead[] = [];
 
   for (const r of regions) {
@@ -169,7 +180,7 @@ async function searchRegion(
   region: string | undefined,
   limit: number,
   perRegionCap: number,
-  shared: { set: Set<string>; seenPlaceIds: Set<string>; enrichmentsUsed: number; quotaHit: boolean; apiCalls: number; enrich: boolean },
+  shared: { set: Set<string>; seenPlaceIds: Set<string>; enrichmentsUsed: number; quotaHit: boolean; apiCalls: number; enrichCap: number },
   bumpEnrich: () => void,
   budget: number,
   where: string,
@@ -264,8 +275,19 @@ async function searchRegion(
       const withWebsite = resolved.filter((c): c is NonNullable<typeof c> => c !== null);
       if (withWebsite.length === 0) break;
 
-      for (const c of withWebsite) {
-        if (leads.length >= limit || leads.length >= perRegionCap || shared.enrichmentsUsed >= budget || shared.quotaHit) break;
+      // Crawl the allowed candidates in parallel. Sequential crawling made a
+      // 25-result search take ~40s; a small width keeps wall time sane while the
+      // per-page byte cap keeps CPU under the worker limit. Candidates beyond
+      // the live cap (and any with no email) are returned email-less and filled
+      // later by website-crawl.
+      const allowed = Math.min(
+        withWebsite.length,
+        Math.max(0, limit - leads.length),
+        Math.max(0, perRegionCap - leads.length),
+      );
+      if (allowed <= 0) break;
+      const enrichRoom = Math.min(allowed, Math.max(0, shared.enrichCap - shared.enrichmentsUsed));
+      const enriched = await pMap(withWebsite.slice(0, allowed), 4, async (c, i) => {
         const { city, country: parsedCountry } = parseCityCountry(c.address, "");
         const countryName = String(parsedCountry ?? "").toLowerCase();
         const category = formatCategory(c.place.types, c.place.primaryType);
@@ -285,13 +307,7 @@ async function searchRegion(
           place_id: c.place.id,
         };
 
-        // Background warming skips this: crawling every website is heavy and
-        // can exhaust the worker's compute. Those rows are saved email-less and
-        // filled later by website-crawl, which has its own budget.
-        if (!shared.enrich) {
-          leads.push({ ...base, email: "" });
-          continue;
-        }
+        if (i >= enrichRoom) return { ...base, email: "" };
 
         // Step 3: Enrich website for publicly displayed emails — pick the single
         // best email so one business never floods the list with duplicates.
@@ -304,16 +320,16 @@ async function searchRegion(
 
         if (best) {
           shared.set.add(best.email);
-          leads.push({
+          return {
             ...base,
             email: best.email,
             email_source: best.source_type === "mailto" ? "website-mailto" : "website-text",
             email_source_url: best.source_url,
-          });
-        } else {
-          leads.push({ ...base, email: "" });
+          };
         }
-      }
+        return { ...base, email: "" };
+      });
+      leads.push(...enriched);
 
       pageToken = data.nextPageToken;
       if (!pageToken) break;

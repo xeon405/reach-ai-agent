@@ -37,6 +37,11 @@ const METADATA_RE = /content=["']([^"']*?@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}?)["']/gi
 const MAX_PAGES = 5;
 const PER_PAGE_TIMEOUT_MS = 6_000;
 const TOTAL_TIMEOUT_MS = 25_000;
+// Cap the HTML we read per page. Business sites can be many MB; regex-scanning
+// all of it is what exhausted the worker's 2s CPU budget (HTTP 546). Email
+// addresses are almost always in the head/footer/contact markup, so the first
+// ~256 KB is plenty and keeps the crawl cheap.
+const MAX_BYTES_PER_PAGE = 256_000;
 
 function normalizeEmail(raw: string): string {
   return raw.toLowerCase().trim().replace(/\s+/g, "");
@@ -159,6 +164,35 @@ function discoverLinks(html: string, baseOrigin: string): string[] {
   return scored.map((s) => s.url);
 }
 
+async function readCapped(res: Response, maxBytes: number): Promise<string> {
+  const reader = res.body?.getReader();
+  if (!reader) return (await res.text()).slice(0, maxBytes);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        total += value.length;
+      }
+    }
+  } catch {
+    // fall through with whatever we already read
+  }
+  try { await reader.cancel(); } catch { /* already closed */ }
+  const merged = new Uint8Array(Math.min(total, maxBytes));
+  let off = 0;
+  for (const c of chunks) {
+    const take = Math.min(c.length, merged.length - off);
+    if (take <= 0) break;
+    merged.set(c.subarray(0, take), off);
+    off += take;
+  }
+  return new TextDecoder("utf-8", { fatal: false }).decode(merged);
+}
+
 async function fetchPage(url: string, signal: AbortSignal): Promise<string | null> {
   try {
     const res = await fetch(url, {
@@ -172,7 +206,7 @@ async function fetchPage(url: string, signal: AbortSignal): Promise<string | nul
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") ?? "";
     if (!ct.includes("text/html") && !ct.includes("application/xhtml")) return null;
-    return await res.text();
+    return await readCapped(res, MAX_BYTES_PER_PAGE);
   } catch {
     return null;
   }

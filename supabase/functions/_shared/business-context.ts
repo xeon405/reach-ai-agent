@@ -32,6 +32,7 @@ export interface BusinessProfile {
   communication_style?: string | null;
   dont_claim?: string | null;
   website_url?: string | null;
+  phone?: string | null;
   plan?: string | null;
 }
 
@@ -85,7 +86,10 @@ function normaliseCities(raw: unknown): string[] {
   return out;
 }
 
-export function buildBIContext(profile: Record<string, unknown>): string {
+export function buildBIContext(
+  profile: Record<string, unknown>,
+  opts: { sharePhone?: boolean } = {},
+): string {
   const parts: string[] = [];
   // Deliberately terse. This block competes for the model's attention with the
   // shorter conversation-derived profile, and at full length the model kept
@@ -98,6 +102,10 @@ export function buildBIContext(profile: Record<string, unknown>): string {
   const cities = normaliseCities(profile.cities);
   if (cities.length) parts.push(`Cities they sell in: ${cities.join(", ")}`);
   if (profile.website_url) parts.push(`Their website: ${clean(profile.website_url, 100)}`);
+  // Only surfaced on live lead replies (opt-in), never in cold-email generation,
+  // and it is the ONLY phone the reply AI is ever allowed to write.
+  if (opts.sharePhone && profile.phone)
+    parts.push(`Owner's direct phone (the ONLY number you may ever share, and only when the lead asks to call or asks for a number): ${clean(profile.phone, 40)}`);
   if (profile.autopilot_niche) parts.push(`Chosen niche: ${clean(profile.autopilot_niche, 70)}`);
   if (profile.communication_style)
     parts.push(`Tone & style: ${clean(profile.communication_style, 160)}`);

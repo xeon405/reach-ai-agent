@@ -6,7 +6,7 @@ import { nextLifecycle } from "../_shared/policy.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { APP_BASE_URL } from "../_shared/app-base-url.ts";
 import { signToken } from "../_shared/crypto.ts";
-import { REPLY_CONTINUITY_RULES } from "../_shared/ai-lib.ts";
+import { REPLY_CONTINUITY_RULES, stripFabricatedPhones } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -140,7 +140,7 @@ serve(async (req) => {
     // Load sender profile + Gmail credentials (decrypted transparently)
     const { data: profile } = await admin
       .from("profiles")
-      .select("gmail_connected, name, email, gmail_email")
+      .select("gmail_connected, name, email, gmail_email, phone")
       .eq("id", userId)
       .single();
     if (!profile?.gmail_connected) throw new Error("Gmail not connected. Connect it in Settings first.");
@@ -176,19 +176,20 @@ serve(async (req) => {
         }
       }
       const threadHistory = await fetchThreadHistory(tok, msgThreadId, toEmail, profile?.gmail_email ?? "");
-      const fresh = await groqChat([{
-        role: "user",
-        content: `A reply arrived to a cold email you sent.
+      const regenPrompt = `A reply arrived to a cold email you sent.
 Lead: ${sanitizeForPrompt(leadRow?.name ?? toEmail, 80)} (${sanitizeForPrompt(leadRow?.job_title, 80) || "professional"}) at ${sanitizeForPrompt(leadRow?.company, 120)}${leadRow?.country ? `, ${sanitizeForPrompt(String(leadRow.country), 40)}` : ""}
 Their exact words: "${theirWords || "(no newer message found — write a gentle nudge referencing the original outreach)"}"
 You originally offered: ${sanitizeForPrompt(prof?.offer ?? "our services")}${prof?.booking_link ? `
-Their booking link: ${prof.booking_link} — invite them to book there (only if not already shared in the thread below).` : ""}
+Their booking link: ${prof.booking_link} — invite them to book there (only if not already shared in the thread below).` : ""}${profile?.phone ? `
+If they ask to call or ask for a number, you MAY share the owner's number exactly once, written exactly as: ${sanitizeForPrompt(String(profile.phone), 40)}. Never write any other number.` : `
+If they ask to call or ask for a number, do NOT give any number — say you'll get them the details personally, or ask for the best number and time to reach them. Never invent or guess a number.`}
 ${threadHistory ? `\nConversation so far (lines marked "You:" are the sender's OWN previous replies — never contradict them, never re-offer what is already there):\n"${sanitizeForPrompt(threadHistory, 1800)}"` : ""}
 
 Write a 3-4 sentence human reply on behalf of ${prof?.name || "the sender"}. Warm, confident, zero fluff.
 Rules: respond to something SPECIFIC they said. Answer the question they actually asked first. Ask exactly one question moving toward a call. Do NOT reuse generic phrasing like "I hope this finds you well". Never invent prices or facts. Sign off as "Best regards". Return only the reply text.${row.ai_draft ? `
-IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft, 300)}" — write COMPLETELY different wording, structure and opening line.` : ""}${REPLY_CONTINUITY_RULES}`,
-      }], { maxTokens: 600, temperature: 0.9, context: { fn: "send-reply", kind: "regen", user_id: userId, lead_id: row.lead_id ?? null } });
+IMPORTANT: A previous reply sent to them was: "${sanitizeForPrompt(row.ai_draft, 300)}" — write COMPLETELY different wording, structure and opening line.` : ""}${REPLY_CONTINUITY_RULES}`;
+      const freshRaw = await groqChat([{ role: "user", content: regenPrompt }], { maxTokens: 600, temperature: 0.9, context: { fn: "send-reply", kind: "regen", user_id: userId, lead_id: row.lead_id ?? null } });
+      const fresh = freshRaw ? stripFabricatedPhones(freshRaw, regenPrompt).text : freshRaw;
       if (fresh?.trim()) {
         replyBody = fresh.trim();
         await admin.from("emails_sent").update({ ai_draft: replyBody }).eq("id", emailId);

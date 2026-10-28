@@ -149,11 +149,50 @@ CONTINUITY RULES (non-negotiable):
 
 AUTHORITY RULES (the owner does not read routine email — you are the voice of the business):
 - PRICING: our price is FIXED and cannot be changed, discounted or negotiated by you. State the published price from the knowledge base, then briefly re-state the value and hold the line warmly. If the knowledge base has no price, say it is on the site and stop. NEVER invent an amount, and never hint that a discount is possible.
+- CONTACT DETAILS: never invent or guess any contact details — phone / mobile / WhatsApp number, street address, email address, or social handle. Only ever share details that are written in the context above (the owner's settings or the knowledge base). If the lead asks for a phone number or a way to call and no number is given in the context, do NOT provide one — say briefly that you'll get them the details personally, or ask for the best number and a good time to reach them.
 - ANGRY / UNHAPPY CUSTOMERS: stay calm, warm and professional. Acknowledge the frustration genuinely, apologise once (no grovelling), state the true facts from the knowledge base, and give the concrete next step. NEVER be defensive, sarcastic, passive-aggressive, or argue back. NEVER blame the customer. Do not over-explain or repeat the same point three times.
 - SECURITY / PRIVACY / LEGAL QUESTIONS: answer factually ONLY from what the published knowledge base actually says. Summarise the policy, do not give legal advice, and do not interpret anything in the lead's favour. If the knowledge base is silent on the specific question, say honestly that you will get it confirmed for them and offer a point of contact — never guess at a policy.
 - SHORT OR UNCLEAR BUT FRIENDLY REPLIES ("its cool", "wow", "ok", "nice", "thanks", "here is conversation?"): never treat these as a reason to stay silent. Warmly acknowledge and thank them for the kind words, reflect back what they said, and invite the natural next step with ONE easy question. Do not demand they explain themselves or say you did not understand.
 - NEVER mention that you are an AI, and never say you will pass the message to a human unless the context explicitly says a human is taking over.
 `;
+
+/** Strips any digit collection that looks like a phone number but did NOT appear
+ *  anywhere in the text the model was given (its prompt/context). This is the
+ *  hard backstop for the "never invent contact details" rule: even if the model
+ *  slips and writes a made-up number, it never reaches the lead. Numbers that
+ *  ARE present in the source (the owner's configured phone, the knowledge base,
+ *  the lead's own words) are left untouched. */
+const PHONE_CANDIDATE_RE = /\+?\d[\d\s().\-]{6,}\d/g;
+function digitsOnly(s: string): string {
+  return s.replace(/\D/g, "");
+}
+export function stripFabricatedPhones(reply: string, sourceText: string): { text: string; stripped: boolean } {
+  if (!reply) return { text: reply, stripped: false };
+  const given = digitsOnly(sourceText);
+  const wasGiven = (d: string): boolean =>
+    given.includes(d) ||                       // exact digits
+    (d.length >= 10 && given.includes(d.slice(-10))) || // formatting / country-code drift
+    given.includes(d.replace(/^0+/, ""));      // trunk-prefix "0" drift
+  let stripped = false;
+  const out = reply.replace(PHONE_CANDIDATE_RE, (match) => {
+    const d = digitsOnly(match);
+    if (d.length < 10 || d.length > 15) return match; // not phone-like (prices, dates, ids)
+    if (wasGiven(d)) return match;                     // was actually provided in context
+    stripped = true;
+    return "";
+  });
+  let text = out
+    .replace(/[([{]\s*(?=[.,!?;:)]|$)/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([.,!?;:])/g, "$1")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  // If stripping the number gutted the reply, send nothing rather than a broken
+  // sentence — the caller falls back to the safe/owner path.
+  if (stripped && text.length < 25) text = "";
+  return { text, stripped };
+}
 
 export const PLAN_CAPS: Record<string, { emails: number; leads: number }> = {
   free: { emails: 10, leads: 25 },

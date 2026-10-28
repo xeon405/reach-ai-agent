@@ -37,6 +37,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Live search crawls only a few websites inline to stay under the worker's 2s
+// CPU limit (HTTP 546). The pages are now read with a hard byte cap (see
+// website-email-enrichment.ts), so a handful is cheap; the remaining businesses
+// come back email-less and are filled in shortly after by the background
+// website-crawl job kicked off below.
+const LIVE_ENRICH_LIMIT = 10;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -98,13 +105,38 @@ serve(async (req) => {
     // Serve fresh cached results first — quota is only spent on new chemistry.
     const cached = await cacheGet<CachePayload>(supabase, "leads", cacheKey);
     if (cached) {
+      // Live search now returns most businesses email-less (bounded crawling);
+      // the background website-crawl job fills their emails a little later.
+      // Re-hydrate any that have since been filled so a repeat search shows them.
+      const cachedLeads = (cached.leads ?? []) as Lead[];
+      const missingIds = cachedLeads.filter((l) => !l.email && l.place_id).map((l) => l.place_id);
+      if (missingIds.length > 0) {
+        const { data: filled } = await supabase
+          .from("saved_businesses")
+          .select("place_id, email, email_source, email_source_url, email_status, email_confidence, email_is_role, email_is_disposable, email_verification_reason")
+          .in("place_id", missingIds.slice(0, 100))
+          .not("email", "is", null);
+        const byId = new Map((filled ?? []).map((r) => [String(r.place_id), r]));
+        for (const l of cachedLeads) {
+          const f = l.place_id ? byId.get(String(l.place_id)) : undefined;
+          if (!f?.email) continue;
+          l.email = String(f.email);
+          l.email_source = f.email_source ? String(f.email_source) : undefined;
+          l.email_source_url = f.email_source_url ? String(f.email_source_url) : undefined;
+          l.email_status = f.email_status ? String(f.email_status) : undefined;
+          l.email_confidence = typeof f.email_confidence === "number" ? f.email_confidence : undefined;
+          l.email_is_role = typeof f.email_is_role === "boolean" ? f.email_is_role : undefined;
+          l.email_is_disposable = typeof f.email_is_disposable === "boolean" ? f.email_is_disposable : undefined;
+          l.email_verification_reason = f.email_verification_reason ? String(f.email_verification_reason) : undefined;
+        }
+      }
       await insertAudit(supabase, {
         user_id: userId,
         campaign_id: campaignId,
         event: "lead.searched",
-        payload: { count: cached.leads?.length ?? 0, country, jobTitle, source: cached.source, cached: true },
+        payload: { count: cachedLeads.length, country, jobTitle, source: cached.source, cached: true },
       });
-      return json({ ...cached, cached: true });
+      return json({ ...cached, leads: cachedLeads, cached: true });
     }
 
     let leads: Lead[] = [];
@@ -168,6 +200,8 @@ serve(async (req) => {
           location,
           aiPlan?.variants ?? [],
           extraAreas,
+          undefined,
+          LIVE_ENRICH_LIMIT,
         );
         if (gres.quotaHit) quotaHit = true;
         await recordGoogleSearches(supabase, gres.apiCalls);
@@ -346,12 +380,18 @@ serve(async (req) => {
       }
     }
 
+    const withEmailCount = verifiedLeads.filter((l) => !!l.email).length;
+    const pendingCount = verifiedLeads.length - withEmailCount;
     let message =
       leads.length === 0
         ? source === "google-maps"
-          ? `No businesses with public emails found for "${jobTitle}" in ${country || "United States"}. Try another niche or country, or import a CSV.`
-          : `No public emails found for "${jobTitle}" in ${country || "United States"}. Try "dentist", "gym", "restaurant", "salon", "lawyer" — or import a CSV.`
-        : `Found ${verifiedLeads.length} businesses with public emails (${source}). Review and add the ones you want.`;
+          ? `No businesses found for "${jobTitle}" in ${country || "United States"}. Try another niche or country, or import a CSV.`
+          : `No businesses found for "${jobTitle}" in ${country || "United States"}. Try "dentist", "gym", "restaurant", "salon", "lawyer" — or import a CSV.`
+        : `Found ${verifiedLeads.length} businesses (${source}). ${withEmailCount} have emails ready${
+            pendingCount > 0
+              ? `; the other ${pendingCount} are being fetched in the background and will appear shortly`
+              : ""
+          }. Review and add the ones you want.`;
     if (aiCurated) message += ` AI: ${aiCurated}`;
 
     // Grow "our own map": merge any remembered rows not already shown, then save
@@ -367,6 +407,22 @@ serve(async (req) => {
     }
     await saveBusinesses(supabase, verifiedLeads, nicheKey, countryStr);
     if (cityKey) await markCoverageRefreshed(supabase, nicheKey, countryStr, cityKey, String(location ?? ""));
+
+    // Some businesses came back without an email (we no longer crawl inline to
+    // dodge the 2s CPU limit). Kick the background crawler right away so their
+    // emails are filled shortly after this response — fire-and-forget, so the
+    // search still returns immediately.
+    if (verifiedLeads.some((l) => !l.email)) {
+      const crawlSecret = Deno.env.get("CRON_SECRET");
+      const crawlUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/website-crawl`;
+      if (crawlSecret) {
+        const kickoff = fetch(crawlUrl, { method: "POST", headers: { "x-cron-secret": crawlSecret } })
+          .then(() => {})
+          .catch(() => {});
+        const et = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+        if (et?.waitUntil) et.waitUntil(kickoff);
+      }
+    }
 
     // Cache the finished result so the next identical request (within TTL) is
     // served without spending more Places quota or re-enriching websites.

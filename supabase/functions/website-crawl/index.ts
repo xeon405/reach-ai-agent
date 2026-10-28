@@ -13,8 +13,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { enrichWebsiteEmails } from "../_shared/website-email-enrichment.ts";
 import { verifyEmail } from "../_shared/email-verifier.ts";
 
-const DAILY_CAP = 80;
-const PER_RUN_MAX = 16;
+const DAILY_CAP = 150;
+const PER_RUN_MAX = 10;
 const CONCURRENCY = 8;
 const RECHECK_DAYS = 30;
 
@@ -75,7 +75,10 @@ serve(async (req) => {
     .not("website", "is", null)
     .neq("website", "")
     .or(`email_crawl_at.is.null,email_crawl_at.lt.${recheckIso}`)
-    .order("email_crawl_at", { ascending: true, nullsFirst: true })
+    // Newest discoveries first: when a user searches, their fresh businesses
+    // (saved moments ago) should get emails before the multi-thousand-row
+    // historical backlog, so a re-search shows results quickly.
+    .order("last_seen", { ascending: false })
     .limit(Math.max(1, Math.min(budget, PER_RUN_MAX)));
 
   if (error) return json({ error: error.message }, 500);
