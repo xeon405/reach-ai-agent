@@ -21,7 +21,7 @@ const STEPS = [
   {
     icon: Search,
     title: "Find real businesses",
-    body: "We look at public map and directory data — real companies, with a name, a category and usually a website. We check the site before we write to it. No purchased lists, no scraped consumer emails, no guessing an address into existence.",
+    body: "We find real companies — a name, a category, and usually a website. We check the site before we write to it. No purchased lists, no scraped consumer emails, no guessing an address into existence.",
   },
   {
     icon: Mail,
@@ -156,8 +156,9 @@ function AboutPage() {
         <div className="rounded-2xl border border-border bg-card p-7 shadow-card">
           <h2 className="font-semibold">How we make money</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            One subscription. There are no per-email charges, no "credits" that quietly expire, and
-            no setup fee. Self-serve plans are{" "}
+            One subscription, per account, covering one connected email address. There are no
+            per-contact, per-lead or per-email charges, no "credits" that quietly expire, and no
+            setup fee. Self-serve plans are{" "}
             <Link to="/" hash="pricing" className="text-primary underline underline-offset-4">
               $37, $79 or $149 per month
             </Link>{" "}
@@ -171,6 +172,10 @@ function AboutPage() {
               refund policy
             </Link>{" "}
             is short and readable.
+          </p>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            One account sends from one address. A second address is a second account, not an add-on
+            — the limit exists so one plan can't be split across several mailboxes.
           </p>
         </div>
 
