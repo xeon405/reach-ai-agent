@@ -44,7 +44,7 @@ const nav = [
 const pageTitles: Array<[string, string]> = [
   ["/dashboard", "Dashboard"],
   ["/agent", "Agent"],
-  ["/leads", "Leads"],
+  ["/leads", "Contacts"],
   ["/campaigns", "Campaigns"],
   ["/emails", "Emails"],
   ["/billing", "Billing"],

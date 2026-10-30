@@ -82,7 +82,7 @@ function LeadsPage() {
     setLeads((prev) => prev.filter((l) => l.id !== id));
     const counts = (data as { row_counts?: Record<string, number> } | null)?.row_counts ?? {};
     const total = Object.values(counts).reduce((a, b) => a + (Number(b) || 0), 0);
-    toast.success(`Lead deleted — ${total} history rows erased`);
+    toast.success(`Contact deleted — ${total} history rows erased`);
   }
 
   async function setLeadStatus(id: string, next: string) {
@@ -171,7 +171,7 @@ function LeadsPage() {
       status: "new",
     });
     if (error) { toast.error(error.message); return; }
-    toast.success("Lead added!");
+    toast.success("Contact added!");
     setForm({ name: "", email: "", company: "", job_title: "", country: "", campaign_id: "" });
     setAddOpen(false);
     load();
@@ -256,8 +256,8 @@ function LeadsPage() {
     <div className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Leads</h1>
-          <p className="text-xs text-muted-foreground">{filtered.length} leads</p>
+          <h1 className="text-lg font-semibold tracking-tight">Contacts</h1>
+          <p className="text-xs text-muted-foreground">{filtered.length} contacts</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={exportCsv}>
@@ -281,11 +281,11 @@ function LeadsPage() {
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Lead
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Contact
               </Button>
             </DialogTrigger>
             <DialogContent className="w-full max-w-lg">
-              <DialogHeader><DialogTitle>Add Lead</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Add Contact</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <Input placeholder="Full name" value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -346,7 +346,7 @@ function LeadsPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={addLead}>Add Lead</Button>
+                <Button onClick={addLead}>Add Contact</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -406,7 +406,7 @@ function LeadsPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr><td colSpan={10} className="px-4 py-16 text-center text-muted-foreground">
-                No leads yet. Use "Find Leads with AI" or add manually.
+                No contacts yet. Use "Find Leads with AI" or add manually.
               </td></tr>
             ) : filtered.map((l) => (
               <tr key={l.id} className="border-t border-border hover:bg-muted/20">

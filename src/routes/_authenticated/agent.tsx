@@ -94,13 +94,13 @@ const TREE: MenuNode[] = [
     ],
   },
   {
-    label: "Leads",
+    label: "Contacts",
     children: [
       { label: "Find new contacts", href: "/lead-finder" },
-      { label: "See all leads", href: "/leads" },
+      { label: "See all contacts", href: "/leads" },
       { label: "Search my saved contacts", message: "find new contacts" },
       { label: "Who should I email?", message: "who should i email" },
-      { label: "Add a lead", href: "/leads?add=1" },
+      { label: "Add a contact", href: "/leads?add=1" },
     ],
   },
   {
@@ -138,7 +138,7 @@ const ROOT: MenuNode = { label: "", children: TREE };
 type NodeStyle = { icon: LucideIcon; tint: string };
 const NODE_STYLE: Record<string, NodeStyle> = {
   Campaigns: { icon: Megaphone, tint: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-  Leads: { icon: Users, tint: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
+  Contacts: { icon: Users, tint: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
   Results: { icon: BarChart3, tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   Inbox: { icon: Inbox, tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
   Safety: { icon: ShieldCheck, tint: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
