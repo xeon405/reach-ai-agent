@@ -66,6 +66,13 @@ function LeadsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [q, setQ] = useState("");
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
+  // Bulk selection. Only ever holds ids the owner ticked by hand or via
+  // "select all" on the rows currently visible, so a filter can never make
+  // hidden contacts disappear along with the visible ones.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkCount, setBulkCount] = useState(0);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   async function deleteLead(id: string) {
     if (!window.confirm("Delete this lead? This permanently removes it AND all its history (memory, emails, meetings, tracking, scores). This cannot be undone.")) return;
@@ -241,6 +248,68 @@ function LeadsPage() {
     return matchQ && matchC && matchS && matchCamp;
   });
 
+  const allVisibleSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** Select-all works on the rows in view only: what you see is what you get. */
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) for (const l of filtered) next.delete(l.id);
+      else for (const l of filtered) next.add(l.id);
+      return next;
+    });
+  }
+
+  /** Erasure is one lead per call, so bulk runs a small pool of workers and
+   *  reports honestly: successes are removed from the list, failures keep
+   *  their rows and trigger a reload so the screen matches the database. */
+  async function deleteSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    setBulkProgress({ done: 0, total: ids.length });
+
+    let ok = 0, failed = 0, rows = 0;
+    const queue = [...ids];
+    const worker = async () => {
+      for (;;) {
+        const id = queue.shift();
+        if (!id) return;
+        const { data, error } = await supabase.functions.invoke("lead-erasure", {
+          body: { action: "delete", leadId: id },
+        });
+        if (error) {
+          failed++;
+        } else {
+          ok++;
+          setLeads((prev) => prev.filter((l) => l.id !== id));
+          setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+          const counts = (data as { row_counts?: Record<string, number> } | null)?.row_counts ?? {};
+          rows += Object.values(counts).reduce((a, b) => a + (Number(b) || 0), 0);
+        }
+        setBulkProgress({ done: ok + failed, total: ids.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, ids.length) }, worker));
+
+    setBulkProgress(null);
+    setBulkOpen(false);
+    if (failed > 0) {
+      toast.error(`${ok} deleted, ${failed} failed — the list has been refreshed`);
+      void load();
+      return;
+    }
+    toast.success(`${ok} ${ok === 1 ? "contact" : "contacts"} deleted — ${rows} history rows erased`);
+  }
+
   function exportCsv() {
     const header = ["Name", "Company", "Job Title", "Country", "Email", "Status", "Date Added"];
     const rows = filtered.map((l) => [l.name, l.company, l.job_title, l.country, l.email, l.status, l.created_at]);
@@ -386,10 +455,57 @@ function LeadsPage() {
         </Select>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => { setBulkCount(selected.size); setBulkOpen(true); }}>
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete selected
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Dialog open={bulkOpen} onOpenChange={(o) => { if (!bulkProgress) setBulkOpen(o); }}>
+        <DialogContent className="w-full max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Delete {bulkCount} {bulkCount === 1 ? "contact" : "contacts"}?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This permanently removes {bulkCount === 1 ? "it" : "them"} AND all history (memory,
+            emails, meetings, tracking, scores). This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={!!bulkProgress}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void deleteSelected()} disabled={!!bulkProgress}>
+              {bulkProgress
+                ? `Deleting ${bulkProgress.done} of ${bulkProgress.total}…`
+                : `Delete ${bulkCount}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
+              <th className="w-10 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all contacts in view"
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+              </th>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Temp</th>
               <th className="px-4 py-3">Company</th>
@@ -405,11 +521,20 @@ function LeadsPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-16 text-center text-muted-foreground">
+              <tr><td colSpan={12} className="px-4 py-16 text-center text-muted-foreground">
                 No contacts yet. Use "Find Leads with AI" or add manually.
               </td></tr>
             ) : filtered.map((l) => (
-              <tr key={l.id} className="border-t border-border hover:bg-muted/20">
+              <tr key={l.id} className={`border-t border-border hover:bg-muted/20 ${selected.has(l.id) ? "bg-primary/5" : ""}`}>
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(l.id)}
+                    onChange={() => toggleSelected(l.id)}
+                    aria-label={`Select ${l.name ?? l.email ?? "contact"}`}
+                    className="h-4 w-4 rounded border-input accent-primary"
+                  />
+                </td>
                 <td className="max-w-[160px] truncate px-4 py-3 font-medium" title={l.name ?? ""}>{l.name ?? "—"}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${temperature(l).cls}`}>
