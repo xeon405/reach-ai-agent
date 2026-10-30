@@ -108,6 +108,18 @@ function LeadsPage() {
 
   useEffect(() => { void load(); }, []);
 
+  // Deep link from the agent menu ("Add a lead" -> /leads?add=1). Open the
+  // dialog straight away, then strip the param so a refresh doesn't reopen it
+  // or leave a stray query string behind.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("add") !== "1") return;
+    setAddOpen(true);
+    params.delete("add");
+    const qs = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+  }, []);
+
   async function load() {
     const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(500);
     setLeads((data as Lead[]) ?? []);

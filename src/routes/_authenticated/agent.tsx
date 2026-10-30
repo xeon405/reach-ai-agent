@@ -100,6 +100,7 @@ const TREE: MenuNode[] = [
       { label: "See all leads", href: "/leads" },
       { label: "Search my saved contacts", message: "find new contacts" },
       { label: "Who should I email?", message: "who should i email" },
+      { label: "Add a lead", href: "/leads?add=1" },
     ],
   },
   {
@@ -281,7 +282,10 @@ function AgentPage() {
     if (m.href) {
       // Leaving the chat entirely, so the tree starts over next time.
       setPath([]);
-      navigate({ to: m.href });
+      // A leaf may carry a query string (e.g. /leads?add=1). `to` only matches
+      // route paths, so those navigate by href instead.
+      if (m.href.includes("?")) navigate({ href: m.href });
+      else navigate({ to: m.href });
       return;
     }
     if (m.message) void send(m.message, false, true);
