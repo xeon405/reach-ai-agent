@@ -80,6 +80,7 @@ function SettingsPage() {
   const [invited, setInvited] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [company, setCompany] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
   const [offer, setOffer] = useState("");
   const [problemSolved, setProblemSolved] = useState("");
@@ -154,6 +155,7 @@ function SettingsPage() {
         setApCountry(p.autopilot_country ?? "");
         setApNiche(p.autopilot_niche ?? "");
         setCompany(p.company ?? "");
+        setBusinessAddress(p.business_address ?? "");
         setBusinessDescription(p.business_description ?? "");
         setOffer(p.offer ?? "");
         setProblemSolved(p.problem_solved ?? "");
@@ -217,6 +219,7 @@ function SettingsPage() {
       .update({
         name,
         company: company || null,
+        business_address: businessAddress.trim() || null,
         notify_replies: notify,
         booking_link: booking.trim() || null,
         website_url: websiteUrl.trim() || null,
@@ -270,6 +273,15 @@ function SettingsPage() {
         <div className="space-y-1.5">
           <Label>Company</Label>
           <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Business address</Label>
+          <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)}
+            placeholder="1 Main Street, Leeds, LS1 1AA, United Kingdom" />
+          <p className="text-xs text-muted-foreground">
+            Required before sending. Your business name and address appear on the emails you send, and we use
+            the pair to keep one free trial per business. It is never published or shown to the people you email.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label>Email</Label>

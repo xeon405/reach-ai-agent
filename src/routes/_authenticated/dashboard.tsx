@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReplyTrendChart, type ReplyTrendPoint } from "@/components/dashboard-charts";
+import { SendGate } from "@/components/send-gate";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -618,6 +619,7 @@ function Dashboard() {
       </div>
 
       {/* Toolbar */}
+      <SendGate />
       <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
         <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
           {DATE_RANGES.map((dr) => (

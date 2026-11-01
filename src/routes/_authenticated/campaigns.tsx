@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Pause, Play, Plus, Trash2, Sparkles, Loader2, Send, Pencil, Eye, Clock, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { TEMPLATES } from "@/lib/templates";
+import { SendGate } from "@/components/send-gate";
 
 export const Route = createFileRoute("/_authenticated/campaigns")({
   component: CampaignsPage,
@@ -324,6 +325,8 @@ function CampaignsPage() {
           </Dialog>
         </div>
       </div>
+
+      <SendGate />
 
       <div className="grid gap-4">
         {items.length === 0 && (

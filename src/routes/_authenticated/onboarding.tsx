@@ -45,6 +45,7 @@ function Onboarding() {
   // Step 3: Links & Assets
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [bookingLink, setBookingLink] = useState("");
   const [hasProductImage, setHasProductImage] = useState(false);
@@ -61,6 +62,7 @@ function Onboarding() {
       if (p) {
         setName(p.name ?? "");
         setCompany(p.company ?? "");
+        setBusinessAddress(p.business_address ?? "");
         setOffer(p.offer ?? "");
         setWebsiteUrl(p.website_url ?? "");
         setBookingLink(p.booking_link ?? "");
@@ -101,6 +103,7 @@ function Onboarding() {
     const { error } = await supabase.from("profiles").update({
       name,
       company: company || null,
+      business_address: businessAddress.trim() || null,
       offer: offer || null,
       icp,
       website_url: websiteUrl.trim() || null,
@@ -125,6 +128,21 @@ function Onboarding() {
       target_icp: icp,
     });
 
+    // The duplicate-business trigger may have flagged this account while we
+    // saved. If so, send the user straight to the explanation instead of
+    // dropping them on a dashboard where nothing sends.
+    const { data: after } = await supabase
+      .from("profiles")
+      .select("domain_required, domain_verified")
+      .eq("id", u.user.id)
+      .single();
+
+    if (after?.domain_required && !after.domain_verified) {
+      toast.success("Setup saved. One more step before sending.");
+      navigate({ to: "/verify-domain" });
+      return;
+    }
+
     toast.success("Your AI agent is configured and ready!");
     navigate({ to: "/dashboard" });
   }
@@ -132,6 +150,7 @@ function Onboarding() {
   const canNext = () => {
     if (step === 1) return businessDescription.trim().length > 0 || offer.trim().length > 0;
     if (step === 2) return countries.length > 0;
+    if (step === 3) return company.trim().length > 0 && businessAddress.trim().length > 0;
     return true;
   };
 
@@ -255,9 +274,19 @@ function Onboarding() {
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex Rivera" />
               </div>
               <div className="space-y-1.5">
-                <Label>Company name</Label>
+                <Label>Business or brand name *</Label>
                 <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc." />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Business address *</Label>
+              <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)}
+                placeholder="1 Main Street, Leeds, LS1 1AA, United Kingdom" />
+              <p className="text-xs text-muted-foreground">
+                Your real business name and address. They appear on the emails you send, so outbound mail
+                carries a truthful sender identity. We also use the pair to keep one free trial per business.
+                It is never published or shown to the people you email.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Website or app URL</Label>
@@ -284,7 +313,7 @@ function Onboarding() {
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-              <Button className="flex-1 bg-primary" onClick={() => setStep(4)}>
+              <Button className="flex-1 bg-primary" onClick={() => setStep(4)} disabled={!canNext()}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -343,6 +372,7 @@ function Onboarding() {
               </Row>
               <Row label="Cities">{cities || "Nationwide"}</Row>
               <Row label="Sender">{name || "—"} {company ? `· ${company}` : ""}</Row>
+              <Row label="Business address">{businessAddress || "—"}</Row>
               <Row label="Website">{websiteUrl || "—"}</Row>
               <Row label="Booking link">{bookingLink || "—"}</Row>
               <Row label="Voice">{communicationStyle || "Default (professional, direct)"}</Row>
