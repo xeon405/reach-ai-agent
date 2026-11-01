@@ -50,6 +50,12 @@ const OPENER_MIN_LIFT = 0.05;
 // strong evidence the tail is waste.
 const SEQ_DEAD_MIN_SENT = 20;
 
+// Reply-shape gate. Judged on MEETINGS, not sentiment: a warm reply that never
+// books anything is not a win. 15 conversations per shape before a shape may be
+// named, and it must beat the campaign's own booking rate by 5 points.
+const REPLY_STYLE_MIN_CONV = 15;
+const REPLY_STYLE_MIN_LIFT = 0.05;
+
 // Exported for the synthetic-data harness (scripts/stage4-simulation.mjs) so
 // the tests assert against the exact constants the fold logic runs with.
 export const TEST_GATES = { MIN_SAMPLE, MIN_DELTA, MIN_SAMPLE_AGG, MIN_PUBLISH_CELL, OPENER_MIN_SENT, OPENER_MIN_LIFT };
@@ -256,6 +262,42 @@ export function foldCampaigns(campaigns: Map<string, any>, meetings: Map<string,
         ? `Every reply in this campaign came at or before step ${lastReplyStep}. Steps ${deadTail[0].step}-${deadTail[deadTail.length - 1].step} have had ${deadTail.reduce((n, s) => n + s.sent, 0)} sends and zero replies. Stopping after step ${lastReplyStep} is likely to save volume without losing replies.`
         : null;
 
+    // ---- reply shape ---------------------------------------------------
+    // Which opening shape books meetings? Counted per CONVERSATION (distinct
+    // lead), because a lead who replies five times is still one conversation and
+    // would otherwise dominate the average. Conversion is a booked meeting —
+    // the business outcome — never reply sentiment.
+    const styleRows = new Map<string, { key: string; conv: Set<string>; met: Set<string> }>();
+    const metThisCampaign = meetings.get(cid);
+    for (const e of emails) {
+      const k = typeof e.reply_style === "string" ? e.reply_style.trim() : "";
+      if (!k || !e.lead_id) continue;
+      const s = styleRows.get(k) ?? { key: k, conv: new Set<string>(), met: new Set<string>() };
+      s.conv.add(e.lead_id);
+      if (metThisCampaign?.has(e.lead_id)) s.met.add(e.lead_id);
+      styleRows.set(k, s);
+    }
+    const styleList = [...styleRows.values()]
+      .map((s) => ({
+        key: s.key,
+        conversations: s.conv.size,
+        meetings: s.met.size,
+        booking_rate: s.conv.size ? Math.round((s.met.size / s.conv.size) * 10000) / 10000 : 0,
+      }))
+      .sort((a, b) => b.booking_rate - a.booking_rate || b.conversations - a.conversations);
+    const styleConv = styleList.reduce((n, s) => n + s.conversations, 0);
+    const styleMet = styleList.reduce((n, s) => n + s.meetings, 0);
+    const styleAvg = styleConv ? styleMet / styleConv : 0;
+    const qualifiedStyles = styleList.filter((s) => s.conversations >= REPLY_STYLE_MIN_CONV);
+    const styleLeader = qualifiedStyles[0] ?? null;
+    const styleWinner =
+      styleLeader && qualifiedStyles.length >= 2 && styleLeader.booking_rate >= styleAvg + REPLY_STYLE_MIN_LIFT
+        ? styleLeader
+        : null;
+    const styleHint = styleWinner
+      ? `The "${styleWinner.key}" reply shape books meetings most often for this audience (${styleWinner.meetings} of ${styleWinner.conversations} conversations, ${pct(styleWinner.booking_rate)}, versus ${pct(styleAvg)} across the campaign). Use that shape.`
+      : null;
+
     folded.set(cid, {
       variants: Object.fromEntries(list.map((v) => [v.key, v])),
       winner_variant: winner,
@@ -281,11 +323,16 @@ export function foldCampaigns(campaigns: Map<string, any>, meetings: Map<string,
         last_reply_step: lastReplyStep || null,
         steps: Object.fromEntries(stepList.map((s) => [s.step, s])),
       },
-      // Still DEFERRED (audit-2026-09-12): reply_style_hint has no attribution
-      // source yet. The reply prompt makes no recorded stylistic decision, so
-      // there is nothing to correlate a meeting with. Inventing a hint here
-      // would be a guess dressed up as learning.
-      reply_style_hint: null,
+      // Reply shape — LIVE producer. Consumers (inbox-agent) apply the winner to
+      // new conversations; the hint text is advisory context.
+      reply_style_hint: styleHint,
+      reply_style_winner: styleWinner?.key ?? null,
+      reply_style_sample: {
+        min_conversations: REPLY_STYLE_MIN_CONV,
+        min_lift: REPLY_STYLE_MIN_LIFT,
+        campaign_booking_rate: Math.round(styleAvg * 10000) / 10000,
+        shapes: Object.fromEntries(styleList.map((s) => [s.key, s])),
+      },
     });
   }
   return folded;
@@ -295,7 +342,7 @@ export async function foldCampaignLearning(db: any): Promise<number> {
   const since = daysAgo(CAMPAIGN_WINDOW_DAYS);
   const [emails, meetings, bounces] = await Promise.all([
     fetchAll<any>(() => db.from("emails_sent").select(
-      "campaign_id, lead_id, variant, subject, replied, opened, ai_paused, opener_key, sequence",
+      "campaign_id, lead_id, variant, subject, replied, opened, ai_paused, opener_key, sequence, reply_style",
     ).not("campaign_id", "is", null).gte("sent_at", since)),
     fetchAll<any>(() => db.from("meetings").select("campaign_id, lead_id").gte("booked_at", since)),
     fetchAll<any>(() => db.from("audit_events").select("campaign_id").eq("event", "email.bounced").gte("created_at", since)),

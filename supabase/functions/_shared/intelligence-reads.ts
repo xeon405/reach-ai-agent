@@ -116,7 +116,7 @@ export async function getLeadScore(
 // ------------------------------------------------------------------
 interface CampaignLearningRow {
   campaign_id: string;
-  state: { reply_style_hint?: unknown; next_sequence_hint?: unknown; opener_hint?: unknown; opener_winner?: unknown; winner_variant?: unknown; sequence_sample?: unknown } | null;
+  state: { reply_style_hint?: unknown; reply_style_winner?: unknown; next_sequence_hint?: unknown; opener_hint?: unknown; opener_winner?: unknown; winner_variant?: unknown; sequence_sample?: unknown } | null;
   version: number;
   updated_at: string;
 }
@@ -159,6 +159,22 @@ export async function getReplyStyleHint(db: Db, campaignId: string): Promise<Cam
   const hint = stringHint(row.state?.reply_style_hint);
   if (!hint) return null;
   return { hint, version: Number(row.version) || 0, updated_at: row.updated_at };
+}
+
+/** The reply SHAPE this campaign books meetings from, when the fold has proven
+ *  one. The shape keys live in _shared/reply-styles.ts. Null (the normal state
+ *  until 15+ conversations per shape exist) leaves the per-lead hash pick. */
+export type ReplyStyleWinner = { key: string; version: number; updated_at?: string };
+
+export async function getReplyStyleWinner(db: Db, campaignId: string): Promise<ReplyStyleWinner | null> {
+  const enabled = await getKillSwitch(db, "campaign_learning.enabled", { campaignId });
+  if (!enabled) return null;
+  const row = await readCampaignLearning(db, campaignId);
+  if (!row) return null;
+  if (!stringHint(row.state?.reply_style_hint)) return null;
+  const key = stringHint(row.state?.reply_style_winner);
+  if (!key) return null;
+  return { key, version: Number(row.version) || 0, updated_at: row.updated_at };
 }
 
 /** Next-step advice for this campaign (reserved for the Stage 6 queue wiring —

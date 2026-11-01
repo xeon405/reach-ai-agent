@@ -31,10 +31,12 @@ import {
 } from "../_shared/thread-memory.ts";
 import {
   getReplyStyleHint,
+  getReplyStyleWinner,
   replyStyleSuffix,
   strategyRef,
   type CampaignHint,
 } from "../_shared/intelligence-reads.ts";
+import { pickReplyStyle, replyStyleByKey, type ReplyStyle } from "../_shared/reply-styles.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,6 +83,29 @@ async function styleHintFor(
   const k = `${userId}|${campaignId}`;
   if (!styleCache.has(k)) styleCache.set(k, await getReplyStyleHint(db, campaignId));
   return styleCache.get(k)!;
+}
+
+// Per-invocation cache of the LEARNED reply shape per campaign (the winner the
+// fold proved). Null => no proven winner => fall back to the per-lead hash.
+const styleWinnerCache = new Map<string, string | null>();
+async function replyStyleFor(
+  db: ReturnType<typeof createClient<any>>,
+  campaignId: string | null | undefined,
+  leadId: string,
+): Promise<ReplyStyle> {
+  if (campaignId) {
+    if (!styleWinnerCache.has(campaignId)) {
+      try {
+        const w = await getReplyStyleWinner(db, campaignId);
+        styleWinnerCache.set(campaignId, w?.key ?? null);
+      } catch {
+        styleWinnerCache.set(campaignId, null);
+      }
+    }
+    const learned = replyStyleByKey(styleWinnerCache.get(campaignId) ?? null);
+    if (learned) return learned;
+  }
+  return pickReplyStyle(leadId);
 }
 
 // Per-invocation cache of each lead's own outbound Gmail ids (ai.reply_sent +
@@ -539,6 +564,7 @@ Deno.serve(async (req) => {
           if (!tok) continue;
           const cfg = await configFor(supabase, email.user_id, email.campaign_id);
           const styleHint = await styleHintFor(supabase, email.user_id, email.campaign_id);
+          const replyStyle = await replyStyleFor(supabase, email.campaign_id, lead.id);
           const afterEpoch = Math.floor(new Date(email.sent_at).getTime() / 1000);
           const q = `from:${lead.email} in:anywhere -category:promotions after:${afterEpoch}`;
           const searchRes = await fetch(
@@ -754,7 +780,7 @@ COMPANY KNOWLEDGE BASE (from your website — use this to answer questions factu
 "${sanitizeForPrompt(siteKnowledge, 1800)}"` : ""}${profile.booking_link ? `
 Your booking link was already included in your first email to them — do NOT paste it again. If pointing them to it, say "the link I sent earlier".` : ""}
 
-Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${replyPolicySuffix(cfg.reply_policy)}${replyStyleSuffix(styleHint?.hint ?? "")} ${intentGuide}
+Write a 3-4 sentence human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Warm, confident, zero fluff.${replyPolicySuffix(cfg.reply_policy)}${replyStyleSuffix(styleHint?.hint ?? "")} ${replyStyle.directive} ${intentGuide}
 Rules: respond to something SPECIFIC they actually said (quote or reference it). If they asked a question, ANSWER it directly using the company knowledge base above when possible — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts. If they ask about PRICE/PRICING/COST: answer with the amount when the knowledge base contains one; if none${hasSite ? ", say the price is on the site / happy to confirm" : ", say you're happy to confirm it with them directly"} — never invent an amount and never leave the question unanswered or defer to a human. If the answer lives on your website${profile.website_url ? ` (${sanitizeForPrompt(profile.website_url, 120)})` : ""}, point them there — but only once, and never repeat a link you already put in your original email above. ${hasSite ? "Do NOT ask them to book a call or meeting — answer fully and stop; if you ask anything, make it a genuine information question, not about booking." : "Politely leave the door open — you may invite one quick call to discuss further only if it's genuinely useful, and never mention booking links."} Never use placeholders like [name]. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
 }], { maxTokens: 600, temperature: 0.9 });
               draft = rawDraft ?? "";
@@ -775,7 +801,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
                   )).catch(() => null);
             if (ids) {
               aiRepliesSent++;
-              await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: draft, gmail_thread_id: ids.threadId }).eq("id", email.id);
+              await supabase.from("emails_sent").update({ autoreplied: true, ai_draft: draft, gmail_thread_id: ids.threadId, reply_style: replyStyle.key }).eq("id", email.id);
               await supabase.from("leads").update({ lifecycle: nextLifecycle(newLifecycle, "classified.interested") }).eq("id", lead.id);
               await insertAudit(supabase, { user_id: email.user_id, campaign_id: email.campaign_id, lead_id: lead.id, event: "ai.reply_sent", payload: { gmail_message_id: ids.id, ...(styleHint ? { style_hint: styleHint.hint.slice(0, 180) } : {}) }, ...(styleHint ? { decision_id: crypto.randomUUID(), model_version: `campaign_learning/v${styleHint.version}`, strategy_ref: strategyRef(email.campaign_id, styleHint.version) } : {}) });
             }
@@ -896,6 +922,7 @@ Rules: respond to something SPECIFIC they actually said (quote or reference it).
           // (matches pre-0b behavior where over-budget threads were never scanned).
           if ((t.ai_turns ?? 0) >= cfg.turn_budget) continue;
           const styleHint = await styleHintFor(supabase, t.user_id, t.campaign_id ?? null);
+          const replyStyle = await replyStyleFor(supabase, t.campaign_id ?? null, lead.id);
 
           const tok = await getAccessToken(supabase, t.user_id);
           if (!tok) continue;
@@ -1229,7 +1256,7 @@ COMPANY KNOWLEDGE BASE (from your website — answer questions factually from th
 Booking-link policy: your link was already shared earlier in this thread. Do NOT paste it again unless they explicitly ask for it or say they can't find it — refer to it as "the link I sent earlier".` : ""}
 ${convIntentGuide}
 
-Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length.${replyPolicySuffix(cfg.reply_policy)}${replyStyleSuffix(styleHint?.hint ?? "")} Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", keep it honest and brief — never guess"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, ${profile.website_url ? "say the price is on the site" : "explain you'd rather get them the exact details on a quick call"} — never invent an amount. Do NOT push a call or booking${profile.website_url ? " — answer fully from the knowledge base and stop" : " unless they explicitly ask to talk"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
+Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profile.name ?? "the sender", 60)}. Match their energy and length.${replyPolicySuffix(cfg.reply_policy)}${replyStyleSuffix(styleHint?.hint ?? "")} ${replyStyle.directive} Answer whatever they asked directly and factually using the knowledge base when available — when they ask what we do or how it works, briefly state 1-2 concrete capabilities from the knowledge base in your own words before pointing them onward; never invent pricing or facts; if something isn't covered there${profile.website_url ? `, point them to ${sanitizeForPrompt(profile.website_url, 120)}` : ", keep it honest and brief — never guess"}. If they asked about PRICE/PRICING/COST, answer with the amount when it appears in the knowledge base above; if no amount appears, ${profile.website_url ? "say the price is on the site" : "explain you'd rather get them the exact details on a quick call"} — never invent an amount. Do NOT push a call or booking${profile.website_url ? " — answer fully from the knowledge base and stop" : " unless they explicitly ask to talk"}. Ask at most one question. Sign off as "Best regards". Return only the reply text.${REPLY_CONTINUITY_RULES}`,
                 }], { maxTokens: 500, temperature: 0.9 });
               } catch (ge) {
                 groqFail = groqFail || String(ge).slice(0, 160);
@@ -1252,6 +1279,7 @@ Write a short (2-4 sentence) human reply on behalf of ${sanitizeForPrompt(profil
                     autoreplied: true,
                     ai_draft: aiReply.trim(),
                     gmail_thread_id: ids.threadId,
+                    reply_style: replyStyle.key,
                   }).eq("id", t.id);
                   await supabase.from("email_threads").upsert({
                     user_id: t.user_id, lead_id: lead.id, gmail_thread_id: ids.threadId ?? null,
