@@ -116,7 +116,7 @@ export async function getLeadScore(
 // ------------------------------------------------------------------
 interface CampaignLearningRow {
   campaign_id: string;
-  state: { reply_style_hint?: unknown; next_sequence_hint?: unknown; opener_hint?: unknown; opener_winner?: unknown } | null;
+  state: { reply_style_hint?: unknown; next_sequence_hint?: unknown; opener_hint?: unknown; opener_winner?: unknown; winner_variant?: unknown; sequence_sample?: unknown } | null;
   version: number;
   updated_at: string;
 }
@@ -190,6 +190,54 @@ export async function getOpenerHint(db: Db, campaignId: string): Promise<OpenerH
     key: stringHint(row.state?.opener_winner),
     version: Number(row.version) || 0,
     updated_at: row.updated_at,
+  };
+}
+
+/** The A/B subject winner, when the fold has proven one past MIN_SAMPLE.
+ *  `variant` is the machine-actionable part: "B" = the alternate subject pool,
+ *  null = the campaign's default subject. The fold already refuses to name a
+ *  winner below 25 sends per variant and 3 points of lift, so this reader only
+ *  ever reports a decision the data actually supports. */
+export type SubjectHint = { variant: "B" | null; key: string; version: number; updated_at?: string };
+
+export async function getSubjectHint(db: Db, campaignId: string): Promise<SubjectHint | null> {
+  const enabled = await getKillSwitch(db, "campaign_learning.enabled", { campaignId });
+  if (!enabled) return null;
+  const row = await readCampaignLearning(db, campaignId);
+  if (!row) return null;
+  const w = row.state?.winner_variant as { key?: unknown } | null | undefined;
+  const key = stringHint(w?.key);
+  if (!key || !key.startsWith("v:")) return null;
+  const letter = key.slice(2).toUpperCase();
+  if (letter !== "A" && letter !== "B") return null;
+  return {
+    variant: letter === "B" ? "B" : null,
+    key,
+    version: Number(row.version) || 0,
+    updated_at: row.updated_at,
+  };
+}
+
+/** The step at which follow-ups stop paying off, when the fold has proven it.
+ *  Only returned when a real dead tail exists (every step past it has had
+ *  SEQ_DEAD_MIN_SENT sends and zero replies). Used to stop scheduling steps that
+ *  cannot plausibly earn a reply — saving volume, not changing the message. */
+export type SequenceCutoff = { cutoff: number; minSent: number; version: number };
+
+export async function getSequenceCutoff(db: Db, campaignId: string): Promise<SequenceCutoff | null> {
+  const enabled = await getKillSwitch(db, "campaign_learning.enabled", { campaignId });
+  if (!enabled) return null;
+  const row = await readCampaignLearning(db, campaignId);
+  if (!row) return null;
+  const hint = stringHint(row.state?.next_sequence_hint);
+  if (!hint) return null;
+  const sample = row.state?.sequence_sample as { last_reply_step?: unknown; dead_tail_min_sent?: unknown } | undefined;
+  const last = Number(sample?.last_reply_step);
+  if (!Number.isFinite(last) || last <= 0) return null;
+  return {
+    cutoff: last,
+    minSent: Number(sample?.dead_tail_min_sent) || 0,
+    version: Number(row.version) || 0,
   };
 }
 

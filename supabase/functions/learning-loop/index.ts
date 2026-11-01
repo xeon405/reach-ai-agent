@@ -43,6 +43,13 @@ const MODEL = "learning-loop/v1";
 const OPENER_MIN_SENT = 15;
 const OPENER_MIN_LIFT = 0.05;
 
+// Follow-up tail gate. A step is only declared "dead" when it and every later
+// step have each been sent SEQ_DEAD_MIN_SENT times with ZERO replies. That is a
+// deliberately extreme bar: cutting a working follow-up costs real money, while
+// keeping a dead one only costs volume. 20 clean sends with no reply at all is
+// strong evidence the tail is waste.
+const SEQ_DEAD_MIN_SENT = 20;
+
 // Exported for the synthetic-data harness (scripts/stage4-simulation.mjs) so
 // the tests assert against the exact constants the fold logic runs with.
 export const TEST_GATES = { MIN_SAMPLE, MIN_DELTA, MIN_SAMPLE_AGG, MIN_PUBLISH_CELL, OPENER_MIN_SENT, OPENER_MIN_LIFT };
@@ -223,6 +230,32 @@ export function foldCampaigns(campaigns: Map<string, any>, meetings: Map<string,
       ? `The "${openerWinner.key}" opening angle replies best for this audience (${openerWinner.replied} of ${openerWinner.sent} sends, ${pct(openerWinner.reply_rate)}, versus ${pct(openerAvg)} across the campaign). Lead with that angle.`
       : null;
 
+    // ---- follow-up tail ------------------------------------------------
+    // Where does the sequence stop earning? We do NOT compare step N with step
+    // N+1 — later steps always reply less because exposure accumulates, so that
+    // comparison would "prove" the obvious. We only report a tail that has had
+    // real volume and produced literally nothing. Advisory, never automatic:
+    // the step plan belongs to the user, and silently deleting their follow-ups
+    // is destructive. This tells them what the data says; it does not decide.
+    const steps = new Map<number, { step: number; sent: number; replied: number }>();
+    for (const e of emails) {
+      const n = Number(e.sequence);
+      if (!Number.isFinite(n) || n <= 0) continue;
+      const s = steps.get(n) ?? { step: n, sent: 0, replied: 0 };
+      s.sent++;
+      if (e.replied) s.replied++;
+      steps.set(n, s);
+    }
+    const stepList = [...steps.values()].sort((a, b) => a.step - b.step);
+    const lastReplyStep = stepList.filter((s) => s.replied > 0).reduce((mx, s) => Math.max(mx, s.step), 0);
+    const deadTail = stepList.filter(
+      (s) => s.step > lastReplyStep && s.sent >= SEQ_DEAD_MIN_SENT && s.replied === 0,
+    );
+    const seqHint =
+      deadTail.length > 0 && lastReplyStep > 0
+        ? `Every reply in this campaign came at or before step ${lastReplyStep}. Steps ${deadTail[0].step}-${deadTail[deadTail.length - 1].step} have had ${deadTail.reduce((n, s) => n + s.sent, 0)} sends and zero replies. Stopping after step ${lastReplyStep} is likely to save volume without losing replies.`
+        : null;
+
     folded.set(cid, {
       variants: Object.fromEntries(list.map((v) => [v.key, v])),
       winner_variant: winner,
@@ -241,11 +274,17 @@ export function foldCampaigns(campaigns: Map<string, any>, meetings: Map<string,
         campaign_reply_rate: Math.round(openerAvg * 10000) / 10000,
         angles: Object.fromEntries(openerList.map((o) => [o.key, o])),
       },
-      // Still DEFERRED (audit-2026-09-12): next_sequence_hint / reply_style_hint
-      // are reserved keys. Their consumers exist and are gated behind
-      // agent_config toggles, but no producer ships yet, so all reply and
-      // follow-up prompts remain the unlearned baseline on purpose.
-      next_sequence_hint: null,
+      // Follow-up tail — LIVE producer, advisory only (see the note above).
+      next_sequence_hint: seqHint,
+      sequence_sample: {
+        dead_tail_min_sent: SEQ_DEAD_MIN_SENT,
+        last_reply_step: lastReplyStep || null,
+        steps: Object.fromEntries(stepList.map((s) => [s.step, s])),
+      },
+      // Still DEFERRED (audit-2026-09-12): reply_style_hint has no attribution
+      // source yet. The reply prompt makes no recorded stylistic decision, so
+      // there is nothing to correlate a meeting with. Inventing a hint here
+      // would be a guess dressed up as learning.
       reply_style_hint: null,
     });
   }
@@ -256,7 +295,7 @@ export async function foldCampaignLearning(db: any): Promise<number> {
   const since = daysAgo(CAMPAIGN_WINDOW_DAYS);
   const [emails, meetings, bounces] = await Promise.all([
     fetchAll<any>(() => db.from("emails_sent").select(
-      "campaign_id, lead_id, variant, subject, replied, opened, ai_paused, opener_key",
+      "campaign_id, lead_id, variant, subject, replied, opened, ai_paused, opener_key, sequence",
     ).not("campaign_id", "is", null).gte("sent_at", since)),
     fetchAll<any>(() => db.from("meetings").select("campaign_id, lead_id").gte("booked_at", since)),
     fetchAll<any>(() => db.from("audit_events").select("campaign_id").eq("event", "email.bounced").gte("created_at", since)),

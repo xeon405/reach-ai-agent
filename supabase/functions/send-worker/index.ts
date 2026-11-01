@@ -14,7 +14,7 @@ import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmai
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
 import { resolveDailyCap, type CapProfile } from "../_shared/sender-health.ts";
-import { getLeadScore, getNextSequenceHint, getOpenerHint, sequenceHintSuffix, strategyRef, type CampaignHint } from "../_shared/intelligence-reads.ts";
+import { getLeadScore, getNextSequenceHint, getOpenerHint, getSequenceCutoff, getSubjectHint, sequenceHintSuffix, strategyRef, type CampaignHint } from "../_shared/intelligence-reads.ts";
 import { signToken } from "../_shared/crypto.ts";
 import {
   buildLeadFacts,
@@ -414,6 +414,22 @@ async function sequenceHintFor(db: ReturnType<typeof createClient<any>>, campaig
   return sequenceHintCache.get(campaignId)!;
 }
 
+// Learned follow-up cutoff (see foldCampaigns): cached per campaign per
+// invocation, because a follow-up run walks many leads in one campaign.
+const seqCutoffCache = new Map<string, number | null>();
+async function seqCutoffFor(db: ReturnType<typeof createClient<any>>, campaignId: string): Promise<number | null> {
+  if (!campaignId) return null;
+  if (!seqCutoffCache.has(campaignId)) {
+    try {
+      const c = await getSequenceCutoff(db, campaignId);
+      seqCutoffCache.set(campaignId, c?.cutoff ?? null);
+    } catch {
+      seqCutoffCache.set(campaignId, null);
+    }
+  }
+  return seqCutoffCache.get(campaignId) ?? null;
+}
+
 type QueueJob = {
   id: string;
   user_id: string;
@@ -681,16 +697,24 @@ Deno.serve(async (req) => {
     // enough sends exist) leaves the prompt byte-identical to before.
     const openerHint = await getOpenerHint(db, job.campaign_id);
 
+    // Subject learning: the fold only names a winner past 25 sends per variant
+    // and 3 points of lift, so acting on it is acting on evidence. Null keeps
+    // the existing per-send variant assignment (or default subject).
+    const subjectHint = await getSubjectHint(db, job.campaign_id);
+
     // Exactly one attribution source may claim the send. A learned opener
     // outranks the follow-up sequence hint because they describe different
     // decisions, and the audit trail must point at the one that was applied.
     const attribution = openerHint
       ? { model_version: `campaign_learning/v${openerHint.version}`, strategy_ref: strategyRef(job.campaign_id, openerHint.version) }
-      : seqHint
-        ? { model_version: "campaign_learning/v1", strategy_ref: strategyRef(job.campaign_id, seqHint.version) }
-        : {};
+      : subjectHint
+        ? { model_version: `campaign_learning/v${subjectHint.version}`, strategy_ref: strategyRef(job.campaign_id, subjectHint.version) }
+        : seqHint
+          ? { model_version: "campaign_learning/v1", strategy_ref: strategyRef(job.campaign_id, seqHint.version) }
+          : {};
 
-    let variant = job.variant;
+    // The learned subject variant overrides the per-job assignment entirely.
+    let variant = subjectHint ? subjectHint.variant : job.variant;
 
     // Stage 7: AI-cost gate. mode !== 'ai' => the whole send degenerates to the
     // deterministic template (no LLM, no ledger, no debit). mode === 'ai' => the
@@ -986,6 +1010,19 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT â€
         if (nextStep > 14) {
           if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", reason: "completed" });
           else await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "completed" });
+          continue;
+        }
+
+        // Learned cutoff: the fold has proven every reply arrived at or before
+        // step N, and every step past N has had real volume with zero replies.
+        // Stop there instead of burning sends on a tail that cannot plausibly
+        // answer. Absent evidence this is null and behaviour is unchanged.
+        const cutoff = await seqCutoffFor(db, campaign.id);
+        if (cutoff && nextStep > cutoff) {
+          if (dry) dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "cancel", reason: "learned_tail", step: nextStep });
+          else await db.rpc("cancel_lead_followup", { p_lead_id: lead.id, p_reason: "learned_tail" });
+          await insertAudit(db, { user_id: campaign.user_id, campaign_id: campaign.id, lead_id: lead.id, event: "followup.cancelled", payload: { reasons: ["learned_tail"], step: nextStep, cutoff } });
+          followupsCancelled++;
           continue;
         }
 
