@@ -85,22 +85,43 @@ export const ATTENTION_OPENERS: Array<{ key: string; style: string; example: str
 
 const OPENERS_BY_KEY = new Map(ATTENTION_OPENERS.map((o) => [o.key, o]));
 
+export type OpenerAngle = { key: string; style: string; example: string };
+
+/** Look up an angle by key. Used when campaign learning has already decided which
+ *  angle wins for this audience — the decision outranks the hash. */
+export function openerByKey(key: string | null | undefined): OpenerAngle | null {
+  if (!key) return null;
+  return OPENERS_BY_KEY.get(String(key).trim()) ?? null;
+}
+
 /** Deterministic attention angle for a lead+step seed.
  *  Pass hasLeadFacts=false (the lead has no category AND no city) to drop the
  *  "specificity" angle: its example names a {category} in a {city}, and with no
  *  real facts the model invents them — e.g. it pulled "consultant"/"New York"
- *  from the sender's own target market and stated them as facts about the lead. */
-export function pickOpenerDirective(seed: string, opts?: { hasLeadFacts?: boolean }): string {
+ *  from the sender's own target market and stated them as facts about the lead.
+ *
+ *  Returns the ANGLE ITSELF (not just the prompt text) so the caller can persist
+ *  the key on emails_sent. Without that key an outcome can never be attributed
+ *  to the angle that produced it, and the learning loop has nothing to learn
+ *  from. */
+export function pickOpener(seed: string, opts?: { hasLeadFacts?: boolean }): OpenerAngle {
   const pool =
     opts?.hasLeadFacts === false
       ? ATTENTION_OPENERS.filter((o) => o.key !== "specificity")
       : ATTENTION_OPENERS;
   const direct = OPENERS_BY_KEY.get(seed);
-  const o =
-    direct && !(opts?.hasLeadFacts === false && direct.key === "specificity")
-      ? direct
-      : pool[hashString(seed) % pool.length];
+  if (direct && !(opts?.hasLeadFacts === false && direct.key === "specificity")) return direct;
+  return pool[hashString(seed) % pool.length];
+}
+
+/** The prompt block that instructs the model to use one angle. */
+export function openerDirectiveFor(o: OpenerAngle): string {
   return `ATTENTION-GRABBING OPENER — you must use this exact angle (adapt the IDEA to the lead with the facts provided; DO NOT copy the example words):\nANGLE: ${o.style}\nEXAMPLE of the energy, not the words: ${o.example}`;
+}
+
+/** Legacy text-only helper (kept so existing callers compile unchanged). */
+export function pickOpenerDirective(seed: string, opts?: { hasLeadFacts?: boolean }): string {
+  return openerDirectiveFor(pickOpener(seed, opts));
 }
 
 /** Human few-shot voice examples. The AI matches this TONE, never the words. */

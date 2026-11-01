@@ -14,7 +14,7 @@ import { encodeHeaderValue, getAccessToken, sendGmailRaw } from "../_shared/gmai
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
 import { resolveDailyCap, type CapProfile } from "../_shared/sender-health.ts";
-import { getLeadScore, getNextSequenceHint, sequenceHintSuffix, strategyRef, type CampaignHint } from "../_shared/intelligence-reads.ts";
+import { getLeadScore, getNextSequenceHint, getOpenerHint, sequenceHintSuffix, strategyRef, type CampaignHint } from "../_shared/intelligence-reads.ts";
 import { signToken } from "../_shared/crypto.ts";
 import {
   buildLeadFacts,
@@ -23,7 +23,9 @@ import {
   detectLeadLanguage,
   followUpArc,
   hashString,
-  pickOpenerDirective,
+  openerByKey,
+  openerDirectiveFor,
+  pickOpener,
 } from "../_shared/ai-lib.ts";
 
 const corsHeaders = {
@@ -55,7 +57,7 @@ function templateEmail(
   userOffer: string,
   arabic: boolean,
   _sequenceSuffix = "",
-): { subject: string; body: string } {
+): { subject: string; body: string; openerKey: string | null } {
   const leadName = sanitizeForPrompt(lead.name, 80);
   const leadCompany = sanitizeForPrompt(lead.company ?? lead.category ?? "your company", 120);
   const offer = sanitizeForPrompt(userOffer, 200);
@@ -64,7 +66,9 @@ function templateEmail(
   const body = arabic
     ? `السلام عليكم ${leadName}،\n\nأكتب إليك لأن ${offer} قد تكون مفيدة لشركة ${leadCompany}.\n\nهل لديك بضع دقائق لقراءة رسالة سريعة؟\n\nمع التحية،\n${sign}`
     : `Hi ${leadName},\n\nI'm reaching out because ${offer} may be a good fit for ${leadCompany}.\n\nWould you be open to a quick look?\n\nBest regards,\n${sign}`;
-  return { subject, body };
+  // The template uses no attention angle, and claiming one would corrupt the
+  // opener statistics with rows no model ever saw.
+  return { subject, body, openerKey: null };
 }
 
 /** Deterministic follow-up template (Stage 7 conserve path). Same shape as the
@@ -277,8 +281,9 @@ async function generateEmail(
   arabic = false,
   avoidHint = "",
   sequenceSuffix = "",
-  gate?: AiCallHandle
-): Promise<{ subject: string; body: string }> {
+  gate?: AiCallHandle,
+  openerOverride: string | null = null,
+): Promise<{ subject: string; body: string; openerKey: string | null }> {
   if (gate && gate.mode !== "ai") return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix);
   const leadName = sanitizeForPrompt(lead.name, 80);
   const leadCompany = sanitizeForPrompt(lead.company ?? lead.category ?? "your company", 120);
@@ -289,9 +294,16 @@ LANGUAGE REQUIREMENT — WRITE IN ARABIC:
 - The subject must be FULLY IN ARABIC with no English words — a foreign brand/company name may appear in Latin inside the Arabic subject, but never write an English subject or mix English and Arabic in the same phrase.
 - Keep company names and technical terms in Latin script where natural.
 - The JSON keys stay "subject" and "body"; values are Arabic.` : "";
-  const openerDirective = pickOpenerDirective(`${leadName}-${leadCompany}-${leadJobTitle}`, {
-    hasLeadFacts: Boolean(lead.category && lead.city),
-  });
+  // The angle is normally chosen by hash. Campaign learning can overrule it once
+  // it has proven one angle beats the campaign average — that override is the
+  // whole point of recording opener_key in the first place.
+  const opener =
+    openerByKey(openerOverride) ??
+    pickOpener(`${leadName}-${leadCompany}-${leadJobTitle}`, {
+      hasLeadFacts: Boolean(lead.category && lead.city),
+    });
+  const openerKey = opener.key;
+  const openerDirective = openerDirectiveFor(opener);
   const promptContent = `${biContext}${buildLeadFacts(lead)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 A booking link is added automatically AFTER your text — do NOT type any URL yourself.
@@ -333,14 +345,14 @@ The body must use \\n between paragraphs.${lang}`;
       if (parsed.subject && parsed.body) {
         let subj = sanitizeSubject(String(parsed.subject), userOffer, leadCompany, arabic);
         if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
-        return { subject: subj, body: String(parsed.body).replace(/\\n/g, "\n") };
+        return { subject: subj, body: String(parsed.body).replace(/\\n/g, "\n"), openerKey };
       }
     } catch { /* fall through */ }
   }
   const lines = text.split("\n").filter(Boolean);
   let subj = sanitizeSubject(lines[0] ?? "Quick question", userOffer, leadCompany, arabic);
   if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
-  return { subject: subj, body: lines.slice(1).join("\n") || text };
+  return { subject: subj, body: lines.slice(1).join("\n") || text, openerKey };
 }
 
 function localSpamScore(subject: string, body: string): { score: number; hint: string } {
@@ -664,6 +676,20 @@ Deno.serve(async (req) => {
     const seqHint = await sequenceHintFor(db, job.campaign_id);
     const seqSuffix = seqHint ? sequenceHintSuffix(seqHint.hint) : "";
 
+    // Opener learning: when this campaign has proven an angle beats its own
+    // average, that angle replaces the hash pick. Null (the normal state until
+    // enough sends exist) leaves the prompt byte-identical to before.
+    const openerHint = await getOpenerHint(db, job.campaign_id);
+
+    // Exactly one attribution source may claim the send. A learned opener
+    // outranks the follow-up sequence hint because they describe different
+    // decisions, and the audit trail must point at the one that was applied.
+    const attribution = openerHint
+      ? { model_version: `campaign_learning/v${openerHint.version}`, strategy_ref: strategyRef(job.campaign_id, openerHint.version) }
+      : seqHint
+        ? { model_version: "campaign_learning/v1", strategy_ref: strategyRef(job.campaign_id, seqHint.version) }
+        : {};
+
     let variant = job.variant;
 
     // Stage 7: AI-cost gate. mode !== 'ai' => the whole send degenerates to the
@@ -692,7 +718,8 @@ Deno.serve(async (req) => {
           leadLang === "ar",
           "",
           seqSuffix,
-          aiGate
+          aiGate,
+          openerHint?.key ?? null
         )
       : templateEmail(String(ctx.profile.name ?? "Best regards"), lead, String(ctx.profile.offer ?? "our service"), leadLang === "ar", seqSuffix);
     if (variant === "B") {
@@ -702,7 +729,7 @@ Deno.serve(async (req) => {
     let check = localSpamScore(gen.subject, gen.body);
     if (check.score < 60 && check.hint && aiGate.mode === "ai") {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint, seqSuffix, aiGate);
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint, seqSuffix, aiGate, openerHint?.key ?? null);
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
@@ -736,6 +763,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
         variant,
         sequence: 1,
         follow_up_sent: false,
+        opener_key: gen.openerKey,
       });
     if (pendingErr) {
       // Unique constraint violation → another worker already has this job.
@@ -790,7 +818,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     }
 
     ctx.sentToday++;
-    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), followup_initialized: campCheck?.followups_enabled !== false }, ...(seqHint ? { model_version: "campaign_learning/v1", strategy_ref: strategyRef(job.campaign_id, seqHint.version) } : {}) });
+    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), opener_key: gen.openerKey, opener_source: openerHint?.key ? "campaign_learning" : "hash", followup_initialized: campCheck?.followups_enabled !== false }, ...attribution });
     return true;
   }
 
@@ -1039,9 +1067,10 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         // ── AI GENERATE FOLLOW-UP ──
         const destLink = String(profile.website_url || profile.booking_link || "");
         const leadLang = detectLeadLanguage(lead, profile);
-        const fuOpener = pickOpenerDirective(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`, {
+        const fuOpenerAngle = pickOpener(`${String(lead.name ?? "there")}-${String(lead.company ?? "")}-step${nextStep}`, {
           hasLeadFacts: Boolean(lead.category && lead.city),
         });
+        const fuOpener = openerDirectiveFor(fuOpenerAngle);
         const fuSeqHint = await sequenceHintFor(db, campaign.id);
         const fuSeqSuffix = fuSeqHint ? sequenceHintSuffix(fuSeqHint.hint) : "";
         const fuGate = dry
@@ -1181,6 +1210,7 @@ Reply with UNSUBSCRIBE to opt out.${profile.booking_link ? `\n📅 Book time wit
           user_id: campaign.user_id, lead_id: lead.id, campaign_id: campaign.id,
           subject, body: bodyText, sequence: nextStep, follow_up_sent: true,
           gmail_message_id: ids.id, gmail_thread_id: ids.threadId,
+          opener_key: fuOpenerAngle.key,
         });
 
         // ── ADVANCE LEAD TO NEXT STEP ──

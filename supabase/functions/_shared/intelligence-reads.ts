@@ -116,7 +116,7 @@ export async function getLeadScore(
 // ------------------------------------------------------------------
 interface CampaignLearningRow {
   campaign_id: string;
-  state: { reply_style_hint?: unknown; next_sequence_hint?: unknown } | null;
+  state: { reply_style_hint?: unknown; next_sequence_hint?: unknown; opener_hint?: unknown; opener_winner?: unknown } | null;
   version: number;
   updated_at: string;
 }
@@ -171,6 +171,26 @@ export async function getNextSequenceHint(db: Db, campaignId: string): Promise<C
   const hint = stringHint(row.state?.next_sequence_hint);
   if (!hint) return null;
   return { hint, version: Number(row.version) || 0, updated_at: row.updated_at };
+}
+
+/** Which opening angle wins for this campaign, when the fold has proven one.
+ *  `key` is the machine-actionable part (send-worker swaps it in); `hint` is the
+ *  human-readable sentence, usable as-is in a UI or an audit payload. */
+export type OpenerHint = { hint: string; key: string | null; version: number; updated_at?: string };
+
+export async function getOpenerHint(db: Db, campaignId: string): Promise<OpenerHint | null> {
+  const enabled = await getKillSwitch(db, "campaign_learning.enabled", { campaignId });
+  if (!enabled) return null;
+  const row = await readCampaignLearning(db, campaignId);
+  if (!row) return null;
+  const hint = stringHint(row.state?.opener_hint);
+  if (!hint) return null;
+  return {
+    hint,
+    key: stringHint(row.state?.opener_winner),
+    version: Number(row.version) || 0,
+    updated_at: row.updated_at,
+  };
 }
 
 // ------------------------------------------------------------------

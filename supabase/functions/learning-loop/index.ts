@@ -35,9 +35,17 @@ const LEARNING_HOUR_UTC = 2;    // campaign_learning nightly fold hour
 const SCORE_VERSION = 1;
 const MODEL = "learning-loop/v1";
 
+// Opener-angle gates. Deliberately looser than the A/B MIN_SAMPLE (25) because a
+// campaign spreads its sends across 7 angles, so 25-per-angle would mean ~175
+// sends before any learning — and stricter than "whoever replied once", because
+// a single reply is noise. 15 outcomes per angle plus a 5-point lift over the
+// campaign's own average is the point where acting on it beats the hash.
+const OPENER_MIN_SENT = 15;
+const OPENER_MIN_LIFT = 0.05;
+
 // Exported for the synthetic-data harness (scripts/stage4-simulation.mjs) so
 // the tests assert against the exact constants the fold logic runs with.
-export const TEST_GATES = { MIN_SAMPLE, MIN_DELTA, MIN_SAMPLE_AGG, MIN_PUBLISH_CELL };
+export const TEST_GATES = { MIN_SAMPLE, MIN_DELTA, MIN_SAMPLE_AGG, MIN_PUBLISH_CELL, OPENER_MIN_SENT, OPENER_MIN_LIFT };
 
 const now = () => new Date().toISOString();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
@@ -175,17 +183,68 @@ export function foldCampaigns(campaigns: Map<string, any>, meetings: Map<string,
       }
     }
 
+    // ---- opener angle (the one signal we were throwing away) ---------------
+    // Every send carries the attention angle the model was told to open with.
+    // Two conditions must hold before we act on it:
+    //   * each angle has OPENER_MIN_SENT outcomes (small samples lie), and
+    //   * the leader beats this campaign's own average by OPENER_MIN_LIFT
+    //     (a win against yourself is the only comparison that isn't confounded
+    //     by the audience, the offer, and the season).
+    // Below either gate we publish the counts but NO hint, so production keeps
+    // the unchanged hash-selected baseline.
+    const openerRows = new Map<string, { key: string; sent: number; replied: number }>();
+    let openerSent = 0;
+    let openerReplied = 0;
+    for (const e of emails) {
+      const k = typeof e.opener_key === "string" ? e.opener_key.trim() : "";
+      if (!k) continue;
+      const o = openerRows.get(k) ?? { key: k, sent: 0, replied: 0 };
+      o.sent++;
+      openerSent++;
+      if (e.replied) { o.replied++; openerReplied++; }
+      openerRows.set(k, o);
+    }
+    const openerList = [...openerRows.values()]
+      .map((o) => ({
+        ...o,
+        reply_rate: o.sent ? Math.round((o.replied / o.sent) * 10000) / 10000 : 0,
+      }))
+      .sort((a, b) => b.reply_rate - a.reply_rate || b.sent - a.sent);
+    const openerAvg = openerSent ? openerReplied / openerSent : 0;
+    const qualifiedOpeners = openerList.filter((o) => o.sent >= OPENER_MIN_SENT);
+    const openerLeader = qualifiedOpeners[0] ?? null;
+    const openerWinner =
+      openerLeader && qualifiedOpeners.length >= 2 && openerLeader.reply_rate >= openerAvg + OPENER_MIN_LIFT
+        ? openerLeader
+        : null;
+
+    const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+    const openerHint = openerWinner
+      ? `The "${openerWinner.key}" opening angle replies best for this audience (${openerWinner.replied} of ${openerWinner.sent} sends, ${pct(openerWinner.reply_rate)}, versus ${pct(openerAvg)} across the campaign). Lead with that angle.`
+      : null;
+
     folded.set(cid, {
       variants: Object.fromEntries(list.map((v) => [v.key, v])),
       winner_variant: winner,
       min_sample: { required: MIN_SAMPLE, note: "A/B winner declared only when every variant has >= required sent outcomes and the reply-rate lead is >= min_delta ahead." },
       min_delta: MIN_DELTA,
       last_folded_at: now(),
-      // Producer DEFERRED (audit-2026-09-12): next_sequence_hint / reply_style_hint
-      // are reserved keys. Consumers (send-worker follow-ups, inbox-agent replies)
-      // are built and gated behind agent_config toggles, but the fold intentionally
-      // does NOT populate them — so all production prompts are the unlearned baseline
-      // today. Re-enable here when a real producer ships (see AUDIT-FOLLOWUP.md).
+      // Opener learning — LIVE. This is the one producer the fold ships today,
+      // because the signal is recorded per email and the gate compares the
+      // campaign against itself. Consumed by send-worker (getOpenerHint) for
+      // first emails in this campaign only.
+      opener_hint: openerHint,
+      opener_winner: openerWinner?.key ?? null,
+      opener_sample: {
+        min_sent: OPENER_MIN_SENT,
+        min_lift: OPENER_MIN_LIFT,
+        campaign_reply_rate: Math.round(openerAvg * 10000) / 10000,
+        angles: Object.fromEntries(openerList.map((o) => [o.key, o])),
+      },
+      // Still DEFERRED (audit-2026-09-12): next_sequence_hint / reply_style_hint
+      // are reserved keys. Their consumers exist and are gated behind
+      // agent_config toggles, but no producer ships yet, so all reply and
+      // follow-up prompts remain the unlearned baseline on purpose.
       next_sequence_hint: null,
       reply_style_hint: null,
     });
@@ -197,7 +256,7 @@ export async function foldCampaignLearning(db: any): Promise<number> {
   const since = daysAgo(CAMPAIGN_WINDOW_DAYS);
   const [emails, meetings, bounces] = await Promise.all([
     fetchAll<any>(() => db.from("emails_sent").select(
-      "campaign_id, lead_id, variant, subject, replied, opened, ai_paused",
+      "campaign_id, lead_id, variant, subject, replied, opened, ai_paused, opener_key",
     ).not("campaign_id", "is", null).gte("sent_at", since)),
     fetchAll<any>(() => db.from("meetings").select("campaign_id, lead_id").gte("booked_at", since)),
     fetchAll<any>(() => db.from("audit_events").select("campaign_id").eq("event", "email.bounced").gte("created_at", since)),
