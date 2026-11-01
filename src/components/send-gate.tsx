@@ -12,9 +12,17 @@ import { AlertTriangle, ArrowRight } from "lucide-react";
  * no visual noise for healthy accounts.
  */
 
-type Reason = "domain_required" | "lifetime_limit" | "business_identity_required" | "daily_limit" | null;
+type Reason =
+  | "domain_required"
+  | "lifetime_limit"
+  | "business_identity_required"
+  | "daily_limit"
+  | null;
 
-const COPY: Record<Exclude<Reason, null>, { title: string; body: string; cta?: string; to?: string }> = {
+const COPY: Record<
+  Exclude<Reason, null>,
+  { title: string; body: string; cta?: string; to?: string }
+> = {
   domain_required: {
     title: "Sending is paused — confirm your domain",
     body: "Another account already registered your business name and address. Verify the domain your business owns to start sending again.",
@@ -52,14 +60,18 @@ export function SendGate({ className = "" }: { className?: string }) {
       const r = (data as Reason) ?? null;
       setReason(r);
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   if (!reason) return null;
   const c = COPY[reason];
 
   return (
-    <div className={`flex flex-col gap-3 rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-500/30 dark:bg-amber-900/15 ${className}`}>
+    <div
+      className={`flex flex-col gap-3 rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-500/30 dark:bg-amber-900/15 ${className}`}
+    >
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <div>
