@@ -65,13 +65,15 @@ function Terms() {
             <p className="mt-2">
               The free plan allows a total of 50 sent emails per account, no more than 10 in any
               single day, with no card and no expiry. One free trial is offered per person or
-              business. To keep that meaningful, we ask for your business name and address before
-              your first send; both appear on the emails you send, and both are compared against
-              existing accounts. A later account claiming an identical business name and address
-              must confirm it controls that business's domain before it can send. Creating further
-              accounts to obtain additional free allowances is not permitted and may result in those
-              accounts being suspended. If you are the genuine business and believe a check has
-              treated you unfairly, contact support and we will resolve it.
+              business. To keep that meaningful, we ask for your business name and street address
+              before your first send; both appear on the emails you send, and both are compared
+              against existing accounts. A country or city on its own is not accepted, because it
+              cannot be checked or printed as a sender identity. A later account claiming an
+              identical business name and address must confirm it controls that business's domain
+              before it can send. Creating further accounts to obtain additional free allowances is
+              not permitted and may result in those accounts being suspended. If you are the
+              genuine business and believe a check has treated you unfairly, contact support and we
+              will resolve it.
             </p>
           </section>
 

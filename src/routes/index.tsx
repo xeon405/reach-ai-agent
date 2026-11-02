@@ -175,7 +175,7 @@ const faqs = [
   },
   {
     q: "Why do you ask for my business name and address?",
-    a: "Two reasons, both plain: your name and address appear on the emails you send, so nobody is emailing strangers anonymously from our platform; and it lets us keep one free trial per business. It is never published and never shown to the people you email.",
+    a: "Two reasons, both plain: your name and address appear on the emails you send, so nobody is emailing strangers anonymously from our platform; and it lets us keep one free trial per business. It has to be a street address — a country or city on its own is not usable — and it is never published or shown to the people you email.",
   },
 ];
 

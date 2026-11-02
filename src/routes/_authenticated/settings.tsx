@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { AlertTriangle, Check } from "lucide-react";
+import { ADDRESS_EXAMPLE, addressProblem } from "@/lib/address";
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
@@ -211,6 +212,15 @@ function SettingsPage() {
   }
 
   async function save() {
+    // A country name is not an address, and the database will refuse to send,
+    // so say so here instead of letting them save and wonder why nothing goes.
+    if (businessAddress.trim()) {
+      const problem = addressProblem(businessAddress);
+      if (problem) {
+        toast.error(problem);
+        return;
+      }
+    }
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
@@ -277,10 +287,12 @@ function SettingsPage() {
         <div className="space-y-1.5">
           <Label>Business address</Label>
           <Input value={businessAddress} onChange={(e) => setBusinessAddress(e.target.value)}
-            placeholder="1 Main Street, Leeds, LS1 1AA, United Kingdom" />
+            placeholder={ADDRESS_EXAMPLE} />
           <p className="text-xs text-muted-foreground">
-            Required before sending. Your business name and address appear on the emails you send, and we use
-            the pair to keep one free trial per business. It is never published or shown to the people you email.
+            Required before sending, and it must be a street address — a country or city on its own
+            is not enough. Your business name and address appear on the emails you send, and we use
+            the pair to keep one free trial per business. It is never published or shown to the
+            people you email.
           </p>
         </div>
         <div className="space-y-1.5">

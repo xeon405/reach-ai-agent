@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { buildGmailAuthUrl } from "@/lib/gmail-oauth";
+import { ADDRESS_EXAMPLE, addressProblem, isPlausibleAddress } from "@/lib/address";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,6 +65,7 @@ function Onboarding() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [businessAddress, setBusinessAddress] = useState("");
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [bookingLink, setBookingLink] = useState("");
   const [hasProductImage, setHasProductImage] = useState(false);
@@ -113,6 +115,16 @@ function Onboarding() {
     setSaving(true);
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) {
+      setSaving(false);
+      return;
+    }
+
+    // The database refuses to send without a street-level address, so catch it
+    // here rather than letting the user "launch" into a blocked account.
+    const problem = addressProblem(businessAddress);
+    if (!company.trim() || problem) {
+      setAddressError(company.trim() ? problem : "Add your business or brand name first.");
+      setStep(3);
       setSaving(false);
       return;
     }
@@ -185,7 +197,7 @@ function Onboarding() {
   const canNext = () => {
     if (step === 1) return businessDescription.trim().length > 0 || offer.trim().length > 0;
     if (step === 2) return countries.length > 0;
-    if (step === 3) return company.trim().length > 0 && businessAddress.trim().length > 0;
+    if (step === 3) return company.trim().length > 0 && isPlausibleAddress(businessAddress);
     return true;
   };
 
@@ -386,14 +398,24 @@ function Onboarding() {
               <Label>Business address *</Label>
               <Input
                 value={businessAddress}
-                onChange={(e) => setBusinessAddress(e.target.value)}
-                placeholder="1 Main Street, Leeds, LS1 1AA, United Kingdom"
+                onChange={(e) => {
+                  setBusinessAddress(e.target.value);
+                  if (addressError) setAddressError(null);
+                }}
+                onBlur={() => setAddressError(addressProblem(businessAddress))}
+                placeholder={ADDRESS_EXAMPLE}
+                aria-invalid={Boolean(addressError)}
+                className={addressError ? "border-destructive" : undefined}
               />
-              <p className="text-xs text-muted-foreground">
-                Your real business name and address. They appear on the emails you send, so outbound
-                mail carries a truthful sender identity. We also use the pair to keep one free trial
-                per business. It is never published or shown to the people you email.
-              </p>
+              {addressError ? (
+                <p className="text-xs font-medium text-destructive">{addressError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Your real business name and address. They appear on the emails you send, so
+                  outbound mail carries a truthful sender identity. We also use the pair to keep one
+                  free trial per business. It is never published or shown to the people you email.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Website or app URL</Label>
@@ -448,8 +470,21 @@ function Onboarding() {
               </Button>
               <Button
                 className="flex-1 bg-primary"
-                onClick={() => setStep(4)}
-                disabled={!canNext()}
+                onClick={() => {
+                  // Left clickable on purpose: a disabled button gives no
+                  // feedback, so typing "India" would just find it dead.
+                  if (!company.trim()) {
+                    setAddressError("Add your business or brand name first.");
+                    return;
+                  }
+                  const problem = addressProblem(businessAddress);
+                  if (problem) {
+                    setAddressError(problem);
+                    return;
+                  }
+                  setAddressError(null);
+                  setStep(4);
+                }}
               >
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

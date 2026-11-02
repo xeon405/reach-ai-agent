@@ -16,6 +16,7 @@ type Reason =
   | "domain_required"
   | "lifetime_limit"
   | "business_identity_required"
+  | "business_address_incomplete"
   | "daily_limit"
   | null;
 
@@ -32,6 +33,12 @@ const COPY: Record<
   business_identity_required: {
     title: "Add your business name and address",
     body: "Emails need a truthful sender identity, so we ask for your business name and address before the first send. It takes a minute.",
+    cta: "Open settings",
+    to: "/settings",
+  },
+  business_address_incomplete: {
+    title: "Your business address needs a street",
+    body: "A country or city on its own is not an address. Add the street name and building number in Settings — for example 12 Market Street, Leeds — and sending resumes.",
     cta: "Open settings",
     to: "/settings",
   },
