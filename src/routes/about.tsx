@@ -177,6 +177,13 @@ function AboutPage() {
             One account sends from one address. A second address is a second account, not an add-on
             — the limit exists so one plan can't be split across several mailboxes.
           </p>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            Free is <strong className="text-foreground">50 emails in total</strong>, up to 10 a day,
+            with no card and no expiry. It is finite on purpose: unlimited free sending is what
+            spammers use, and their reputation damage follows every other customer's mail into the
+            spam folder. We also allow one free trial per business, so a second account claiming the
+            same business name and address has to confirm it owns that business's domain.
+          </p>
         </div>
 
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-7">

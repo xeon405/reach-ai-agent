@@ -159,7 +159,7 @@ const faqs = [
   },
   {
     q: "How fast will I see results?",
-    a: "Setup takes about three minutes, and your first emails go out almost immediately. Most users see replies within the first week as personalization and follow-ups kick in.",
+    a: "There's no honest fixed answer — it depends on your list and your offer. Personalisation and follow-ups do most of the work, and replies usually come from the second or third email rather than the first.",
   },
   {
     q: "Can it write in Arabic or other languages?",
@@ -167,7 +167,15 @@ const faqs = [
   },
   {
     q: "How much does it cost?",
-    a: "It's free to start. Paid plans are $37, $79, or $149 per month depending on volume, and you can cancel anytime.",
+    a: "Free gives you 50 emails in total — no card, no expiry, up to 10 a day. Paid plans are $37, $79, or $149 per month depending on volume. One subscription covers one connected email address. Cancel anytime.",
+  },
+  {
+    q: "Why is the free plan 50 emails instead of unlimited?",
+    a: "Because unlimited free sending is what spammers use, and their bad sending gets every other customer's mail filtered. 50 emails is enough to get real replies if the offer is right. When you need more, that's the point at which paying makes sense.",
+  },
+  {
+    q: "Why do you ask for my business name and address?",
+    a: "Two reasons, both plain: your name and address appear on the emails you send, so nobody is emailing strangers anonymously from our platform; and it lets us keep one free trial per business. It is never published and never shown to the people you email.",
   },
 ];
 

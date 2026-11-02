@@ -23,7 +23,7 @@ function Terms() {
       <div className="mx-auto max-w-3xl px-4 py-12">
         <div className="mb-10"><Logo /></div>
         <h1 className="text-3xl font-bold tracking-tight">Terms of Service</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Last updated: August 22, 2026</p>
+        <p className="mt-2 text-sm text-muted-foreground">Last updated: November 2, 2026</p>
 
         <div className="mt-8 space-y-8 text-sm leading-relaxed">
           <section>
@@ -61,7 +61,22 @@ function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">5. Subscriptions &amp; billing</h2>
+            <h2 className="text-lg font-semibold">5. Free trial</h2>
+            <p className="mt-2">
+              The free plan allows a total of 50 sent emails per account, no more than 10 in any
+              single day, with no card and no expiry. One free trial is offered per person or
+              business. To keep that meaningful, we ask for your business name and address before
+              your first send; both appear on the emails you send, and both are compared against
+              existing accounts. A later account claiming an identical business name and address
+              must confirm it controls that business's domain before it can send. Creating further
+              accounts to obtain additional free allowances is not permitted and may result in those
+              accounts being suspended. If you are the genuine business and believe a check has
+              treated you unfairly, contact support and we will resolve it.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold">6. Subscriptions &amp; billing</h2>
             <p className="mt-2">
               Paid plans renew monthly until cancelled. You can cancel at any time from the Billing
               page. Payments are processed securely by our payment provider; we never see or store your full card details.
@@ -69,7 +84,7 @@ function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">6. Account termination</h2>
+            <h2 className="text-lg font-semibold">7. Account termination</h2>
             <p className="mt-2">
               We may suspend or terminate accounts that violate these Terms or abuse the Service.
               You may delete your account at any time from Settings.
@@ -77,7 +92,7 @@ function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">7. Disclaimer</h2>
+            <h2 className="text-lg font-semibold">8. Disclaimer</h2>
             <p className="mt-2">
               The Service is provided "as is" without warranties of any kind. We are not liable for
               lost profits, whether emails reach the inbox, or damages arising from your use of the Service.
@@ -85,17 +100,17 @@ function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">8. Refund Policy (Right of Return)</h2>
+            <h2 className="text-lg font-semibold">9. Refund Policy (Right of Return)</h2>
             <p className="mt-2">Every paid plan includes a <strong>14-day money-back guarantee on your first payment</strong> — no forms and no reason needed. To request a refund, email support within 14 days of your payment and it will be processed in full on an account in good standing (not suspended for spam or abuse). Additionally, if a hidden defect is discovered that we cannot fix promptly, you are entitled to a full refund at any point during your subscription.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">9. Honest Pricing &amp; Exact Limits</h2>
+            <h2 className="text-lg font-semibold">10. Honest Pricing &amp; Exact Limits</h2>
             <p className="mt-2">The price displayed for each plan is the complete price — there are no hidden fees, no overage charges, and no automatic surprise renewals beyond the stated subscription. Each plan states its exact daily and monthly email caps; the sending agent hard-stops at those limits. We do not use artificial scarcity, fake discounts, or invented urgency in any of our marketing.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">10. Contact</h2>
+            <h2 className="text-lg font-semibold">11. Contact</h2>
             <p className="mt-2">
               For questions, support, refunds, or any concern about these Terms, contact our team
               at{" "}
