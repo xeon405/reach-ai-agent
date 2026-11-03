@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SupportChat } from "@/components/support-chat";
@@ -41,6 +42,10 @@ const nav = [
   { tKey: "app_settings", url: "/settings", icon: Settings },
 ] as const;
 
+// Only rendered for accounts in public.admins. The page itself checks again
+// server-side — hiding a link is not access control.
+const adminNav = { tKey: "app_admin", url: "/admin", icon: ShieldCheck } as const;
+
 const pageTitles: Array<[string, string]> = [
   ["/dashboard", "Dashboard"],
   ["/agent", "Agent"],
@@ -49,6 +54,7 @@ const pageTitles: Array<[string, string]> = [
   ["/emails", "Emails"],
   ["/billing", "Billing"],
   ["/settings", "Settings"],
+  ["/admin", "Admin"],
 ];
 
 function isActive(path: string, url: string) {
@@ -68,6 +74,20 @@ function AuthenticatedLayout() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Ask once per session whether this account is an admin. A failure means "no":
+  // a hidden link is better than a visible one that always errors.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    supabase.rpc("is_admin").then(({ data, error }) => {
+      if (!cancelled && !error) setIsAdmin(Boolean(data));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Restore the sidebar collapse preference once mounted (guard for SSR).
   useEffect(() => {
@@ -102,6 +122,9 @@ function AuthenticatedLayout() {
   // Onboarding guard: redirect to /onboarding if profile is incomplete
   useEffect(() => {
     if (loading || !user) return;
+    // The operator console must open before onboarding: an admin account has no
+    // business profile, and being pushed into onboarding would lock the page.
+    if (path.startsWith("/admin")) return;
     let cancelled = false;
     (async () => {
       const { data } = await supabase
@@ -116,7 +139,7 @@ function AuthenticatedLayout() {
     return () => {
       cancelled = true;
     };
-  }, [loading, user, navigate]);
+  }, [loading, user, navigate, path]);
 
   if (loading || !user) {
     return (
@@ -147,8 +170,9 @@ function AuthenticatedLayout() {
     navigate({ to: "/" });
   }
 
-  const desktopItems = nav.slice(0, 4);
-  const moreItems = nav.slice(4);
+  const items = isAdmin ? [...nav, adminNav] : nav;
+  const desktopItems = items.slice(0, 4);
+  const moreItems = items.slice(4);
 
   return (
     <div className="flex h-dvh w-full min-w-0 overflow-hidden bg-background">

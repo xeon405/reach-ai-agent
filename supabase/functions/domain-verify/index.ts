@@ -146,11 +146,17 @@ serve(async (req) => {
   if (action === "start") {
     // A domain verified to somebody else is untouchable. We do NOT say who —
     // that would leak another customer's identity.
+    //
+    // `user_id != me` matters: without it the caller's own verified row counts
+    // as "taken" and the person who already proved the domain is told it is
+    // unavailable, which is a dead end. The unique index is on (domain) for
+    // verified rows, so at most one other account can hold it.
     const { data: taken } = await db
       .from("domains")
       .select("id")
       .ilike("domain", domain)
       .not("verified_at", "is", null)
+      .neq("user_id", userId)
       .maybeSingle();
     if (taken) return json({ error: "domain_unavailable" }, 409);
 
@@ -162,6 +168,14 @@ serve(async (req) => {
       .maybeSingle();
 
     if (existing?.verified_at) {
+      // Already proved. Say so AND clear the flag: a verified account can be
+      // flagged again later (an address edit that matches another business, or
+      // an admin action). Returning early without clearing it would leave the
+      // user looking at "verified" while every send is refused.
+      await db
+        .from("profiles")
+        .update({ domain_verified: true, domain_required: false })
+        .eq("id", userId);
       return json({ ok: true, verified: true, domain });
     }
 
@@ -196,7 +210,15 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!row) return json({ error: "start_verification_first" }, 400);
-    if (row.verified_at) return json({ ok: true, verified: true, domain });
+    if (row.verified_at) {
+      // Same reason as in `start`: never report "verified" while the account is
+      // still flagged, or the page is a dead end that looks like success.
+      await db
+        .from("profiles")
+        .update({ domain_verified: true, domain_required: false })
+        .eq("id", userId);
+      return json({ ok: true, verified: true, domain });
+    }
 
     const records = await txtRecords(recordName);
     if (!records.length) {

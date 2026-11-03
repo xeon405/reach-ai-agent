@@ -39,6 +39,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_actions: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          target_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          target_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          target_id?: string | null
+        }
+        Relationships: []
+      }
+      admins: {
+        Row: {
+          created_at: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       agent_action_state: {
         Row: {
           conversation_id: string
@@ -2221,6 +2266,15 @@ export type Database = {
       }
     }
     Functions: {
+      admin_clear_flag: {
+        Args: { p_note?: string; p_user: string }
+        Returns: undefined
+      }
+      admin_console: { Args: never; Returns: Json }
+      admin_flag: {
+        Args: { p_note?: string; p_user: string }
+        Returns: undefined
+      }
       advance_lead_followup: {
         Args: {
           p_campaign_id: string
@@ -2320,6 +2374,12 @@ export type Database = {
         }
         Returns: undefined
       }
+      is_admin: { Args: never; Returns: boolean }
+      is_plausible_business_address: {
+        Args: { p_address: string }
+        Returns: boolean
+      }
+      normalize_business_text: { Args: { p_value: string }; Returns: string }
       public_stats: {
         Args: never
         Returns: {

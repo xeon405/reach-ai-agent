@@ -104,6 +104,7 @@ const DICT: Record<string, { en: string; ar: string }> = {
   app_emails: { en: "Emails Sent", ar: "الرسائل المُرسلة" },
   app_billing: { en: "Billing", ar: "الفواتير" },
   app_settings: { en: "Settings", ar: "الإعدادات" },
+  app_admin: { en: "Admin", ar: "الإدارة" },
   app_agent: { en: "Agent", ar: "الوكيل" },
   app_agent_sub: { en: "Ask about your contacts, campaigns, and sending.", ar: "اسأل عن جهات اتصالك وحملاتك وإرسالك." },
   app_agent_new: { en: "New chat", ar: "محادثة جديدة" },
