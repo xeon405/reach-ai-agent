@@ -69,3 +69,8 @@ android/m2local/
 
 # profiling build output (not deployed, not referenced by build/deploy)
 dist-prof
+
+# generated documentation artifacts (rebuild: python scripts/.ops/build-manual.py)
+SYSTEM-MANUAL.html
+SYSTEM-MANUAL.pdf
+__pycache__/

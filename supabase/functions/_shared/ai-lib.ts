@@ -7,6 +7,9 @@
 // ============================================================
 import { sanitizeForPrompt } from "./groq.ts";
 import { COUNTRY_ISO } from "./osm.ts";
+import { isPersonalContactRequest, personalContactAnswer } from "./support-boundary.ts";
+
+export { isPersonalContactRequest, personalContactAnswer };
 
 const ARABIC_RE = /[\u0600-\u06FF]/;
 const ARAB_COUNTRIES = new Set([
@@ -302,10 +305,14 @@ export const SUPPORT_FEWSHOTS = `## GREAT-ANSWER PATTERNS (match this behavior; 
 /** Deterministic topic router (zero extra LLM cost). Classifies the newest
  *  user message and forces an ON-TOPIC directive so a real product question
  *  is never deflected. Order matters: the most specific/top-scoped checks run
- *  first (gmail before email, identity before everything). */
+ *  first (personal-data boundary, gmail before email, identity before all). */
 export function routeSupportTopic(text: string): string {
   const raw = String(text ?? "").trim().toLowerCase();
   const t = ` ${raw} `;
+  // The capability boundary runs before every keyword rule. A message that
+  // asks for private people's contact data must never be re-read as a
+  // sending question just because it contains the word "emails".
+  if (isPersonalContactRequest(raw)) return supportTopicDirective("PERSONAL_DATA");
   // Product keyword table (order = specificity: gmail before email, etc.).
   // These run FIRST so a greeting that also asks a product thing is a product ask.
   const table: Array<[RegExp, string]> = [
@@ -348,6 +355,14 @@ function supportTopicDirective(topic: string): string {
     IDENTITY: "## TOPIC: WEBSITE & IDENTITY — The user asked about the website, the company, your identity, or who built this. This is ON-TOPIC: answer directly and confidently. The site is https://out-ship.com, you are the OutshipAi Guide, and OutshipAi is built by a small team focused on making cold outreach simple for small businesses — point to outshipai@gmail.com for anything deeper about the team or company. Give a real name/story only if genuinely known; otherwise keep it warm and honest. Never invent anything beyond that.",
     GMAIL: "## TOPIC: GMAIL SETUP — The user asked about connecting/disconnecting Gmail or OAuth. This is ON-TOPIC: answer DIRECTLY with the real steps (Settings → Connect Gmail via Google OAuth; tokens encrypted; revoke anytime from Google Account). Do not deflect.",
     LEAD_FINDING: "## TOPIC: LEAD FINDING — The user asked how to find/get/save leads. This is ON-TOPIC: answer DIRECTLY with the real steps (Lead Finder → niche + country → Search → verify → Save to Database → assign to campaign). Never deflect to generic advice.",
+    PERSONAL_DATA: `## TOPIC: PERSONAL CONTACT DATA — THE USER IS ASKING FOR PRIVATE PEOPLE'S CONTACT DETAILS (parents, students, residents, patients, individuals, consumers). This is a HARD CAPABILITY BOUNDARY. Obey exactly:
+1. Answer NO in the first sentence. Never bury the refusal.
+2. State the real scope: OutshipAi has BUSINESS contact addresses from public business listings (Google Maps / OpenStreetMap) and from addresses published on business websites. It has no consumer or private-person records, and does not buy, scrape or sell personal emails.
+3. Never imply the Lead Finder can produce them. Never say "try searching for parents". Never offer a workaround that acquires personal data without consent.
+4. Say plainly that cold-emailing individuals without consent is restricted by law in many markets (GDPR/ePrivacy in the EU/UK, CASL in Canada), and that a scraped list would damage their sending domain.
+5. Then give the real alternatives: (a) email the surrounding BUSINESSES — tuition centres, coaching institutes, schools, agencies; (b) if they already hold a consented list, import it via Leads → Import CSV; (c) for parents, use opt-in channels — their own form, WhatsApp/Telegram groups, school newsletters, local groups.
+6. Do not lecture. Four to eight short lines, warm and practical, ending with an offer to help with the business search.
+Do NOT answer this as a sending/deliverability question. Do NOT give a Gmail setup checklist.`,
     CAMPAIGNS: "## TOPIC: CAMPAIGNS — The user asked about campaigns. Answer DIRECTLY from the manual: create (name, country, niche, offer) → AI Write → Launch; toggle active/pause; follow-ups per campaign.",
     REPLIES: "## TOPIC: REPLY HANDLING — The user asked about replies. Answer DIRECTLY from the manual: hourly scan, AI classification, AI draft for warm replies in Emails Sent, owner alerts for complex ones, follow-ups auto-cancel on reply.",
     FOLLOWUPS: "## TOPIC: FOLLOW-UPS — The user asked about follow-ups. Answer DIRECTLY: up to 14 AI follow-ups on the set schedule, auto-cancel when the lead replies, toggle off per campaign.",

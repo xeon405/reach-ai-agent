@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
-import { buildSupportUserContext, containsArabic, routeSupportTopic, SUPPORT_SELF_FACTS, SUPPORT_CONTROLS, SUPPORT_FEWSHOTS } from "../_shared/ai-lib.ts";
+import { buildSupportUserContext, containsArabic, routeSupportTopic, isPersonalContactRequest, personalContactAnswer, SUPPORT_SELF_FACTS, SUPPORT_CONTROLS, SUPPORT_FEWSHOTS } from "../_shared/ai-lib.ts";
 import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
 import { openAiCall, openGuestAiCall } from "../_shared/ai-cost-gate.ts";
 
@@ -468,7 +468,15 @@ ${history
     const DAILY_LIMIT_LINE = "You've hit today's support-chat limit — it resets each day. For anything urgent, email outshipai@gmail.com.";
 
     let answer: string | null = null;
-    if (isGuest) {
+    // ── Capability boundary, answered deterministically. "Can I get parent
+    //    emails?" is a factual question about our data, so a model must not
+    //    answer it: the same prompt that sometimes refuses also sometimes
+    //    pivots to a sending tutorial (which is exactly what shipped). No LLM,
+    //    no spend, no drift. Arabic still goes through the model so the answer
+    //    is in the user's language, with the boundary directive attached.
+    if (isPersonalContactRequest(text) && !containsArabic(text)) {
+      answer = personalContactAnswer({ signedIn: !isGuest });
+    } else if (isGuest) {
       const handle = await openGuestAiCall(admin, { kind: "chat", fn: "support-chat", groqChat, perCallGuard: 0.006 }, 900);
       if (handle.mode === "ai") answer = await handle.run(promptText, { maxTokens: 900, temperature: 0.3 });
       answer = answer ?? BUSY_LINE;

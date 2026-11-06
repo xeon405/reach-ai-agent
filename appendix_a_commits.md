@@ -1,0 +1,340 @@
+# Appendix A — Complete commit history (324 commits)
+
+Every commit from the first release to the current HEAD, oldest first.
+
+
+## 2026-08 — 174 commits
+
+- `d015f7d` 2026-08-22 — OutreachAI v1 — production release
+- `13dab7e` 2026-08-22 — Handle email confirmation links in auth callback
+- `100df35` 2026-08-22 — Killer feature: every email is a live product demo with viral footer
+- `d4f72b8` 2026-08-23 — Security hardening: working edit/delete account, remove dead files
+- `84ef8a7` 2026-08-23 — Defer payments gracefully, clean landing footer, billing webhook ready
+- `f5d23fe` 2026-08-23 — Reply alert emails via user's own Gmail
+- `da0c6b4` 2026-08-23 — Free AI Lead Finder via open business directories, honest pricing features
+- `3c6a6e1` 2026-08-23 — Production hardening: DB indexes, query caps, batched counters, dead code removal
+- `3df25a9` 2026-08-23 — PWA offline shell + CSP hash hardening + token vault wiring
+- `4e49b2a` 2026-08-23 — Revert CSP hashing (breaks on Vercel), SW network-first navigations
+- `addea6c` 2026-08-23 — Downgrade Gmail scope readonly->metadata (sensitive tier, free verification)
+- `31de6e2` 2026-08-23 — Remove Lovable traces (error reporter, OG image, junk files), branded og.png
+- `32c3489` 2026-08-23 — CAN-SPAM postal address line in footers (SENDER_ADDRESS env)
+- `eb8e0ff` 2026-08-23 — Growth: smart send-time, live counter, referral system
+- `30334fb` 2026-08-23 — Honest CTAs, robots+sitemap, dedupe meta tags
+- `f3e1831` 2026-08-23 — Google Search Console verification file
+- `221eadc` 2026-08-23 — Automation: warm-up ramp, AI reply sorting, booking links, weekend skip, daily digest
+- `c800aa8` 2026-08-23 — Autopilot mode, 3-step sequences, global dedupe, shared OSM module
+- `ae14fa4` 2026-08-23 — Accuracy: MX validation, bounce sweep, AI subject lines
+- `05b0629` 2026-08-23 — Trust + growth: free tools page, live stats page, AI reply drafts, unified Groq helper
+- `a20eab0` 2026-08-23 — Security hardening: DB-backed rate limits, prompt-injection sanitization
+- `724a102` 2026-08-23 — Security: lock consume_ai_quota RPC to service-role only (quota-burn exploit fixed)
+- `82ad1e4` 2026-08-23 — SEO: sitemap covers tools+stats; privacy wording covers reply classification
+- `dd885fa` 2026-08-23 — Play Store readiness: PNG icons 192/512 + maskable, manifest id+categories
+- `5a6b620` 2026-08-23 — Android app: TWA assetlinks for com.outreachai.app
+- `4d9539c` 2026-08-23 — Add Android TWA app project (com.outreachai.app) — website + app in one repo
+- `8f94bfd` 2026-08-23 — iOS premium install experience: PNG touch icon, iOS meta tags, smart Safari install banner
+- `847ca48` 2026-08-23 — Backup: signing keystore + signed release builds (v1) — full recovery possible from this repo alone
+- `5737436` 2026-08-24 — Security: rotate signing keystore, remove password-bearing build helpers
+- `fc1fff5` 2026-08-24 — New brand logo everywhere: blue-cyan zap icon for web + all Android launchers/splash; rebuilt signed v1
+- `051f24d` 2026-08-24 — Cleanup: exclude Android build intermediates from git
+- `15e9c3f` 2026-08-24 — Ship: /agency DFY page, 20-niche template library, one-click AI reply sending, AI support chat widget
+- `d67bf64` 2026-08-24 — Dual theme system: professional white default + navy dark mode with toggle on web, agency and app sidebar
+- `db6e22a` 2026-08-24 — Monochrome rebrand: black & white light/dark themes, monochrome icons, app rebuilt v2
+- `d749111` 2026-08-24 — Dark mode: restore signature navy+electric-blue palette (light stays monochrome)
+- `868b217` 2026-08-24 — Deal pipeline (editable lead stages + won metric), bulk lead import; warm-up & dedupe confirmed live
+- `31043e4` 2026-08-24 — Chat widget + agency CTAs use theme tokens — adapt to active theme
+- `d8a8d68` 2026-08-24 — Trust pack: /security page, data export, risk-reversal badges, CAN-SPAM sender address
+- `9ada887` 2026-08-24 — Founder note, /status live health page, footer links, status in sitemap
+- `e2a6ac5` 2026-08-24 — Spam checker (UI + auto pre-send guard), one-click unsubscribe system, sitemap
+- `0ada246` 2026-08-24 — Arabic language support: full i18n engine (auto-detect + RTL + toggle), landing translated, Gulf timezones, Arabic emails for Arab leads
+- `c4ca5d2` 2026-08-24 — Fix sidebar header overlap when collapsed: logo text + theme toggle hide gracefully
+- `e91edc9` 2026-08-24 — Fix sidebar footer overflow when collapsed (email + sign out)
+- `26e369a` 2026-08-24 — Frontend audit fixes: table scroll on mobile, settings rows stack, dialog grid responsive, chat bubble size
+- `1f8d117` 2026-08-24 — Audit round 2: campaign stats grid + action buttons responsive
+- `cb5bc89` 2026-08-24 — Creative pack: lead temperature badges, win confetti, campaign health score, email signature, ROI calculator
+- `b9062ee` 2026-08-24 — Pricing copy: value anchor line + consistent free-plan story (EN/AR)
+- `387609d` 2026-08-24 — Honesty Charter: /honesty page with full defect disclosure, refund policy in Terms, honest-pricing section, billing trust strip
+- `1084577` 2026-08-24 — Truth audit: landing caps match enforced PLAN_LIMITS exactly, perks list only real features, terms contact email fixed
+- `4b883a7` 2026-08-24 — Official support email everywhere: outreachai.team@gmail.com (agency, honesty, privacy, security, terms)
+- `395faf4` 2026-08-24 — Ethics completion: /about ethos page, dedicated /refunds policy page, verified-reviews pledge, checkout transparency line
+- `7919480` 2026-08-24 — Charter self-audit fixes: true free tier (10/day), published exact limits per plan, softened meta claim
+- `c3c4e9b` 2026-08-24 — Privacy pass: remove Lemon Squeezy/merchant-of-record mentions, team-based support language, fix broken mailto, proper Terms §10
+- `6d70595` 2026-08-24 — We-built quote, team label, agency mailto fixes, removed unbuilt A/B claim from Growth plan
+- `9ba1515` 2026-08-24 — Full Arabic site translation (94 keys), open tracking pixel, multipart emails with one-click List-Unsubscribe, charter limitation updates
+- `8ce3fc2` 2026-08-24 — Arabic EN-only notice banner on all long-form pages
+- `66d6199` 2026-08-24 — A/B subject split testing + Autopilot AI replies: real features shipped (schema, send-campaign, follow-up, campaigns UI, marketing copy)
+- `203f47d` 2026-08-24 — DB-backed send queue (SKIP LOCKED worker, instant Launch), Groq key pool with rotation+backoff, autopilot cron contract fix
+- `c95608a` 2026-08-24 — CRITICAL fix: missing useLang imports crashed app shell after login (esbuild does not catch undefined identifiers)
+- `2a2752c` 2026-08-24 — Fix login crash (missing imports), duplicate i18n key, A/B stats var bug, create missing referrals table, regenerate DB types, add typecheck script
+- `a7dc883` 2026-08-24 — Rewrite send-campaign cleanly (spliced version had fatal boot corruption): queue worker restored and booting, Deno.serve modernization
+- `88353ee` 2026-08-24 — pg_cron hourly follow-up scheduler, queue revival pass, internal call auth fix, CRON_SECRET rotation
+- `1330e58` 2026-08-24 — gitignore cron secret
+- `733547e` 2026-08-24 — Overpass mirror failover for find-leads (primary 40s+ slow), UA header, support-chat real plan limits
+- `09d3d53` 2026-08-24 — Add lead delete button (was missing entirely)
+- `1eb2487` 2026-08-24 — Country dropdown in Add Lead (free text broke timezone morning filter)
+- `616328a` 2026-08-24 — Add gmail.readonly scope (reply/bounce search was 403ing with metadata-only)
+- `f26c44f` 2026-08-24 — Strip debug instrumentation from follow-up and send-campaign (all pipelines verified live)
+- `882c28f` 2026-08-24 — Personal AI replies: full reply-body context, lead details, regenerate-on-send (no more verbatim repeats)
+- `a263e5e` 2026-08-24 — Anti-repetition memory in AI reply prompts (both detection and regenerate paths)
+- `f154991` 2026-08-24 — Soften email footer: remove promo link + naked URLs, keep honest AI disclosure and opt-out (spam-trigger reduction)
+- `413206c` 2026-08-24 — Conversation Mode: multi-turn AI thread handling, owner takeover detection, booking-intent escalation, turn caps + alerts
+- `2c490d8` 2026-08-24 — Alert policy overhaul: silent routine AI turns, one-click-draft link alerts, handoff notice at 3-turn cap, no more copy-paste digests
+- `caa3ed5` 2026-08-24 — Fix quote-footer false unsubscribes via stripQuoted; mailbox-wide reply search; per-message dedupe; skip NOT_INTERESTED leads
+- `5372a6c` 2026-08-24 — Pre-launch hardening: drop duplicate cron, widen booking classifier (10/10 tests), empty-body guard, NOT_INTERESTED skip, per-message dedupe
+- `4eb95df` 2026-08-24 — Stranger audit fixes: social share meta (og/twitter), hide social-proof badge under 100 sends
+- `80dfcdd` 2026-08-24 — Server-side lead caps per plan (DB trigger) + accurate tools validator error
+- `497b4c0` 2026-08-24 — Strict usability fixes: real sender signature in AI emails (no [Your Name]), anti-hallucination rule, conversation turns saved for owner review
+- `8ceb4e2` 2026-08-24 — Deep-test hardening: case-insensitive unique index on leads(user_id,email)
+- `6425546` 2026-08-24 — CRITICAL unsubscribe fix: campaign filter could silently no-op opt-outs (compliance risk); now suppresses unconditionally + honest updated count
+- `20fb0f7` 2026-08-24 — Production architecture: worker separation (send-worker/inbox-agent), policy engine, DB-enforced suppression, encrypted OAuth vault, lease+retry queue, audit trail, lifecycle state machine
+- `e636d4d` 2026-08-24 — Production hardening pass: DB-enforced suppression verified, atomic send-slot reservation (reserve/release RPC), follow-up idempotency key, OAuth failure state machine (ACCESS_REVOKED/REAUTH_REQUIRED vs transient), RFC 8058-compliant unsubscribe headers on AI replies + GET redirect, reply-loop protections (autoresponder detect, 24h budget, echo guard, confidence floor->human), digest extracted to own cron fn with auth gate, audit triggers for lead.created/campaign.*, claim_v2 next_retry_at hot-loop fix, cron jobs rebuilt without invalid cast
+- `e00d965` 2026-08-25 — fix(status): repoint health checks to live engines; add GET ?health probes
+- `535b9ec` 2026-08-25 — fix(copy): clear subjects + sell-in-first-message with booking link
+- `f2628bb` 2026-08-25 — fix(copy): stop duplicate booking links + make AI answer questions
+- `466cc6c` 2026-08-25 — feat: AI answers lead queries from owner's website content
+- `f93fb28` 2026-08-25 — feat: self-serve booking funnel + richer AI answers
+- `72c9065` 2026-08-25 — fix: chat persistence + lead-finder error handling
+- `241d25d` 2026-08-25 — fix: lead-finder timeout + live progress indicator
+- `4dfcaaf` 2026-08-25 — fix: lead-finder hard timeout + friendly error for slow countries
+- `9d27a8a` 2026-08-25 — feat: lead finder preview with user-controlled save
+- `b3d52c2` 2026-08-25 — feat: Phase 1 — Onboarding / Business Intelligence
+- `25ec82e` 2026-08-25 — fix: resolve 3 critical bugs found in architecture audit
+- `b902640` 2026-08-25 — fix: 3 failure/recovery bugs from Part 3 audit
+- `b7d82b7` 2026-08-25 — fix: two-phase insert pattern + DB constraint for concurrency safety
+- `3279598` 2026-08-25 — fix: database audit — 2 bugs found and fixed
+- `2b2e91b` 2026-08-25 — fix: database cleanup — drop dead columns, dead function, add performance indexes
+- `1fc4e31` 2026-08-25 — docs: update DATABASE-AUDIT.md to reflect all fixes applied
+- `4e58660` 2026-08-25 — audit: Part 6 deployment audit — delete stale follow-up function
+- `ec68b07` 2026-08-25 — fix: Part 7 audit — 2 defects found and fixed
+- `bb00d5f` 2026-08-25 — audit: Final acceptance test — full E2E chain verified against live production
+- `a1b804e` 2026-08-25 — fix(leads): truncate long campaign names in dialogs
+- `314b91f` 2026-08-25 — feat(leads): add Google Maps lead finder with website email scraping
+- `db229a1` 2026-08-25 — fix: resolve 8 defects from production audit
+- `4601d1e` 2026-08-26 — fix(google-maps): migrate to Places API (New) v1 endpoint
+- `938ea8b` 2026-08-26 — feat: dedicated Lead Finder page
+- `9b1b043` 2026-08-26 — fix: dark mode toggle + pure black/white theme
+- `6079773` 2026-08-26 — feat: campaign column in leads + fix chat dark mode
+- `117f340` 2026-08-26 — fix: truncate long campaign/name/company in leads table
+- `76fa0c0` 2026-08-26 — feat: inline editing for campaign names and lead fields
+- `1c77b9f` 2026-08-26 — fix: prevent content clipping at browser zoom
+- `f3db4dc` 2026-08-26 — feat: full edit dialog for every lead
+- `343632f` 2026-08-26 — fix: edit dialog crash — Radix Select can't use empty string value
+- `b6cdba5` 2026-08-26 — feat: full-page lead edit instead of dialog
+- `a629738` 2026-08-26 — fix: hide Lead Finder from sidebar menu
+- `3191170` 2026-08-26 — fix: lead edit route — use flat path to avoid nesting under leads page
+- `b203ffa` 2026-08-26 — feat: full-page campaign edit
+- `292dc32` 2026-08-26 — fix: settings page full-width layout
+- `7846eac` 2026-08-26 — feat: Phase 1 — Lead Discovery Engine enhancements
+- `a9a2bdd` 2026-08-26 — Phase 2: Email verification pipeline
+- `00f8adc` 2026-08-26 — Phase 3: Lead Quality + User Review Workflow
+- `4b992ea` 2026-08-26 — Phase 4A: Campaign Review & Launch page with image upload
+- `31f2b04` 2026-08-26 — Phase 4B: Real Customer Reply Handling — expanded intent taxonomy + conversation UI
+- `abda40a` 2026-08-26 — Phase 5A: Dashboard Analytics — complete business pipeline visualization
+- `e4bcaea` 2026-08-26 — Production audit: security fixes, follow-up system, click tracking
+- `d79e1dd` 2026-08-27 — Phase 1: Complete long-term follow-up engine
+- `4b39d21` 2026-08-27 — fix: dedicated Human Conversion Analytics section with proper metrics
+- `25e968a` 2026-08-27 — fix: restore Human Conversion in funnel + major support chat upgrade
+- `a881c6c` 2026-08-27 — fix: add checkmark icon to Human Conversion in funnel
+- `c6793f9` 2026-08-27 — fix: same ArrowRight on every funnel stage including Human Conversion
+- `1ffab48` 2026-08-27 — fix: move FOLLOWUP_COPY_CONTEXT before try block to fix TDZ error
+- `bd66f0f` 2026-08-27 — feat: website email enrichment — public email discovery from business websites
+- `9bd88c0` 2026-08-27 — fix: remove emojis from UI — professional tone throughout
+- `3f9c6d5` 2026-08-27 — fix: professional emoji + support chat privacy
+- `ed92662` 2026-08-27 — revert: restore all original emojis in UI
+- `c599a09` 2026-08-27 — feat: replace falling emoji confetti with canvas-confetti popper
+- `a86d3fd` 2026-08-27 — chore: bump service worker cache version to v3
+- `baf8e0e` 2026-08-28 — fix: production audit fixes — gmail token persistence, worker slot leak, follow-up RPC hardening, analytics event names, null-email lead save, inbox UX
+- `03e5052` 2026-08-28 — fix: reclaim stranded 'sending' follow-up leads (30min grace) + drop repo junk (NUL, build logs)
+- `8af19eb` 2026-08-28 — fix: reclaim stranded follow-up sends; pin verify_jwt config for worker functions
+- `e640dbe` 2026-08-28 — fix: track-click platform JWT gate broke tracked links (401) for leads - verify_jwt=false
+- `3052818` 2026-08-28 — fix: daily-digest excluded first-time users (NULL last_digest_date) - OR null into candidate query
+- `ce0141e` 2026-08-28 — chore: pin track-click + spam-check verify_jwt in root config
+- `ffd1025` 2026-08-28 — docs: final production readiness audit report
+- `5019d90` 2026-08-28 — feat: AI answers product/pricing questions first; hand off only when truly stuck
+- `1694572` 2026-08-28 — feat(inbox-agent): thread memory, full-site knowledge crawl, objection intelligence
+- `6c0ea27` 2026-08-28 — feat: professional cold-email subjects, no-website niche mode with phone handoff, website-only answering, objection reconciliation
+- `563f621` 2026-08-28 — feat: hybrid campaign delivery — local-morning (default) or instant send per campaign
+- `714be95` 2026-08-28 — feat: stop self-notification emails — inbox keeps only client emails, outreach notifies in-app
+- `55291a7` 2026-08-28 — feat: warm B2B network — opt-in discoverability, intro requests with in-app alerts, matches in AI lead finder
+- `90666e4` 2026-08-28 — feat: referral reward — 7 days free starter per friend who joins via your link
+- `212e879` 2026-08-29 — feat(ai): smarter cold-email writer — lead facts, attention openers, few-shot voice, script-aware language detection (AI upgrade #1)
+- `767f6f8` 2026-08-29 — feat(ai): smarter reply classifier — thread history, few-shot examples, and a 'reason' evidence field (AI upgrade #2)
+- `ee39cbb` 2026-08-29 — feat(ai): reply writer continuity — own-past-reply awareness, no self-contradiction, no invented facts/links (AI upgrade #3)
+- `e622f16` 2026-08-29 — feat(ai): follow-up arc — early value, proof, gentle decision, polite breakup across all 13 steps (AI upgrade #4)
+- `0a5239b` 2026-08-29 — fix(ai): encode non-ASCII email subjects as RFC 2047 — Arabic/emoji subjects were mangled to garbage by Gmail (ser: 'aaassshASSSS') because raw 8-bit headers have no charset
+- `a1f45d5` 2026-08-29 — feat(ai): smarter support chat — persisted threads, real account context (plan/usage/Gmail state), inline Arabic detection, cross-device history (AI upgrade #5)
+- `487f649` 2026-08-29 — fix: Arabic cold-email subjects survive + never mixed-lingual; regenerate DB types so typecheck is clean
+- `c280be6` 2026-08-29 — feat: push notifications — bell with live unread badge, settings toggle, owner_alerts→push_queue trigger, pg_cron push-drainer with VAPID web-push (high/medium alerts only)
+- `1f41827` 2026-08-29 — ui: theme toggle only in sidebar — remove duplicate from top header
+- `5becac7` 2026-08-29 — fix(web): eliminate hydration error + guard against stale service worker (white screen fix)
+- `9ebcc06` 2026-08-29 — fix(find-leads): enforce country targeting on Google Maps + normalize country codes/aliases
+- `238c4e2` 2026-08-29 — fix(web): mount SPA with createRoot (no hydration mismatch #418) + allow Google Fonts in CSP
+- `05f5a17` 2026-08-29 — fix(sw/csp): stop service worker from killing font fetches
+- `dab0e6d` 2026-08-29 — chore: re-trigger vercel deploy
+- `210486a` 2026-08-29 — fix: mount React root on document to stop infinite event-dispatch freeze (react#37065)
+- `a35e382` 2026-08-29 — feat(lead-finder): AI planning + curation, location targeting, varied metros, dedupe, area suggestions, caching
+- `9099186` 2026-08-30 — feat(lead-finder): efficient quota use + own saved-database memory layer
+- `94e3b24` 2026-08-30 — feat(lead-finder): freshness rotation — rediscover new businesses in covered areas
+- `7841064` 2026-08-30 — feat(warm-areas): nightly leftover-quota worker to grow 'our own map'
+- `24861af` 2026-08-30 — feat(chat): reachable before login — visitor/guest mode on landing + signup
+- `3c0a25a` 2026-08-30 — feat(chat): delete conversation button (trash icon in header)
+- `04f03b7` 2026-08-31 — chore(brand): rename OutreachAI to OutShipAI across web + app
+- `4a8d80f` 2026-08-31 — chore(brand): restyle brand casing to OutshipAi
+
+## 2026-09 — 70 commits
+
+- `55a3c3c` 2026-09-04 — fix(security): harden headers, CORS, auth trust, rate limits, minor bugs
+- `2b6e7ad` 2026-09-04 — fix(security): add shared CORS helper
+- `bfcc318` 2026-09-04 — fix(security): HMAC-signed unsubscribe + track-click URLs, crypto warning
+- `9ad00ed` 2026-09-07 — Polish: Substack-style typography, motion, and skeletons
+- `ff3af51` 2026-09-07 — Fix: relax CSP script-src to unblock TanStack Start inline scripts
+- `f0db5e0` 2026-09-07 — hero: add floating bubbles, cursor-tracking blue glow, magnet CTAs, card glare
+- `64988a2` 2026-09-07 — Revert "hero: add floating bubbles, cursor-tracking blue glow, magnet CTAs, card glare"
+- `8e5fe94` 2026-09-07 — landing: brand accent, hero product mock, stats strip, closing CTA, scroll reveal
+- `98e71e4` 2026-09-07 — landing: strictly monochrome black & white
+- `24c090d` 2026-09-07 — landing: editorial polish — app-screenshot mock, italic serif hero, kicker rules, footer columns, nav underline
+- `99fbfdb` 2026-09-07 — landing: mobile menu, how-it-works steps, FAQ + schema, honest badge
+- `e8eae72` 2026-09-07 — landing: craft pass — scrollspy nav, layered hierarchy, grain, staggered reveals, count-up stats, mono slider, window dots, whitespace
+- `62065e2` 2026-09-10 — landing: lazy-mount hero orb after idle, cap pixel ratio & gate render on visibility for perf
+- `904924e` 2026-09-10 — backend: commit stage 0a-9 layer — intelligence, sender-health, cost gate, memory, outcome-verified cron health
+- `ca7004b` 2026-09-10 — ops: add CRON_SECRET rotation + post-rotation verification tooling
+- `f5fa23e` 2026-09-10 — ops: dead-man's switch proof + recovery tooling, .env.example placeholder
+- `8149652` 2026-09-10 — backend: gate support-chat behind the AI-cost meter (guest bucket + signed-in quota)
+- `8f7f88a` 2026-09-10 — ops: codify shared-module bundle rule; attribute quota-only LLM callers
+- `e097575` 2026-09-10 — ops: standing pre-deploy gate -- deploy-fn wrapper enforces staleness sweep
+- `e13c9ef` 2026-09-11 — backend: authenticated lead-erasure path — forget/delete RPC wrapper + dashboard triggers
+- `bdfab3f` 2026-09-12 — backend: harden follow-up send window — PASS 1 pacing + runtime ceiling, pre-send recheck, reply-cancel trigger covers 'sending'; add dry-run scoping; document audit-2026-09-12
+- `3351490` 2026-09-12 — backend: default follow-up sequence -> 4 touches (day 3,7,14,21); re-schedule active mid-sequence leads
+- `31ad60f` 2026-09-12 — backend: Calendly webhook for confirmed bookings — meetings growth migration, owner-scoped attribution + follow-up stop + high-priority alert, honest Bookings KPI (meetings not intent), webhook bootstrap card + config endpoint, branchless constant-time HMAC verify, sim+live proofs; fix campaign generator fallback link + soft-pedal booking claims in marketing
+- `74fa0f8` 2026-09-12 — ops: scope deploy-fn pre-deploy staleness gate to non-targeted functions — the function being deployed is exempt (deploying it is the fix for its own staleness), any other stale bundle still aborts; post-deploy sweep stays unscoped so a partial fix can never look clean; add deploy-gate-scope regression proof (deploy-then-touch fabrication, abort-vs-exempt matrix)
+- `3672ced` 2026-09-12 — landing: instant hero visual — paint 3d-core.jpg poster from first paint (no JS/WebGL dependency), swap it out only after the lazy three.js orb paints its first frame, keep poster as permanent fallback on no-WebGL / reduced-motion, warm the 521kB three chunk in the same idle callback that boots the orb; declare three dep + sync lock
+- `58cd361` 2026-09-12 — landing: give agent-badge a real dark-mode surface (glass chip + readable text) instead of a washed-out white streak with grey text
+- `94c669d` 2026-09-12 — landing: drop the static hero poster entirely — show the webgl orb directly, booting it right after first idle (no window.load wait) so the 3D appears in under a second instead of flashing a jpg first
+- `16bde0b` 2026-09-12 — app: fix the browser url-bar tint so the app doesn't look like a website — theme-color meta was misplaced (.name in links[] rendered nothing) and the manifest still carried the old purple #7c3aed, painting the phone chrome purple; now matches the app bg (#fcfcfc light / #070707 dark via the theme toggle)
+- `8b628a3` 2026-09-12 — app: linear-style dashboard + app-shell pass (compact header, segmented date toolbar, tight KPI strip, flat small panels) — website untouched
+- `c2f116e` 2026-09-12 — app: linear-style pass across all app screens (billing, editors, lead-finder, onboarding) — flat small panels, compact headings, no card shadows; website untouched
+- `5a208dd` 2026-09-12 — app: professional product polish — solid primary buttons (no gradient/glow), no emoji or marketing flourish inside the app; keeps website untouched and same monochrome theme
+- `6608383` 2026-09-13 — app: make it behave like a real app — fixed viewport frame (h-dvh) so the sidebar/top bar stay pinned and only the content area scrolls; dashboard is now a two-column workspace with internally-scrolling panels instead of one long website-style page
+- `5f97bd5` 2026-09-13 — ops: bump service worker version to force fresh app shell on all clients
+- `50c4cc3` 2026-09-13 — app: app-chrome redesign — dark Linear-style sidebar on desktop with light content area; phone now gets a bottom tab bar (Dashboard/Leads/Campaigns/Emails + More sheet) and a top logo bar; no more website-style layout
+- `db772f6` 2026-09-17 — fix: single shared APP_BASE_URL for every lead-facing link
+- `9d1646f` 2026-09-18 — fix: harden send-worker slot release, inbox-agent turn budget, and health-check crash alert; add deno typecheck gate with type-only shared plumbing
+- `669d75d` 2026-09-19 — feat: shared SiteHeader for marketing site, homepage conversion nav, and hero-nodes preview route
+- `c135089` 2026-09-19 — perf: load homepage hero orb immediately and show a static placeholder
+- `e09d13b` 2026-09-19 — hero: remove CSS ghost/shadow behind 3D orb, preload three chunk in shell for faster load
+- `c4f4fb8` 2026-09-19 — hero: restore orb ground shadow only
+- `24bedc8` 2026-09-20 — app: theme-aware collapsible sidebar + mobile drawer with full menu
+- `ffede01` 2026-09-22 — Switch canonical host: outreach-ochre-sigma.vercel.app -> out-ship.com
+- `e95d8d3` 2026-09-22 — chore: untrack 55MB kotlin-compiler jar + scratch pngs/scan scripts; ignore android m2local
+- `551f045` 2026-09-22 — perf: drop RoomEnvironment for baked env; tighten hero-to-header gap; add orb first-paint placeholder
+- `0ca08f9` 2026-09-23 — fix: restore polished chrome shine via studio light-box env bake
+- `48233ba` 2026-09-23 — fix: pitch-black polished orb — charcoal env, near-black metals, moodier reflections
+- `3b6c50f` 2026-09-23 — fix: smarter support-chat — topic router, self-facts, controls, few-shots kill deflect-latch
+- `2c6708b` 2026-09-23 — fix(support-chat): off-topic redirect matched to user intent
+- `62e2634` 2026-09-24 — fix(cost-sweep): heal false-drift lock on fresh windows, allow sweep-owned degrade to self-heal
+- `d9e9fe9` 2026-09-28 — fix(billing): pass user_id in checkout URL so LemonSqueezy webhook can upgrade plans
+- `e805dc8` 2026-09-28 — feat(ai): let the agent handle pricing, angry, security/legal and ambiguous replies
+- `7c10805` 2026-09-28 — feat(billing): replace LemonSqueezy with Razorpay checkout
+- `4e83ee0` 2026-09-28 — fix(billing): use TextEncoder for webhook signature comparison
+- `2395b71` 2026-09-28 — refactor(billing): remove LemonSqueezy completely
+- `a94e6b1` 2026-09-28 — fix(support-chat): stop the bot promising refunds it cannot authorize
+- `f58f398` 2026-09-29 — Fix notification deep links, collapsed sidebar logo, and chatbot billing facts
+- `3aab2cc` 2026-09-29 — Add QA cleanup scripts for support-chat test data
+- `87d5be9` 2026-09-29 — Add tenant-isolation audit harness
+- `25df6d6` 2026-09-29 — Add action-budget: per-message and per-conversation step caps
+- `3690dd8` 2026-09-29 — generate-email: stop inventing lead facts that were never supplied
+- `78cf7c8` 2026-09-29 — Add an AI quality gate; fix two defects it found on first run
+- `9a0dc71` 2026-09-29 — Rewrite customer-facing copy in plain language (EN + AR)
+- `bea0071` 2026-09-30 — agent: add intent-first chat agent with confirm-gated writes
+- `6de6637` 2026-09-30 — agent: fix three safety bugs the live proof exposed in v1
+- `f288032` 2026-09-30 — docs: the frontend was never blocked - it auto-deploys on push
+- `5f282c2` 2026-09-30 — Agent: understand meaning first, then learn the words
+- `a956544` 2026-09-30 — agent: do not claim "learned nothing" when the request failed
+- `f5fe755` 2026-09-30 — agent: confusion retires a phrase, an empty result does not
+- `e1e7c17` 2026-09-30 — agent: let the chat fill the page like the other screens
+- `3b33465` 2026-09-30 — agent: saved chats were never missing, the UI just could not see them
+
+## 2026-10 — 69 commits
+
+- `6755da9` 2026-10-01 — agent: resolve the target before asking anyone to confirm
+- `ee6d368` 2026-10-03 — agent: remember the user and answer the questions they actually asked
+- `d2b027f` 2026-10-03 — agent: stronger business-intro recognition and grounded chat replies
+- `8b23a58` 2026-10-03 — Stop asking for slots the person already gave
+- `42845ae` 2026-10-04 — Fix two bugs my own tests were hiding
+- `8f16275` 2026-10-04 — Teach the agent the owner's account and business from the database
+- `4ec36d0` 2026-10-04 — Stop the agent repeating itself and asking what it already knows
+- `8f7398f` 2026-10-04 — Fix the repeated "not segmented yet" reply for real
+- `21f71ec` 2026-10-04 — Stop dead-ending with "I could not work that out just now"
+- `ce3d8c9` 2026-10-07 — Report AI pool size from health-check
+- `5680655` 2026-10-07 — Menu-first agent: 6 clicks, zero AI calls
+- `cb6bc04` 2026-10-07 — Update @tanstack/react-start to clear the deploy block
+- `fbfb744` 2026-10-07 — Bump service worker to v7 so clients drop stale caches
+- `676b9d0` 2026-10-07 — Show the menu after every reply, not only at the top
+- `b81c9d4` 2026-10-07 — Answer the agent's own questions instead of dead-ending on them
+- `2849e65` 2026-10-07 — Replace the flat menu with a drill-down tree covering the whole app
+- `6c8be76` 2026-10-08 — Fix campaign name parsing to ignore filler like "a campaign"
+- `aa248c2` 2026-10-08 — Fix confirm acceptance for multi-word yes ("Yes, do it")
+- `936dfb1` 2026-10-08 — Format the two recent agent fixes
+- `6e2b521` 2026-10-09 — Ask for a campaign name before confirming the write
+- `38a29be` 2026-10-09 — Fill the campaign name deterministically and just create the draft
+- `f1a0cf1` 2026-10-09 — Save email-less businesses to the shared ledger too
+- `e899d55` 2026-10-09 — Make the agent menu a visual launcher
+- `e1bd0b9` 2026-10-09 — Update contact email to outshipai@gmail.com
+- `a5bb6f9` 2026-10-09 — Razorpay: international readiness preflight + safe credential connector
+- `57974a9` 2026-10-10 — Fix razorpay preflight: Management API returns a hash, not the value
+- `dfb9eb7` 2026-10-10 — Enforce plan limits in DB (campaigns + leads), show them on billing
+- `d40dc4d` 2026-10-11 — Refund policy: 14-day on first purchase, fix cancel wording
+- `199ccb4` 2026-10-11 — Honesty: disclose Find Leads email-availability gap
+- `d2bbf21` 2026-10-11 — Background website->email crawler to enrich the shared business map
+- `617da00` 2026-10-11 — Budget-driven map warmer: spend leftover daily Google quota on area coverage
+- `8b34cdf` 2026-10-12 — Agency: add how-it-works + FAQ, honest cancel wording, self-serve link
+- `f88523e` 2026-10-12 — SEO: unique title + meta description for every public page
+- `963ee61` 2026-10-12 — Analytics: add GA4 (G-95GHJXR7D4) + allow Google domains in CSP
+- `eb130af` 2026-10-12 — Perf: defer heavy homepage JS (three.js orb, support chat, supabase) to idle
+- `6e97be1` 2026-10-13 — Fix wrong Supabase key env var (ANON_KEY -> PUBLISHABLE_KEY) in status, support-chat, unsubscribe
+- `713cc63` 2026-10-13 — Email: send via SendGrid; capture replies + bounces without Gmail
+- `216a253` 2026-10-13 — Remove Gmail connect flow from the UI
+- `163cb03` 2026-10-13 — Drop Gmail wording from public pages and support copy
+- `599def3` 2026-10-13 — Revert "Drop Gmail wording from public pages and support copy"
+- `2c3db80` 2026-10-13 — Revert "Remove Gmail connect flow from the UI"
+- `014bd4a` 2026-10-13 — Revert "Email: send via SendGrid; capture replies + bounces without Gmail"
+- `fec250b` 2026-10-13 — Dashboard: add funnel, performance trend, and reply sentiment charts
+- `8298e5b` 2026-10-13 — Dashboard charts: match theme colors, replace sentiment with intent donut
+- `7ff0b91` 2026-10-13 — Dashboard: single Reply Trend graph; restore pre-chart layout
+- `ee4a339` 2026-10-14 — Reply Trend: draw Interested as a line over the Replies area
+- `1e74ae5` 2026-10-14 — Reply Trend: use ComposedChart so the Interested line renders
+- `35ef303` 2026-10-14 — Reply Trend: add Sent as faint background bars
+- `9a55cde` 2026-10-14 — Reply Trend: make Sent, Replies and Interested all lines
+- `4e6c92b` 2026-10-14 — Reply Trend: dash the Interested line so overlapping Replies stays visible
+- `b15b233` 2026-10-14 — Reply Trend: solid Interested line; thicker Replies line
+- `a1f424c` 2026-10-14 — fix(dashboard): proper dark-mode colors for warn StatCard and intent grays
+- `739f391` 2026-10-14 — fix(outreach): stop inventing lead specifics in cold email
+- `90fa235` 2026-10-14 — Dashboard: polish reply trend chart (gradient areas, dual axis, counts/rate toggle, zero-filled axis)
+- `5ffc321` 2026-10-14 — Dashboard: revert reply trend to stable LineChart (fix blank render)
+- `735a429` 2026-10-14 — Dashboard: restore known-good reply trend chart
+- `b910e76` 2026-10-14 — Dashboard: gradient areas for reply trend (step 1)
+- `3693f7f` 2026-10-14 — Dashboard: subtle point dots on reply trend (step 2)
+- `21138da` 2026-10-15 — Landing: brand casing, trust strip, sample email + reply section
+- `e32bf7d` 2026-10-23 — Eval: dev2 split, per-row tags, four-outcome scoring
+- `ccfcda8` 2026-10-28 — fix(agent): never invent contact details; cap lead-crawl CPU cost
+- `57e89eb` 2026-10-28 — Eval: per-row rule-layer reporter + Oct 21 result tables
+- `7cf57f7` 2026-10-28 — Settings: explain Google's unverified-app warning next to Connect Gmail
+- `8e5e2eb` 2026-10-28 — Backend: recover inbound-email + email-events source into the repo
+- `7553409` 2026-10-30 — Agent menu: 'Add a lead' shortcut opens the Add Lead dialog
+- `1754a30` 2026-10-30 — Wording: call them contacts, not leads
+- `b1831ed` 2026-10-30 — Contacts: select many and delete in one action
+- `4120b05` 2026-10-30 — About: rewrite the page around what we refuse to do
+- `39e9a0f` 2026-10-30 — About: clarify one-address pricing, drop the data-sourcing detail
+
+## 2026-11 — 11 commits
+
+- `f4ae37a` 2026-11-01 — Opener learning: record the angle, then act on the one that works
+- `7213529` 2026-11-01 — Learning: act on the subject winner, stop dead follow-up tails
+- `9a1e400` 2026-11-01 — Reply-style learning: give the reply a recorded shape, then learn from meetings
+- `2314bde` 2026-11-01 — Stop free-trial farming: lifetime cap, business identity, DNS domain proof
+- `db20276` 2026-11-01 — Scope send_block_reason to the caller's own account
+- `3fecc47` 2026-11-01 — Format the new anti-abuse UI files
+- `f71a687` 2026-11-02 — Say plainly what free now is: 50 emails total, up to 10 a day
+- `add8406` 2026-11-02 — Reject a country name as the business address
+- `220fd2b` 2026-11-02 — Keep the block-reason string compatible with the deployed bundle
+- `a5dd901` 2026-11-02 — Restore the specific address reason now that the bundle is live
+- `74701dd` 2026-11-03 — Add the operator console, and fix two bugs it exposed
