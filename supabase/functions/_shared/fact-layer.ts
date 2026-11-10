@@ -20,6 +20,8 @@
 
 export type FactKind =
   | "name"
+  | "company"
+  | "job_title"
   | "category"
   | "city"
   | "address"
@@ -251,6 +253,23 @@ const STRUCTURAL =
 const CTA_QUESTION =
   /^(want|would you|are you open|worth|can we|shall we|interested|open to|happy to|do you want|may i|is it worth|how about|keen)\b/i;
 
+/** Sign-offs may carry the sender's own contact number. Kept narrow: one
+ *  short line, no second sentence, so this cannot smuggle a claim. */
+const SIGN_OFF =
+  /^(best|kind regards|regards|thanks|thank you|cheers|sincerely|warmly)\b/i;
+
+/** Numbers that need backing. Digits glued to letters (LS1, B2B) are part of
+ *  a word, not a statistic. */
+function numbersIn(text: string): string[] {
+  const out: string[] = [];
+  for (const m of String(text ?? "").matchAll(
+    /(?<![A-Za-z])\d[\d,]*(?:\.\d+)?(?![A-Za-z])/g,
+  )) {
+    out.push(m[0].replace(/,/g, "").replace(/\.$/, ""));
+  }
+  return out;
+}
+
 /** Line breaks are sentence boundaries: a greeting must never be glued to the
  *  first claim, or the greeting inherits the claim's enforcement. */
 function splitSentences(text: string): string[] {
@@ -261,13 +280,32 @@ function splitSentences(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Every sentence must cite at least one verified fact, or be structural
- *  (greeting, sign-off, unsubscribe). Anything else is blocked and reported,
- *  never silently dropped: the caller shows the reason. */
+/** A sentence needs a fact when it asserts something checkable: a number, or
+ *  a detail about this specific prospect (name, city, category). Generic
+ *  value statements ("happy to share how we help clinics") do not. */
+export function sentenceNeedsFact(sentence: string, anchors: string[]): boolean {
+  const s = normalizeForMatch(sentence);
+  if (!s) return false;
+  if (/\d/.test(s)) return true;
+  for (const a of anchors ?? []) {
+    const token = normalizeForMatch(a);
+    if (token.length >= 4 && s.includes(token)) return true;
+  }
+  return false;
+}
+
+/** Every checkable sentence must cite at least one verified fact, or be
+ *  structural (greeting, sign-off, unsubscribe). Anything else is blocked and
+ *  reported, never silently dropped: the caller shows the reason.
+ *
+ *  `lenient` narrows the requirement to sentences that actually assert a
+ *  checkable detail (see sentenceNeedsFact). `anchors` are the prospect's own
+ *  values, so naming the wrong city can never pass as a generic line. */
 export function enforceClaims(
   draft: string,
   claims: Claim[],
   facts: Fact[],
+  opts: { lenient?: boolean; anchors?: string[] } = {},
 ): EnforcementResult {
   const byId = new Map(facts.map((f) => [f.id, f]));
   const bySentence = new Map(
@@ -278,11 +316,16 @@ export function enforceClaims(
   const blocked: Array<{ sentence: string; reason: string }> = [];
 
   for (const sentence of splitSentences(draft)) {
-    if (STRUCTURAL.test(sentence) && !/\d/.test(sentence)) {
+    const signOff = SIGN_OFF.test(sentence) && sentence.length <= 80 && !/[.!?]\s*\S/.test(sentence) && !/\.\s*$/.test(sentence);
+    if (STRUCTURAL.test(sentence) && (!/\d/.test(sentence) || signOff)) {
       kept.push(sentence);
       continue;
     }
     if (CTA_QUESTION.test(sentence) && /\?\s*$/.test(sentence) && !/\d/.test(sentence)) {
+      kept.push(sentence);
+      continue;
+    }
+    if (opts.lenient && !sentenceNeedsFact(sentence, opts.anchors ?? [])) {
       kept.push(sentence);
       continue;
     }
@@ -304,6 +347,27 @@ export function enforceClaims(
       });
       continue;
     }
+
+    // Citing a real fact does not license extra numbers. "Rated 4.6 by 120
+    // reviews" cites the rating fact, but 120 reviews is invented. Every
+    // number in a sentence must appear in the value of a cited fact.
+    const citedText = normalizeForMatch(
+      claim.fact_ids
+        .map((id) => {
+          const f = byId.get(id)!;
+          return `${f.value} ${f.quote}`;
+        })
+        .join(" | "),
+    ).replace(/,/g, "");
+    const invented = numbersIn(sentence).find((n) => !citedText.includes(n));
+    if (invented) {
+      blocked.push({
+        sentence,
+        reason: `states a number no cited fact supports: ${invented}`,
+      });
+      continue;
+    }
+
     kept.push(sentence);
   }
 

@@ -27,6 +27,12 @@ import {
   openerDirectiveFor,
   pickOpener,
 } from "../_shared/ai-lib.ts";
+import {
+  factsFromLead,
+  guardDraft,
+  parseWriterJson,
+} from "../_shared/fact-writer.ts";
+import { factsToPromptBlock } from "../_shared/fact-layer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -304,7 +310,11 @@ LANGUAGE REQUIREMENT — WRITE IN ARABIC:
     });
   const openerKey = opener.key;
   const openerDirective = openerDirectiveFor(opener);
-  const promptContent = `${biContext}${buildLeadFacts(lead)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
+  // The only business input to the model: verified facts, wrapped as data.
+  // A lead row field that is missing simply produces no fact, and therefore
+  // no sentence about it.
+  const facts = factsFromLead(lead);
+  const promptContent = `${biContext}${factsToPromptBlock(facts)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 A booking link is added automatically AFTER your text — do NOT type any URL yourself.
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
@@ -330,29 +340,27 @@ Rules for body:
 - Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.
 
 Return ONLY a JSON object with this exact format:
-{"subject":"...","body":"line1\\nline2\\nline3"}
-The body must use \\n between paragraphs.${lang}`;
+{"subject":"...","body":"line1\\nline2\\nline3","claims":[{"sentence":"exact sentence from body","fact_ids":["f1"]}]}
+The body must use \\n between paragraphs.
+Every sentence that states a number, a name, a place, a rating, or anything about this specific business must cite at least one fact id from VERIFIED FACTS. If no fact supports a sentence, do not write the sentence. A shorter true email beats a richer invented one.${lang}`;
   const text = gate
     ? (await gate.run(promptContent, { maxTokens: 700, temperature: 0.8 })) ?? ""
     : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 700, temperature: 0.8 });
   if (gate && !text.trim()) return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix); // conserve on empty AI
 
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start !== -1 && end > start) {
-    try {
-      const parsed = JSON.parse(text.slice(start, end + 1));
-      if (parsed.subject && parsed.body) {
-        let subj = sanitizeSubject(String(parsed.subject), userOffer, leadCompany, arabic);
-        if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
-        return { subject: subj, body: String(parsed.body).replace(/\\n/g, "\n"), openerKey };
-      }
-    } catch { /* fall through */ }
+  // Enforce before use. A body sentence that cannot point at a verified fact
+  // is removed with a reason; if nothing citable survives, the deterministic
+  // template is used instead (it states only the name, company and offer).
+  const parsed = parseWriterJson(text);
+  if (parsed) {
+    const outcome = guardDraft(text, facts);
+    if (!outcome.empty) {
+      let subj = sanitizeSubject(parsed.subject || "Quick question", userOffer, leadCompany, arabic);
+      if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
+      return { subject: subj, body: outcome.content, openerKey };
+    }
   }
-  const lines = text.split("\n").filter(Boolean);
-  let subj = sanitizeSubject(lines[0] ?? "Quick question", userOffer, leadCompany, arabic);
-  if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
-  return { subject: subj, body: lines.slice(1).join("\n") || text, openerKey };
+  return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix);
 }
 
 function localSpamScore(subject: string, body: string): { score: number; hint: string } {

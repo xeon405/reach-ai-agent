@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { groqChat, groqKeys, sanitizeForPrompt } from "../_shared/groq.ts";
+import { containsArabic, pickOpenerDirective } from "../_shared/ai-lib.ts";
 import {
-  buildLeadFacts,
-  COLD_EMAIL_FEWSHOTS,
-  containsArabic,
-  pickOpenerDirective,
-} from "../_shared/ai-lib.ts";
+  buildFactWriterPrompt,
+  factsFromLead,
+  guardDraft,
+  listingUrl,
+} from "../_shared/fact-writer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,52 +78,64 @@ serve(async (req) => {
     // would be readable. The id only ever enriches the prompt -- it can never
     // widen what the caller may see, because the name/company/title the email is
     // written from are still the ones the caller supplied.
-    let leadFacts = "";
-    let leadCategory: string | null = null;
-    let leadCity: string | null = null;
+    let leadRow: Record<string, unknown> = {};
     if (typeof leadId === "string" && leadId) {
       const { data: lead } = await supabase
         .from("leads")
-        .select("category, city, country, rating, website, email_status, email_is_role")
+        .select("category, city, address, country, rating, website, phone, email_status, email_is_role")
         .eq("id", leadId)
         .eq("user_id", userId)
         .maybeSingle();
-      leadFacts = buildLeadFacts(lead ?? {});
-      leadCategory = lead?.category ?? null;
-      leadCity = lead?.city ?? null;
+      leadRow = (lead ?? {}) as Record<string, unknown>;
     }
+
+    const leadCategory = typeof leadRow.category === "string" ? leadRow.category : null;
+    const leadCity = typeof leadRow.city === "string" ? leadRow.city : null;
+
+    // The only business input to the writer. Name, company and job title come
+    // from the caller; the rest from the lead row. Page-level facts are added
+    // later, once the lead has a fetched page.
+    const facts = factsFromLead(leadRow, {
+      listingUrl: listingUrl(leadName, leadRow.address ?? leadCity),
+      extra: [
+        { kind: "name", value: leadName, source: "you" },
+        { kind: "company", value: leadCompany, source: "you" },
+        { kind: "job_title", value: leadJobTitle, source: "you" },
+      ],
+    });
 
     const openerDirective = pickOpenerDirective(`${sanitizeForPrompt(leadName, 80)}-${sanitizeForPrompt(leadCompany, 120)}`, {
       hasLeadFacts: Boolean(leadCategory && leadCity),
     });
 
-    const content = await groqChat([{
-      role: "user",
-      content: `Write a short, personalized cold email from ${senderName || "a representative"} at ${sanitizeForPrompt(yourCompany ?? prof?.company ?? "our company", 120)} to ${sanitizeForPrompt(leadName, 80)} who is a ${sanitizeForPrompt(leadJobTitle, 80)} at ${sanitizeForPrompt(leadCompany, 120)}.
-Our offer: ${sanitizeForPrompt(yourOffer ?? "our service")}${bookingLink ? `
-Booking link you can mention for scheduling: ${bookingLink}` : ""}
-${leadFacts}
-${openerDirective}
+    const writerPrompt = buildFactWriterPrompt({
+      facts,
+      senderName: senderName || `${sanitizeForPrompt(yourCompany ?? prof?.company ?? "the team", 120)} team`,
+      senderCompany: sanitizeForPrompt(yourCompany ?? prof?.company ?? "our company", 120),
+      offer: sanitizeForPrompt(yourOffer ?? "our service", 200),
+      bookingLink: bookingLink || undefined,
+      signature: senderSig || undefined,
+      arabic,
+      openerDirective,
+    });
 
-${COLD_EMAIL_FEWSHOTS}
+    const raw = await groqChat([{ role: "user", content: writerPrompt }], {
+      maxTokens: 800,
+      context: { fn: "generate-email", kind: "gen_email", user_id: userId },
+    });
 
-Rules:
-- Maximum 5 sentences
-- Sound human and genuine, not salesy
-- End with a simple question
-- No subject line, just the email body
-- Sign off exactly as: Best regards,
-${senderName || `${sanitizeForPrompt(yourCompany ?? "the team", 120)} team`}
-- NEVER use placeholders like [Your Name] or [Company] — use only real details given above
-- Ground every personalisation in the LEAD FACTS above. Use ONLY what is written there. NEVER invent a detail — not their city, not their industry, not a rating, not a problem they are known to have, not a company size or revenue, not an award or news item, and never a personal life event. If a fact is not listed above, you do not know it, so do not write it. When no LEAD FACTS block is present, personalise using only the person's name, company and job title as given, and nothing more.
-- NEVER claim to have researched, visited, reviewed, or noticed anything about them. Do not assert what they currently have, use, lack, or are missing (do not write "I noticed you don't have X", "you aren't using X", "you have no X"). You have no knowledge of their current setup beyond the facts listed, so speak about what you DO in general terms and let them tell you about themselves.
-- Write like a real person who knows only what is on this page. A vague but honest email beats a specific but invented one, always
-- Never use these words: free, guarantee, act now, limited time, risk-free, urgent, buy now, cheap, loan, click here, 100%, make money, congratulations, dear friend, instant.${senderSig ? `
-- Append this signature block verbatim at the end:\n${senderSig}` : ""}${arabic ? `
-- WRITE IN ARABIC with a professional Gulf business tone. Keep company names in Latin script.` : ""}`,
-    }], { maxTokens: 800, context: { fn: "generate-email", kind: "gen_email", user_id: userId } });
+    // Parse, then enforce. A sentence that cannot point at a verified fact is
+    // removed here, and the reason travels back with the draft. Empty content
+    // means: do not send this, there is nothing true to say yet.
+    const outcome = guardDraft(raw, facts);
 
-    return json({ content });
+    return json({
+      content: outcome.content,
+      claims: outcome.claims,
+      facts: outcome.facts,
+      blocked: outcome.blocked,
+      empty: outcome.empty,
+    });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
