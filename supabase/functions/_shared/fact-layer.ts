@@ -22,6 +22,7 @@ export type FactKind =
   | "name"
   | "company"
   | "job_title"
+  | "offer"
   | "category"
   | "city"
   | "address"
@@ -31,7 +32,7 @@ export type FactKind =
   | "phone"
   | "page_quote";
 
-export type FactSource = "listing" | "page" | "you";
+export type FactSource = "listing" | "page" | "you" | "ours";
 
 export interface Fact {
   /** Stable id used by the writer to cite a fact for a sentence. */
@@ -91,14 +92,16 @@ const ENTITIES: Record<string, string> = {
 };
 
 export function decodeEntities(input: string): string {
+  const safe = (code: number) =>
+    Number.isFinite(code) && code > 0 && code < 0x110000 && !(code >= 0xd800 && code <= 0xdfff);
   return input
     .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => {
       const code = parseInt(String(hex), 16);
-      return Number.isFinite(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : " ";
+      return safe(code) ? String.fromCodePoint(code) : " ";
     })
     .replace(/&#(\d+);/g, (_m, dec) => {
       const code = parseInt(String(dec), 10);
-      return Number.isFinite(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : " ";
+      return safe(code) ? String.fromCodePoint(code) : " ";
     })
     .replace(/&([a-z]+);/gi, (m, name) => ENTITIES[String(name).toLowerCase()] ?? m);
 }
@@ -124,6 +127,10 @@ export function extractVisibleText(html: string): string {
   out = out.replace(/<\/?(?:p|div|br|li|tr|td|th|h[1-6]|section|article|header|footer|main|nav|ul|ol|table|tbody|thead)\b[^>]*>/gi, " ");
   out = out.replace(/<[^>]+>/g, " ");
   out = decodeEntities(out);
+  // Never emit a lone surrogate or a decode replacement into a fact: both are
+  // corruption, not text a reader could see.
+  out = out.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+  out = out.replace(/\uFFFD/g, " ");
   return out.replace(/\s+/g, " ").trim();
 }
 
@@ -292,6 +299,15 @@ export function sentenceNeedsFact(sentence: string, anchors: string[]): boolean 
     if (token.length >= 4 && s.includes(token)) return true;
   }
   return false;
+}
+
+/** True for lines that assert nothing: greetings, signs-offs, and a plain
+ *  next-step question. Used to decide whether a draft says anything at all. */
+export function isPleasantry(sentence: string): boolean {
+  const s = String(sentence ?? "").trim();
+  if (!s) return true;
+  if (STRUCTURAL.test(s)) return true;
+  return CTA_QUESTION.test(s) && /\?\s*$/.test(s) && !/\d/.test(s);
 }
 
 /** Every checkable sentence must cite at least one verified fact, or be

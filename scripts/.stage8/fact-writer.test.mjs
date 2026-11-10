@@ -80,12 +80,19 @@ const byKind = (k) => facts.find((f) => f.kind === k);
   check(out.content === "", "no residue is left behind");
 }
 
-// ── the good path keeps sourced sentences ─────────────────────────────────
+// ── the good path keeps only sourced sentences ─────────────────────────────
 {
+  const withOffer = factsFromLead(LEAD, {
+    now: NOW,
+    extra: [{ kind: "offer", value: "we help clinics fill quiet afternoon slots", source: "you" }],
+  });
+  const offerId = withOffer.find((f) => f.kind === "offer").id;
+
   const draft = [
     "Hi Sam,",
     "I saw Bright Smile Dental is in Leeds and rated 4.6.",
     "We help clinics fill quiet afternoon slots.",
+    "You get pitched every day.",
     "Worth a quick call?",
     "Best regards, Alex",
   ].join("\n");
@@ -95,17 +102,25 @@ const byKind = (k) => facts.find((f) => f.kind === k);
       draft,
       claims: [
         { sentence: "I saw Bright Smile Dental is in Leeds and rated 4.6.", fact_ids: ["f1", "f3", "f5"] },
+        { sentence: "We help clinics fill quiet afternoon slots.", fact_ids: [offerId] },
       ],
     }),
-    facts,
+    withOffer,
   );
 
   check(/rated 4\.6/.test(out.content), "sourced sentence is kept");
   check(/Hi Sam,/.test(out.content), "greeting survives");
   check(/Best regards, Alex/.test(out.content), "sign-off survives");
   check(/Worth a quick call\?/.test(out.content), "plain question survives");
-  check(/fill quiet afternoon slots/.test(out.content), "generic value line survives in lenient mode");
+  check(/fill quiet afternoon slots/.test(out.content), "the sender's own offer survives with its fact");
+  check(!/pitched every day/.test(out.content), "an uncited line about their life is blocked");
   check(out.empty === false, "a draft with one true sentence is sendable");
+
+  const pleasantries = guardDraft(
+    JSON.stringify({ draft: "Hi Sam,\nBest regards, Alex", claims: [] }),
+    withOffer,
+  );
+  check(pleasantries.empty === true && pleasantries.content === "", "a greeting plus sign-off is not an email");
 
   // The same sentence plus an invented review count must be removed whole.
   const inflated = guardDraft(

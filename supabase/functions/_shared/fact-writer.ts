@@ -19,6 +19,7 @@ import {
   type FactSource,
   enforceClaims,
   factsToPromptBlock,
+  isPleasantry,
 } from "./fact-layer.ts";
 
 export interface WriterOutcome {
@@ -234,19 +235,15 @@ export function guardDraft(raw: string, facts: Fact[]): WriterOutcome {
     };
   }
 
-  const anchors = facts
-    .filter((f) => ["name", "city", "category"].includes(f.kind))
-    .map((f) => f.value);
-
-  const first = enforceClaims(parsed.draft, parsed.claims, facts, {
-    lenient: true,
-    anchors,
-  });
+  const first = enforceClaims(parsed.draft, parsed.claims, facts);
 
   const places = stripUnsupportedPlaces(first.kept, facts);
   const blocked = [...first.blocked, ...places.blocked];
 
-  const content = places.kept.join("\n").trim();
+  // A greeting and a sign-off are not an email. If no sentence that says
+  // something survived, the draft is empty, whatever pleasantries remain.
+  const substantive = places.kept.filter((s) => !isPleasantry(s));
+  const content = substantive.length ? places.kept.join("\n").trim() : "";
   return {
     content,
     claims: parsed.claims,

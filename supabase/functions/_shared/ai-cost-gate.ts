@@ -229,7 +229,7 @@ export interface AiCallHandle {
   mode: AiMode;
   metering_degraded: boolean;
   reason: string | null;
-  run(promptText: string, opts?: { maxTokens?: number; temperature?: number }): Promise<string | null>;
+  run(promptText: string, opts?: { maxTokens?: number; temperature?: number; json?: boolean }): Promise<string | null>;
 }
 
 export async function openAiCall(
@@ -258,6 +258,7 @@ export async function openAiCall(
           {
             maxTokens: opts?.maxTokens ?? maxTokens,
             temperature: opts?.temperature,
+            json: opts?.json,
             context: {
               fn: ctx.fn ?? "openAiCall",
               kind: ctx.kind,
@@ -302,6 +303,7 @@ export async function openAiCall(
           {
             maxTokens: opts?.maxTokens ?? maxTokens,
             temperature: opts?.temperature,
+            json: opts?.json,
             context: {
               fn: ctx.fn ?? "openAiCall",
               kind: ctx.kind,
@@ -357,6 +359,7 @@ export async function openGuestAiCall(
           {
             maxTokens: opts?.maxTokens ?? maxTokens,
             temperature: opts?.temperature,
+            json: opts?.json,
             context: { fn: ctx.fn ?? "openGuestAiCall", kind: ctx.kind, model: ctx.model },
           },
         );
@@ -418,6 +421,7 @@ export async function openGuestAiCall(
           {
             maxTokens: opts?.maxTokens ?? maxTokens,
             temperature: opts?.temperature,
+            json: opts?.json,
             context: {
               fn: ctx.fn ?? "openGuestAiCall",
               kind: ctx.kind,

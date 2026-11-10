@@ -26,7 +26,7 @@ const STEPS = [
   {
     icon: Mail,
     title: "Write one email at a time",
-    body: "Each email is built from that business's own details, not a template with a name dropped in. The agent is instructed to invent nothing: no fake prices, no invented phone numbers, no claims that aren't in your settings or your knowledge base.",
+    body: "Each email is built from that business's own details, not a template with a name dropped in. The rule is enforced in code, not in a prompt: every sentence must point at a stored fact with a quote and a source link. If a sentence has no fact behind it, we remove it before you ever see the draft. No fake prices, no invented phone numbers, no made-up results.",
   },
   {
     icon: Inbox,

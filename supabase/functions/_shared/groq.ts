@@ -196,7 +196,15 @@ function parkKey(key: string, retryAfterSec: number | null): void {
 
 export async function groqChat(
   messages: Array<{ role: string; content: string }>,
-  opts?: { maxTokens?: number; temperature?: number; context?: MeterContext },
+  opts?: {
+    maxTokens?: number;
+    temperature?: number;
+    /** Ask the provider for a JSON object. Used where the caller parses a
+     *  contract (the fact writer), because a free-form reply cannot be
+     *  enforced and would be silently discarded. */
+    json?: boolean;
+    context?: MeterContext;
+  },
 ): Promise<string> {
   const keys = groqKeys();
   if (keys.length === 0) throw new Error("No GROQ API keys configured");
@@ -225,6 +233,7 @@ export async function groqChat(
           messages,
           max_tokens: opts?.maxTokens ?? 1024,
           temperature: opts?.temperature,
+          ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
           // Reasoning models spend budget thinking first — cap it so answers survive
           reasoning_effort: "low",
         }),

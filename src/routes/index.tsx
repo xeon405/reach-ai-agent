@@ -342,6 +342,7 @@ function Landing() {
     <div className="min-h-screen bg-background">
       <SiteHeader
         nav={[
+          { label: "Live demo", to: "/demo" },
           { label: t("nav_features"), href: "#features", spy: true },
           { label: t("nav_pricing"), href: "#pricing", spy: true },
           { label: "How it works", href: "#how", spy: true },
@@ -370,17 +371,17 @@ function Landing() {
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <a
-                href="/auth"
+                href="/demo"
                 className="bg-neutral-950 hover:bg-neutral-800 dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 text-white font-medium px-6 py-3.5 rounded-full transition duration-200 flex items-center gap-2 text-sm shadow-md shadow-neutral-950/10 cursor-pointer"
               >
-                <span>Start free — no card needed</span>
+                <span>Try the live demo — no signup</span>
                 <span>→</span>
               </a>
               <a
-                href="#pricing"
+                href="/auth"
                 className="bg-transparent hover:border-neutral-400 text-neutral-900 dark:text-neutral-100 border-[1.5px] border-[#E0DED9] dark:border-neutral-700 font-medium px-6 py-3.5 rounded-full transition duration-200 text-sm cursor-pointer"
               >
-                Pricing
+                Start free — no card needed
               </a>
             </div>
           </div>

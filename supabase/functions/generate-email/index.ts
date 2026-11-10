@@ -101,6 +101,7 @@ serve(async (req) => {
         { kind: "name", value: leadName, source: "you" },
         { kind: "company", value: leadCompany, source: "you" },
         { kind: "job_title", value: leadJobTitle, source: "you" },
+        { kind: "offer", value: yourOffer ?? "our service", source: "you" },
       ],
     });
 
@@ -121,6 +122,7 @@ serve(async (req) => {
 
     const raw = await groqChat([{ role: "user", content: writerPrompt }], {
       maxTokens: 800,
+      json: true,
       context: { fn: "generate-email", kind: "gen_email", user_id: userId },
     });
 

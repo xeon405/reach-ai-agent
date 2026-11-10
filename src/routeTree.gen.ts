@@ -19,6 +19,7 @@ import { Route as RefundsRouteImport } from './routes/refunds'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PreviewHeroNodesRouteImport } from './routes/preview-hero-nodes'
 import { Route as HonestyRouteImport } from './routes/honesty'
+import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AgencyRouteImport } from './routes/agency'
 import { Route as AboutRouteImport } from './routes/about'
@@ -90,6 +91,11 @@ const PreviewHeroNodesRoute = PreviewHeroNodesRouteImport.update({
 const HonestyRoute = HonestyRouteImport.update({
   id: '/honesty',
   path: '/honesty',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -211,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
+  '/demo': typeof DemoRoute
   '/honesty': typeof HonestyRoute
   '/preview-hero-nodes': typeof PreviewHeroNodesRoute
   '/privacy': typeof PrivacyRoute
@@ -244,6 +251,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
+  '/demo': typeof DemoRoute
   '/honesty': typeof HonestyRoute
   '/preview-hero-nodes': typeof PreviewHeroNodesRoute
   '/privacy': typeof PrivacyRoute
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
+  '/demo': typeof DemoRoute
   '/honesty': typeof HonestyRoute
   '/preview-hero-nodes': typeof PreviewHeroNodesRoute
   '/privacy': typeof PrivacyRoute
@@ -314,6 +323,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/agency'
     | '/auth'
+    | '/demo'
     | '/honesty'
     | '/preview-hero-nodes'
     | '/privacy'
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/agency'
     | '/auth'
+    | '/demo'
     | '/honesty'
     | '/preview-hero-nodes'
     | '/privacy'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/agency'
     | '/auth'
+    | '/demo'
     | '/honesty'
     | '/preview-hero-nodes'
     | '/privacy'
@@ -416,6 +428,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AgencyRoute: typeof AgencyRoute
   AuthRoute: typeof AuthRouteWithChildren
+  DemoRoute: typeof DemoRoute
   HonestyRoute: typeof HonestyRoute
   PreviewHeroNodesRoute: typeof PreviewHeroNodesRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -499,6 +512,13 @@ declare module '@tanstack/react-router' {
       path: '/honesty'
       fullPath: '/honesty'
       preLoaderRoute: typeof HonestyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo': {
+      id: '/demo'
+      path: '/demo'
+      fullPath: '/demo'
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -716,6 +736,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AgencyRoute: AgencyRoute,
   AuthRoute: AuthRouteWithChildren,
+  DemoRoute: DemoRoute,
   HonestyRoute: HonestyRoute,
   PreviewHeroNodesRoute: PreviewHeroNodesRoute,
   PrivacyRoute: PrivacyRoute,

@@ -313,7 +313,9 @@ LANGUAGE REQUIREMENT — WRITE IN ARABIC:
   // The only business input to the model: verified facts, wrapped as data.
   // A lead row field that is missing simply produces no fact, and therefore
   // no sentence about it.
-  const facts = factsFromLead(lead);
+  const facts = factsFromLead(lead, {
+    extra: [{ kind: "offer", value: userOffer, source: "you" }],
+  });
   const promptContent = `${biContext}${factsToPromptBlock(facts)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
 A booking link is added automatically AFTER your text — do NOT type any URL yourself.
@@ -344,8 +346,8 @@ Return ONLY a JSON object with this exact format:
 The body must use \\n between paragraphs.
 Every sentence that states a number, a name, a place, a rating, or anything about this specific business must cite at least one fact id from VERIFIED FACTS. If no fact supports a sentence, do not write the sentence. A shorter true email beats a richer invented one.${lang}`;
   const text = gate
-    ? (await gate.run(promptContent, { maxTokens: 700, temperature: 0.8 })) ?? ""
-    : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 700, temperature: 0.8 });
+    ? (await gate.run(promptContent, { maxTokens: 700, temperature: 0.8, json: true })) ?? ""
+    : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 700, temperature: 0.8, json: true });
   if (gate && !text.trim()) return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix); // conserve on empty AI
 
   // Enforce before use. A body sentence that cannot point at a verified fact

@@ -10,6 +10,7 @@ import {
   Mail, Check, AlertTriangle, Eye, Upload, X, Image as ImageIcon,
   Globe, Clock, Users, Zap, Pause, Rocket,
 } from "lucide-react";
+import { WhyThisEmail, type ProofBlocked, type ProofClaim, type ProofFact } from "@/components/why-this-email";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/campaign-review/$campaignId")({
@@ -53,6 +54,11 @@ function CampaignReviewPage() {
   const [launchResult, setLaunchResult] = useState<Record<string, unknown> | null>(null);
   const [previewLead, setPreviewLead] = useState<Lead | null>(null);
   const [previewEmail, setPreviewEmail] = useState<{ subject: string; body: string } | null>(null);
+  const [previewProof, setPreviewProof] = useState<{
+    facts: ProofFact[];
+    claims: ProofClaim[];
+    blocked: ProofBlocked[];
+  } | null>(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -137,6 +143,7 @@ function CampaignReviewPage() {
   async function generatePreview(lead: Lead) {
     setPreviewLead(lead);
     setPreviewEmail(null);
+    setPreviewProof(null);
     setGeneratingPreview(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-email", {
@@ -152,6 +159,12 @@ function CampaignReviewPage() {
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       const body = data.content ?? "";
+      setPreviewProof({
+        facts: Array.isArray(data?.facts) ? data.facts : [],
+        claims: Array.isArray(data?.claims) ? data.claims : [],
+        blocked: Array.isArray(data?.blocked) ? data.blocked : [],
+      });
+      if (!body) return;
       const link = profile?.website_url || profile?.booking_link || "";
       const fullBody = `${body}${link ? `\n\nSee how it works & get started: ${link}` : ""}${profile?.signature ? `\n\n${profile.signature}` : ""}`;
       setPreviewEmail({ subject: `Quick question about ${lead.company ?? "your business"}`, body: fullBody });
@@ -422,11 +435,11 @@ function CampaignReviewPage() {
 
       {/* Email Preview Modal */}
       {previewLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setPreviewLead(null); setPreviewEmail(null); }}>
-          <div className="mx-4 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setPreviewLead(null); setPreviewEmail(null); setPreviewProof(null); }}>
+          <div className="mx-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Email Preview</h3>
-              <button onClick={() => { setPreviewLead(null); setPreviewEmail(null); }} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setPreviewLead(null); setPreviewEmail(null); setPreviewProof(null); }} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -454,7 +467,14 @@ function CampaignReviewPage() {
                       <img src={imageUrl} alt="Campaign image" className="mt-1 rounded-lg max-h-32 object-cover" />
                     </div>
                   )}
+                  {previewProof && (
+                    <div className="border-t border-border pt-3">
+                      <WhyThisEmail {...previewProof} />
+                    </div>
+                  )}
                 </div>
+              ) : previewProof ? (
+                <WhyThisEmail {...previewProof} />
               ) : (
                 <div className="text-sm text-muted-foreground py-4 text-center">Click a contact's Preview button to generate an email preview.</div>
               )}
