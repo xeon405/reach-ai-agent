@@ -76,6 +76,38 @@ const LIFECYCLE_STYLE: Record<string, string> = {
   HUMAN_TAKEOVER: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
+/** Three buckets, not ten labels. The detailed intent is still shown, but the
+ *  owner only has to make one decision: talk now, follow up later, or stop. */
+type Bucket = "interested" | "not_now" | "stop" | "other";
+
+const BUCKET_STYLE: Record<Bucket, { label: string; cls: string }> = {
+  interested: { label: "Interested", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
+  not_now: { label: "Not now", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+  stop: { label: "Stop", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  other: { label: "Other", cls: "bg-muted text-muted-foreground" },
+};
+
+const BUCKET_RANK: Record<Bucket, number> = { interested: 0, not_now: 1, stop: 2, other: 3 };
+
+function bucketOf(email: EmailRow, cls?: Classification): Bucket {
+  if (
+    email.lead?.lifecycle === "UNSUBSCRIBED" ||
+    cls?.unsubscribe === true ||
+    cls?.intent === "unsubscribe"
+  ) {
+    return "stop";
+  }
+  if (
+    cls?.interested === true ||
+    cls?.booking_intent === true ||
+    ["interested", "booking", "question", "objection"].includes(cls?.intent ?? "")
+  ) {
+    return "interested";
+  }
+  if (cls?.intent === "not_interested" || cls?.interested === false) return "not_now";
+  return "other";
+}
+
 function EmailsPage() {
   const { lead: leadParam, thread: threadParam } = Route.useSearch();
   const [emails, setEmails] = useState<EmailRow[]>([]);
@@ -83,6 +115,7 @@ function EmailsPage() {
   const [alerts, setAlerts] = useState<OwnerAlert[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [bucket, setBucket] = useState<Bucket | "all">("all");
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [sending, setSending] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,6 +156,34 @@ function EmailsPage() {
   }
 
   const selectedEmail = useMemo(() => emails.find((e) => e.id === selected), [emails, selected]);
+
+  const latestClsFor = (e: EmailRow) =>
+    classifications.find((c) => c.lead_id === e.lead_id) ?? undefined;
+
+  const buckets = useMemo(() => {
+    const map = new Map<string, Bucket>();
+    for (const e of emails) map.set(e.id, bucketOf(e, latestClsFor(e)));
+    return map;
+    // latestClsFor only reads classifications; listing it keeps the memo honest.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emails, classifications]);
+
+  const counts = useMemo(() => {
+    const c: Record<Bucket | "all", number> = { all: emails.length, interested: 0, not_now: 0, stop: 0, other: 0 };
+    for (const e of emails) c[buckets.get(e.id) ?? "other"] += 1;
+    return c;
+  }, [emails, buckets]);
+
+  const visibleEmails = useMemo(() => {
+    const time = (e: EmailRow) => new Date(e.last_lead_msg_at ?? e.sent_at).getTime();
+    return emails
+      .filter((e) => bucket === "all" || buckets.get(e.id) === bucket)
+      .sort((a, b) => {
+        const ra = BUCKET_RANK[buckets.get(a.id) ?? "other"];
+        const rb = BUCKET_RANK[buckets.get(b.id) ?? "other"];
+        return ra - rb || time(b) - time(a);
+      });
+  }, [emails, bucket, buckets]);
 
   // Deep-link from a notification: once the inbox has loaded, open the thread
   // the owner actually clicked on. Cleared afterwards so choosing another
@@ -225,6 +286,41 @@ function EmailsPage() {
         </div>
       </div>
 
+      {/* Three buckets: talk now, follow up later, stop. Interested threads
+          always rise to the top of "All". */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {([
+          ["all", "All"],
+          ["interested", "Interested"],
+          ["not_now", "Not now"],
+          ["stop", "Stop"],
+          ["other", "Other"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setBucket(key)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              bucket === key
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:border-primary/40"
+            }`}
+          >
+            {label}
+            <span className="ml-1.5 opacity-70">{counts[key]}</span>
+          </button>
+        ))}
+        {bucket === "interested" && counts.interested > 0 && (
+          <span className="ml-1 text-xs text-muted-foreground">
+            These people asked to keep talking. Reply yourself or open the thread to take over.
+          </span>
+        )}
+        {bucket === "stop" && counts.stop > 0 && (
+          <span className="ml-1 text-xs text-muted-foreground">
+            These asked us to stop. They are suppressed and will not be contacted again.
+          </span>
+        )}
+      </div>
+
       {/* Alerts Panel */}
       {showAlerts && (
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
@@ -259,13 +355,14 @@ function EmailsPage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
         {/* Email list */}
         <div className="space-y-2">
-          {emails.length === 0 ? (
+          {visibleEmails.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              No emails sent yet.
+              {emails.length === 0 ? "No emails sent yet." : "No threads in this bucket."}
             </div>
-          ) : emails.map((e) => {
+          ) : visibleEmails.map((e) => {
             const lead = e.lead;
-            const latestCls = classifications.find((c) => c.lead_id === e.lead_id);
+            const latestCls = latestClsFor(e);
+            const rowBucket = buckets.get(e.id) ?? "other";
             const hasDraft = !!e.ai_draft;
             const isActive = e.replied || e.ai_turns;
             return (
@@ -286,6 +383,9 @@ function EmailsPage() {
                     <span className="font-medium text-sm truncate">{lead?.company ?? lead?.name ?? "Unknown"}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${BUCKET_STYLE[rowBucket].cls}`}>
+                      {BUCKET_STYLE[rowBucket].label}
+                    </span>
                     {e.ai_turns != null && e.ai_turns > 0 && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <MessageSquare className="h-3 w-3" /> {e.ai_turns}
