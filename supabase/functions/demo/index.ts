@@ -44,6 +44,24 @@ const admin = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
 );
 
+/** Last-mile text safety: a broken decoder or a truncated byte must never put
+ *  a lone surrogate or a replacement character into a fact or an email. */
+function cleanLine(text: string): string {
+  return String(text ?? "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    .replace(/\uFFFD/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanBlock(text: string): string {
+  return String(text ?? "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    .replace(/\uFFFD/g, " ")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+}
+
 function clientIp(req: Request): string {
   // The platform appends the real client IP; attacker-supplied entries come first.
   const parts = (req.headers.get("x-forwarded-for") ?? "")
@@ -95,20 +113,25 @@ async function readCapped(res: Response): Promise<string> {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    total += value.byteLength;
-    if (total > MAX_BYTES) {
+    const remaining = MAX_BYTES - total;
+    if (remaining <= 0) {
       try { await reader.cancel(); } catch { /* already closed */ }
       break;
     }
-    chunks.push(value);
+    // Copy each chunk: a stream is allowed to reuse the buffer behind the view.
+    const take = value.byteLength > remaining ? value.subarray(0, remaining) : value;
+    chunks.push(take.slice());
+    total += take.byteLength;
+    if (take.byteLength < value.byteLength) {
+      try { await reader.cancel(); } catch { /* already closed */ }
+      break;
+    }
   }
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const c of chunks) {
-    const take = Math.min(c.byteLength, total - offset);
-    bytes.set(c.subarray(0, take), offset);
-    offset += take;
-    if (offset >= total) break;
+    bytes.set(c, offset);
+    offset += c.byteLength;
   }
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
@@ -268,12 +291,30 @@ serve(async (req) => {
       });
     }
 
+    const safeFacts = facts.map((f) => ({
+      ...f,
+      value: cleanLine(f.value),
+      quote: cleanLine(f.quote),
+    }));
+    const safeEmails = emails.map((e) => ({
+      ...e,
+      content: cleanBlock(String(e.content ?? "")),
+      claims: (e.claims as Array<{ sentence: string; fact_ids: string[] }> | undefined)?.map((c) => ({
+        sentence: cleanLine(c.sentence),
+        fact_ids: c.fact_ids,
+      })) ?? [],
+      blocked: (e.blocked as Array<{ sentence: string; reason: string }> | undefined)?.map((b) => ({
+        sentence: cleanLine(b.sentence),
+        reason: cleanLine(b.reason),
+      })) ?? [],
+    }));
+
     return json({
-      business: picked.businessName || url.hostname.replace(/^www\./, ""),
+      business: cleanLine(picked.businessName || url.hostname.replace(/^www\./, "")),
       sourceUrl: page.url,
       checkedAt,
-      facts,
-      emails,
+      facts: safeFacts,
+      emails: safeEmails,
       notice: "No signup. Nothing is sent. Email addresses are never read or shown.",
     });
   } catch (err) {

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SendingHealthCard } from "@/components/sending-health";
 import {
   Users,
   Send,
@@ -731,6 +732,8 @@ function Dashboard() {
           value={kpis.suppressed}
         />
       </div>
+
+      <SendingHealthCard />
 
       {/* Reply Trend — the single graph */}
       <Section title="Reply Trend" icon={<TrendingUp className="h-4 w-4" />}>
