@@ -37,7 +37,8 @@ import {
   Globe,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ReplyTrendChart, TREND_METRICS, trendTotals, type ReplyTrendPoint, type TrendMetric } from "@/components/dashboard-charts";
+import { ReplyTrendChart } from "@/components/dashboard-charts";
+import { buildReplyTrend, trendTotals, type ReplyTrendPoint } from "@/lib/trend";
 import { SendGate } from "@/components/send-gate";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -141,7 +142,7 @@ const DATE_RANGES = [
   { label: "Today", days: 1 },
   { label: "7 days", days: 7 },
   { label: "30 days", days: 30 },
-  { label: "90 days", days: 90 },
+  { label: "3 months", days: 90 },
   { label: "All time", days: 3650 },
 ] as const;
 
@@ -207,7 +208,6 @@ function Dashboard() {
   const [dateRange, setDateRange] = useState<number>(3650);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
-  const [trendMetric, setTrendMetric] = useState<TrendMetric>("all");
 
   useEffect(() => {
     loadAll();
@@ -506,56 +506,30 @@ function Dashboard() {
   const unreadAlerts = useMemo(() => alerts.filter((a) => !a.read).length, [alerts]);
 
   const replyTrendData = useMemo<ReplyTrendPoint[]>(() => {
-    const mode: "day" | "week" | "month" =
-      dateRange <= 31 ? "day" : dateRange <= 180 ? "week" : "month";
-    const buckets = new Map<
-      string,
-      { ts: number; label: string; sends: number; replies: number; interested: number }
-    >();
-    const bucketOf = (iso: string) => {
-      const d = new Date(iso);
-      if (mode === "day") {
-        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-        return {
-          key: start.toISOString().slice(0, 10),
-          ts: start.getTime(),
-          label: start.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        };
-      }
-      if (mode === "week") {
-        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-        const dow = (start.getDay() + 6) % 7;
-        start.setDate(start.getDate() - dow);
-        return {
-          key: start.toISOString().slice(0, 10),
-          ts: start.getTime(),
-          label: start.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        };
-      }
-      const start = new Date(d.getFullYear(), d.getMonth(), 1);
-      return {
-        key: `${start.getFullYear()}-${start.getMonth()}`,
-        ts: start.getTime(),
-        label: start.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
-      };
-    };
-    for (const e of fEmails) {
-      const b = bucketOf(e.sent_at);
-      let row = buckets.get(b.key);
-      if (!row) {
-        row = { ts: b.ts, label: b.label, sends: 0, replies: 0, interested: 0 };
-        buckets.set(b.key, row);
-      }
-      row.sends++;
-      if (e.replied) row.replies++;
-      if ((e.reply_sentiment ?? "").toUpperCase() === "INTERESTED") row.interested++;
-    }
-    return [...buckets.values()].sort((a, b) => a.ts - b.ts);
-  }, [fEmails, dateRange]);
+    // Nothing to plot is a real empty state, not a flat line.
+    if (fEmails.length === 0) return [];
+    // "All time" starts at the oldest send, so a new account is not given a
+    // decade of empty months. The bucket size then follows that real span.
+    const oldestSend = fEmails.reduce(
+      (min, e) => (e.sent_at < min ? e.sent_at : min),
+      fEmails[0].sent_at,
+    );
+    const fromIso = dateRange >= 3650 ? oldestSend : cutoff;
+    return buildReplyTrend(fEmails, { fromIso, nowIso: new Date().toISOString() });
+  }, [fEmails, cutoff, dateRange]);
 
   // Totals straight from the plotted buckets, so the headline numbers and the
   // graph speak from the same data. No separate query, no second definition.
   const trendTotalsData = useMemo(() => trendTotals(replyTrendData), [replyTrendData]);
+
+  const rangeHint =
+    dateRange === 1
+      ? "today"
+      : dateRange >= 3650
+        ? "all time"
+        : `last ${(
+            DATE_RANGES.find((r) => r.days === dateRange)?.label ?? "30 days"
+          ).toLowerCase()}`;
 
   const replyStats = useMemo(() => {
     const rate = (list: EmailRow[]) =>
@@ -627,39 +601,22 @@ function Dashboard() {
 
       {/* Toolbar */}
       <SendGate />
-      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
-          {DATE_RANGES.map((dr) => (
-            <button
-              key={dr.days}
-              onClick={() => setDateRange(dr.days)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                dateRange === dr.days
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              {dr.label}
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <div className="relative">
-            <select
-              value={campaignFilter}
-              onChange={(e) => setCampaignFilter(e.target.value)}
-              className="appearance-none rounded-lg border border-border bg-card py-1.5 pl-3 pr-7 text-xs outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="all">All campaigns</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          </div>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
+        <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative">
+          <select
+            value={campaignFilter}
+            onChange={(e) => setCampaignFilter(e.target.value)}
+            className="appearance-none rounded-lg border border-border bg-card py-1.5 pl-3 pr-7 text-xs outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="all">All campaigns</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
         </div>
       </div>
 
@@ -742,52 +699,29 @@ function Dashboard() {
       <SendingHealthCard />
       <ReviewWaitingCard />
 
-      {/* Totals first, trend second: a graph alone hides the answer. */}
+      {/* Time range lives next to the numbers it changes. */}
       <Section title="Outreach totals" icon={<TrendingUp className="h-4 w-4" />}>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <TrendTotal
-            label="Emails sent"
-            value={trendTotalsData.sends}
-            hint="in this period"
-            color="var(--muted-foreground)"
-            active={trendMetric === "sends"}
-            onClick={() => setTrendMetric(trendMetric === "sends" ? "all" : "sends")}
-          />
-          <TrendTotal
-            label="Replied"
-            value={trendTotalsData.replies}
-            hint={`${share(trendTotalsData.replies, trendTotalsData.sends)}% of sent`}
-            color="var(--primary)"
-            active={trendMetric === "replies"}
-            onClick={() => setTrendMetric(trendMetric === "replies" ? "all" : "replies")}
-          />
-          <TrendTotal
-            label="Interested"
-            value={trendTotalsData.interested}
-            hint={`${share(trendTotalsData.interested, trendTotalsData.sends)}% of sent`}
-            color="var(--success)"
-            active={trendMetric === "interested"}
-            onClick={() => setTrendMetric(trendMetric === "interested" ? "all" : "interested")}
-          />
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
-            {TREND_METRICS.map((m) => (
-              <button
-                key={m.value}
-                onClick={() => setTrendMetric(m.value)}
-                aria-pressed={trendMetric === m.value}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  trendMetric === m.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {m.color && <span className="h-1.5 w-1.5 rounded-full" style={{ background: m.color }} />}
-                {m.label}
-              </button>
-            ))}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Time range
+            </span>
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-background p-0.5">
+              {DATE_RANGES.map((dr) => (
+                <button
+                  key={dr.days}
+                  onClick={() => setDateRange(dr.days)}
+                  aria-pressed={dateRange === dr.days}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    dateRange === dr.days
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {dr.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="text-xs text-muted-foreground">
             Reply rate{" "}
@@ -809,14 +743,38 @@ function Dashboard() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <TrendTotal
+            label="Emails sent"
+            value={trendTotalsData.sends}
+            hint={rangeHint}
+            color="var(--muted-foreground)"
+          />
+          <TrendTotal
+            label="Replied"
+            value={trendTotalsData.replies}
+            hint={`${share(trendTotalsData.replies, trendTotalsData.sends)}% of sent`}
+            color="var(--primary)"
+          />
+          <TrendTotal
+            label="Interested"
+            value={trendTotalsData.interested}
+            hint={`${share(trendTotalsData.interested, trendTotalsData.sends)}% of sent`}
+            color="var(--success)"
+          />
+        </div>
+
         {replyTrendData.length === 0 ? (
           <p className="mt-4 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             No emails sent in this period yet. These are real zeros, not a loading state.
           </p>
         ) : (
-          <div className="mt-2">
-            <ReplyTrendChart data={replyTrendData} metric={trendMetric} />
+          <div className="mt-3">
+            <ReplyTrendChart data={replyTrendData} />
             <p className="mt-1 text-[11px] text-muted-foreground">
+              {replyTrendData.filter((p) => p.sends > 0).length === 1
+                ? "Only one period has sends so far, so the line has a single peak. "
+                : ""}
               Each point counts emails by the day they were sent. Interested means the first reply
               was classified as interested.
             </p>
@@ -1263,34 +1221,21 @@ function TrendTotal({
   value,
   hint,
   color,
-  active,
-  onClick,
 }: {
   label: string;
   value: number;
   hint: string;
   color: string;
-  active: boolean;
-  onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`rounded-lg border p-3 text-left transition-colors ${
-        active
-          ? "border-primary/60 bg-primary/5"
-          : "border-border bg-card hover:border-primary/30 hover:bg-muted/40"
-      }`}
-    >
-      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
         {label}
-      </span>
-      <span className="mt-1 block text-2xl font-semibold tabular-nums">{value}</span>
-      <span className="block text-[11px] text-muted-foreground">{hint}</span>
-    </button>
+      </div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+      <div className="text-[11px] text-muted-foreground">{hint}</div>
+    </div>
   );
 }
 
