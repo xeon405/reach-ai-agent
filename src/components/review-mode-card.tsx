@@ -61,7 +61,10 @@ export function ReviewModeCard({
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id;
-    if (!uid) return;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
     const [profileRes, sentRes, heldRes] = await Promise.all([
       supabase.from("profiles").select("review_mode").eq("id", uid).maybeSingle(),
       supabase.from("emails_sent").select("id", { count: "exact", head: true }).eq("user_id", uid),
