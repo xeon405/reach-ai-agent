@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { COUNTRY_ISO } from "../_shared/osm.ts";
 import { insertAudit } from "../_shared/audit.ts";
 import { effectivePlan } from "../_shared/effective-plan.ts";
+import { shouldHoldForReview } from "../_shared/review-mode.ts";
 import { getKillSwitch } from "../_shared/intelligence-reads.ts";
 
 const corsHeaders = {
@@ -219,7 +220,24 @@ Deno.serve(async (req) => {
     if (et?.waitUntil) et.waitUntil(kickoff);
 
     const parts: string[] = [];
-    if (inserted > 0) parts.push(`${inserted} email${inserted === 1 ? "" : "s"} queued — ${instant ? "sending now" : "sending as each lead enters their morning"}`);
+    if (inserted > 0) {
+      // Say what will actually happen. In review mode the email is written and
+      // held, so "sending now" would be a promise the product does not keep.
+      const { count: lifetimeSends } = await supabase
+        .from("emails_sent")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+      const held = shouldHoldForReview(profile.review_mode, lifetimeSends ?? 0);
+      parts.push(
+        `${inserted} email${inserted === 1 ? "" : "s"} queued — ${
+          held
+            ? "each one waits in Review for your OK"
+            : instant
+              ? "sending now"
+              : "sending as each lead enters their morning"
+        }`,
+      );
+    }
     if (waiting > 0 && !instant) parts.push(`${waiting} waiting for their local morning`);
     if (invalidLeadIds.length > 0) parts.push(`${invalidLeadIds.length} undeliverable skipped`);
     if (dupeIds.size > 0) parts.push(`${dupeIds.size} duplicates skipped`);
