@@ -285,10 +285,15 @@ function Dashboard() {
     }
   }
 
-  const cutoff = useMemo(
-    () => new Date(Date.now() - dateRange * 86400000).toISOString(),
-    [dateRange],
-  );
+  const cutoff = useMemo(() => {
+    // "Today" must mean today, not the last 24 hours: a rolling window would
+    // count last night's sends as today's.
+    if (dateRange === 1) {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    }
+    return new Date(Date.now() - dateRange * 86400000).toISOString();
+  }, [dateRange]);
 
   const fLeads = useMemo(
     () =>
@@ -780,24 +785,35 @@ function Dashboard() {
           <div className="mt-3">
             <div className="mb-2 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
               {[
-                { label: "Sent", color: TREND_COLORS.sends },
-                { label: "Replied", color: TREND_COLORS.replies },
-                { label: "Interested", color: TREND_COLORS.interested },
+                { label: "Sent", color: TREND_COLORS.sends, dash: undefined },
+                { label: "Replied", color: TREND_COLORS.replies, dash: "7 4" },
+                { label: "Interested", color: TREND_COLORS.interested, dash: "2 3" },
               ].map((item) => (
                 <span key={item.label} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+                  <svg width="18" height="6" aria-hidden="true">
+                    <line
+                      x1="0"
+                      y1="3"
+                      x2="18"
+                      y2="3"
+                      stroke={item.color}
+                      strokeWidth={2.5}
+                      strokeDasharray={item.dash}
+                    />
+                  </svg>
                   {item.label}
                 </span>
               ))}
-              <span className="ml-auto">Bars are counts. Hover a day for exact numbers.</span>
+              <span className="ml-auto">Lines are counts. Hover a point for exact numbers.</span>
             </div>
             <ReplyTrendChart data={replyTrendData} />
             <p className="mt-1 text-[11px] text-muted-foreground">
               {replyTrendData.filter((p) => p.sends > 0).length === 1
-                ? "Only one period has sends so far, so there is a single group of bars. "
+                ? "Only one period has sends so far, so there is a single peak. "
                 : ""}
-              Each group counts emails by the day they were sent. Interested means the first reply
-              was classified as interested.
+              Each point counts emails by the day they were sent. Interested means the first reply
+              was classified as interested. When all three numbers are the same, the lines overlap:
+              solid is Sent, dashed is Replied, dotted is Interested.
             </p>
           </div>
         )}
