@@ -33,10 +33,15 @@ export function WhyThisEmail({
   facts,
   claims,
   blocked,
+  template = false,
 }: {
   facts: ProofFact[];
   claims: ProofClaim[];
   blocked: ProofBlocked[];
+  /** True when the email being shown is the fixed template (no generated
+   *  sentence survived). The panel must not claim "no email was written"
+   *  beside a real email. */
+  template?: boolean;
 }) {
   const byId = new Map((facts ?? []).map((f) => [f.id, f]));
   const used = new Set((claims ?? []).flatMap((c) => c.fact_ids ?? []));
@@ -58,8 +63,9 @@ export function WhyThisEmail({
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
           <Info className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            No sentence passed the fact check, so no email was written. Add a website or a full address to this
-            business, then generate again.
+            {template
+              ? "This email is the fixed template. It states only the contact's name, your company and your offer. No generated sentence passed the fact check."
+              : "No sentence passed the fact check, so no email was written. Add a website or a full address to this business, then generate again."}
           </p>
         </div>
       ) : (

@@ -286,6 +286,7 @@ function ReviewPage() {
                     facts={meta.facts ?? []}
                     claims={meta.claims ?? []}
                     blocked={meta.blocked ?? []}
+                    template={meta.template === true}
                   />
                 </div>
 
