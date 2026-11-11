@@ -102,6 +102,7 @@ const DICT: Record<string, { en: string; ar: string }> = {
   app_leads: { en: "Contacts", ar: "جهات الاتصال" },
   app_lead_finder: { en: "Find Businesses", ar: "البحث عن عملاء جدد" },
   app_emails: { en: "Emails Sent", ar: "الرسائل المُرسلة" },
+  app_review: { en: "Review", ar: "المراجعة" },
   app_billing: { en: "Billing", ar: "الفواتير" },
   app_settings: { en: "Settings", ar: "الإعدادات" },
   app_admin: { en: "Admin", ar: "الإدارة" },

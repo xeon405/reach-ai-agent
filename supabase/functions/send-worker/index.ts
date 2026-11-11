@@ -32,7 +32,8 @@ import {
   guardDraft,
   parseWriterJson,
 } from "../_shared/fact-writer.ts";
-import { factsToPromptBlock } from "../_shared/fact-layer.ts";
+import { type Claim, type Fact, factsToPromptBlock } from "../_shared/fact-layer.ts";
+import { shouldHoldForReview } from "../_shared/review-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,10 @@ const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
   growth: { dailyEmails: 200 },
   agency: { dailyEmails: 500 },
 };
+
+/** The unknown-sender period: a new account's first 20 emails are held for
+ *  review by default. The rule itself lives in _shared/review-mode.ts so it is
+ *  testable without a mailbox. */
 
 const SITE = APP_BASE_URL;
 
@@ -278,6 +283,17 @@ function isArabicLead(country: string | null | undefined): boolean {
   return !!iso && ARAB_COUNTRIES.has(iso);
 }
 
+/** The writer's output plus its proof. The proof travels with the draft so a
+ *  held email can show why each sentence exists, not only at preview time. */
+type GeneratedEmail = {
+  subject: string;
+  body: string;
+  openerKey: string | null;
+  facts: Fact[];
+  claims: Claim[];
+  blocked: Array<{ sentence: string; reason: string }>;
+};
+
 async function generateEmail(
   senderName: string,
   lead: Record<string, any>,
@@ -289,8 +305,15 @@ async function generateEmail(
   sequenceSuffix = "",
   gate?: AiCallHandle,
   openerOverride: string | null = null,
-): Promise<{ subject: string; body: string; openerKey: string | null }> {
-  if (gate && gate.mode !== "ai") return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix);
+): Promise<GeneratedEmail> {
+  if (gate && gate.mode !== "ai") {
+    return {
+      ...templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix),
+      facts: [],
+      claims: [],
+      blocked: [{ sentence: "", reason: "AI budget is paused, so the fixed template was used" }],
+    };
+  }
   const leadName = sanitizeForPrompt(lead.name, 80);
   const leadCompany = sanitizeForPrompt(lead.company ?? lead.category ?? "your company", 120);
   const leadJobTitle = sanitizeForPrompt(lead.job_title, 80);
@@ -348,21 +371,40 @@ Every sentence that states a number, a name, a place, a rating, or anything abou
   const text = gate
     ? (await gate.run(promptContent, { maxTokens: 700, temperature: 0.8, json: true })) ?? ""
     : await groqChat([{ role: "user", content: promptContent }], { maxTokens: 700, temperature: 0.8, json: true });
-  if (gate && !text.trim()) return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix); // conserve on empty AI
+  if (gate && !text.trim()) {
+    return {
+      ...templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix),
+      facts,
+      claims: [],
+      blocked: [{ sentence: "", reason: "the writer returned nothing, so the fixed template was used" }],
+    };
+  }
 
   // Enforce before use. A body sentence that cannot point at a verified fact
   // is removed with a reason; if nothing citable survives, the deterministic
   // template is used instead (it states only the name, company and offer).
   const parsed = parseWriterJson(text);
-  if (parsed) {
-    const outcome = guardDraft(text, facts);
-    if (!outcome.empty) {
-      let subj = sanitizeSubject(parsed.subject || "Quick question", userOffer, leadCompany, arabic);
-      if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
-      return { subject: subj, body: outcome.content, openerKey };
-    }
+  const outcome = parsed ? guardDraft(text, facts) : null;
+  if (parsed && outcome && !outcome.empty) {
+    let subj = sanitizeSubject(parsed.subject || "Quick question", userOffer, leadCompany, arabic);
+    if (arabic && !containsArabic(subj)) subj = arabicFallbackSubject(leadCompany);
+    return {
+      subject: subj,
+      body: outcome.content,
+      openerKey,
+      facts: outcome.facts,
+      claims: outcome.claims,
+      blocked: outcome.blocked,
+    };
   }
-  return templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix);
+  return {
+    ...templateEmail(senderName, lead, userOffer, arabic, sequenceSuffix),
+    facts,
+    claims: [],
+    blocked: outcome?.blocked?.length
+      ? outcome.blocked
+      : [{ sentence: "", reason: "no citable sentence survived, so the fixed template was used" }],
+  };
 }
 
 function localSpamScore(subject: string, body: string): { score: number; hint: string } {
@@ -447,6 +489,10 @@ type QueueJob = {
   lead_id: string;
   variant: string | null;
   attempts: number;
+  review_state: string | null;
+  draft_subject: string | null;
+  draft_body: string | null;
+  draft_meta: Record<string, any> | null;
 };
 
 interface UserCtx {
@@ -454,6 +500,9 @@ interface UserCtx {
   dailyCap: number;
   today: string;
   sentToday: number;
+  /** All emails ever sent by this account, follow-ups included. Used only to
+   *  decide whether the account is still in its review period. */
+  lifetimeSends: number;
   exhausted: boolean;
 }
 
@@ -518,7 +567,7 @@ Deno.serve(async (req) => {
     }
 
     // ---------------- PASS 2: claimed queue jobs --------------------------------
-    let sent = 0, failed = 0, retried = 0, dead = 0;
+    let sent = 0, failed = 0, retried = 0, dead = 0, held = 0;
     const ctxs = new Map<string, UserCtx>();
 
     while (Date.now() - startedAt < RUNTIME_MS) {
@@ -564,12 +613,14 @@ Deno.serve(async (req) => {
           }
           slotHeld = true;
 
-          const ok = await processJob(supabase, job, ctx!, startedAt);
-          if (ok) { sent++; ctx!.sentToday++; }
+          const outcome = await processJob(supabase, job, ctx!, startedAt);
+          if (outcome === "sent") { sent++; ctx!.sentToday++; }
           else {
-            // Send didn't happen — give the reserved slot back.
+            // A held draft or a skipped job did not use the slot. A held draft is
+            // a success for the owner, not a failure: it is waiting for them.
             try { await supabase.rpc("release_send_slot", { p_user: job.user_id }); } catch (_e) { /* best effort */ }
-            failed++;
+            if (outcome === "held") held++;
+            else failed++;
           }
           await new Promise((r) => setTimeout(r, DELAY_MS));
         } catch (e) {
@@ -593,7 +644,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, sent, failed, retried, dead, ...fuStats });
+    return json({ ok: true, sent, held, failed, retried, dead, ...fuStats });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
@@ -608,11 +659,18 @@ Deno.serve(async (req) => {
     const ceil = profile.gmail_account_type === "workspace" ? 2000 : 500;
     const dailyCap = await resolveDailyCap(db, profile, limits.dailyEmails, ceil);
     const today = new Date().toISOString().split("T")[0];
+    // One count per user per worker run, not per job. This decides review mode
+    // only; the daily cap stays owned by reserve_send_slot.
+    const { count: lifetimeSends } = await db
+      .from("emails_sent")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", uid);
     return {
       profile,
       dailyCap,
       today,
       sentToday: profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0,
+      lifetimeSends: lifetimeSends ?? 0,
       exhausted: false,
     };
   }
@@ -656,23 +714,25 @@ Deno.serve(async (req) => {
     return null;
   }
 
-  async function processJob(db: ReturnType<typeof createClient<any>>, job: QueueJob, ctx: UserCtx, _start: number): Promise<boolean> {
+  type JobOutcome = "sent" | "held" | "skipped";
+
+  async function processJob(db: ReturnType<typeof createClient<any>>, job: QueueJob, ctx: UserCtx, _start: number): Promise<JobOutcome> {
     const blockReason = await eligibilityBlock(db, job, ctx.profile);
     if (blockReason) {
       await db.from("send_queue").update({ status: "cancelled", last_error: blockReason, lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
       await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: job.lead_id, event: "email.cancelled", payload: { reason: blockReason } });
-      return false;
+      return "skipped";
     }
 
     const { data: lead } = await db.from("leads").select("*").eq("id", job.lead_id).single();
-    if (!lead) return false;
+    if (!lead) return "skipped";
 
     // Idempotency: never double-send a first touch
     const { data: prior } = await db.from("emails_sent").select("id")
       .eq("campaign_id", job.campaign_id).eq("lead_id", lead.id).eq("sequence", 1).limit(1).maybeSingle();
     if (prior) {
       await db.from("send_queue").update({ status: "sent", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
-      return true;
+      return "sent";
     }
 
     // Domain syntax + MX pre-check (pre-check only — bounces handled separately)
@@ -680,7 +740,7 @@ Deno.serve(async (req) => {
     if (!domain || !/^[\w.+-]+@[\w.-]+\.[a-z]{2,}$/i.test(lead.email)) {
       await db.from("leads").update({ status: "invalid" }).eq("id", lead.id);
       await db.from("send_queue").update({ status: "cancelled", last_error: "invalid_email", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
-      return false;
+      return "skipped";
     }
     try {
       const mx = await Deno.resolveDns(domain, "MX");
@@ -688,11 +748,38 @@ Deno.serve(async (req) => {
     } catch {
       await db.from("leads").update({ status: "invalid" }).eq("id", lead.id);
       await db.from("send_queue").update({ status: "cancelled", last_error: "mx_fail", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
-      return false;
+      return "skipped";
     }
 
     const tok = await getAccessToken(db, job.user_id);
     if (!tok) throw new Error("gmail_token_mint_failed");
+
+    const meta = (job.draft_meta ?? {}) as Record<string, any>;
+    // An approved job reuses the exact text the owner saw: same subject, same
+    // body, same footer, same offer link. Nothing is regenerated, so approval
+    // cannot silently produce a different email from the one that was read.
+    const stored =
+      job.review_state === "approved" && job.draft_subject && job.draft_body
+        ? {
+            subject: job.draft_subject,
+            body: job.draft_body,
+            openerKey: (meta.opener_key ?? null) as string | null,
+            variant: (meta.variant ?? job.variant) as string | null,
+          }
+        : null;
+
+    let gen: GeneratedEmail;
+    let variant: string | null = job.variant;
+    let attribution: Record<string, string> = (meta.attribution ?? {}) as Record<string, string>;
+    let openerSource = String(meta.opener_source ?? "hash");
+    let destLink2 = String(ctx.profile.website_url || ctx.profile.booking_link || "");
+    let bodyText: string;
+
+    if (stored) {
+      gen = { subject: stored.subject, body: "", openerKey: stored.openerKey, facts: [], claims: [], blocked: [] };
+      variant = stored.variant;
+      bodyText = stored.body;
+    } else {
 
     const biCtx = buildBIContext(ctx.profile);
 
@@ -706,6 +793,7 @@ Deno.serve(async (req) => {
     // average, that angle replaces the hash pick. Null (the normal state until
     // enough sends exist) leaves the prompt byte-identical to before.
     const openerHint = await getOpenerHint(db, job.campaign_id);
+    openerSource = openerHint?.key ? "campaign_learning" : "hash";
 
     // Subject learning: the fold only names a winner past 25 sends per variant
     // and 3 points of lift, so acting on it is acting on evidence. Null keeps
@@ -715,7 +803,7 @@ Deno.serve(async (req) => {
     // Exactly one attribution source may claim the send. A learned opener
     // outranks the follow-up sequence hint because they describe different
     // decisions, and the audit trail must point at the one that was applied.
-    const attribution = openerHint
+    attribution = openerHint
       ? { model_version: `campaign_learning/v${openerHint.version}`, strategy_ref: strategyRef(job.campaign_id, openerHint.version) }
       : subjectHint
         ? { model_version: `campaign_learning/v${subjectHint.version}`, strategy_ref: strategyRef(job.campaign_id, subjectHint.version) }
@@ -724,7 +812,7 @@ Deno.serve(async (req) => {
           : {};
 
     // The learned subject variant overrides the per-job assignment entirely.
-    let variant = subjectHint ? subjectHint.variant : job.variant;
+    variant = subjectHint ? subjectHint.variant : job.variant;
 
     // Stage 7: AI-cost gate. mode !== 'ai' => the whole send degenerates to the
     // deterministic template (no LLM, no ledger, no debit). mode === 'ai' => the
@@ -742,7 +830,7 @@ Deno.serve(async (req) => {
 
     const destLink = String(ctx.profile.website_url || ctx.profile.booking_link || "");
     const leadLang = detectLeadLanguage(lead, ctx.profile);
-    let gen = aiGate.mode === "ai"
+    gen = aiGate.mode === "ai"
       ? await generateEmail(
           String(ctx.profile.name ?? "Best regards"),
           lead,
@@ -755,7 +843,12 @@ Deno.serve(async (req) => {
           aiGate,
           openerHint?.key ?? null
         )
-      : templateEmail(String(ctx.profile.name ?? "Best regards"), lead, String(ctx.profile.offer ?? "our service"), leadLang === "ar", seqSuffix);
+      : {
+          ...templateEmail(String(ctx.profile.name ?? "Best regards"), lead, String(ctx.profile.offer ?? "our service"), leadLang === "ar", seqSuffix),
+          facts: [],
+          claims: [],
+          blocked: [{ sentence: "", reason: "AI budget is paused, so the fixed template was used" }],
+        };
     if (variant === "B") {
       const subs = aiGate.mode === "ai" ? (abCache.get(job.campaign_id)?.subs ?? []) : [];
       if (subs.length > 0) gen.subject = subs[Math.floor(Math.random() * subs.length)];
@@ -768,11 +861,54 @@ Deno.serve(async (req) => {
       } catch { /* keep original */ }
     }
 
-    const destLink2 = String(ctx.profile.website_url || ctx.profile.booking_link || "");
-    const bodyText = `${gen.body}${destLink2 ? (ctx.profile.website_url ? `\n\n🔗 See how it works & get started: ${destLink2}` : `\n\n📅 Want details or a quick demo? Book a time that suits you: ${destLink2}`) : ""}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
+    destLink2 = String(ctx.profile.website_url || ctx.profile.booking_link || "");
+    bodyText = `${gen.body}${destLink2 ? (ctx.profile.website_url ? `\n\n🔗 See how it works & get started: ${destLink2}` : `\n\n📅 Want details or a quick demo? Book a time that suits you: ${destLink2}`) : ""}${ctx.profile.signature ? `\n\n${sanitizeForPrompt(ctx.profile.signature, 400)}` : ""}
 
 PS: I use an AI assistant (OutshipAi) to help manage my outreach — this note was drafted with its help.
 Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Deno.env.get("SENDER_ADDRESS")}` : ""}`;
+
+    // Review mode: hold the finished draft instead of sending it. The text is
+    // stored exactly as it would leave, so approving sends this email and not a
+    // new one. Nothing is counted as sent and the daily slot is released by the
+    // caller, so a held draft never spends volume.
+    const reviewMode = String(ctx.profile.review_mode ?? "first_20");
+    if (shouldHoldForReview(reviewMode, ctx.lifetimeSends)) {
+      await db.from("send_queue").update({
+        status: "awaiting_review",
+        review_state: "awaiting",
+        draft_subject: gen.subject,
+        draft_body: bodyText,
+        draft_meta: {
+          variant,
+          opener_key: gen.openerKey,
+          opener_source: openerSource,
+          attribution,
+          facts: gen.facts,
+          claims: gen.claims,
+          blocked: gen.blocked,
+          template: gen.claims.length === 0,
+          held_at: new Date().toISOString(),
+        },
+        lease_until: null,
+        next_retry_at: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", job.id);
+      await insertAudit(db, {
+        user_id: job.user_id,
+        campaign_id: job.campaign_id,
+        lead_id: job.lead_id,
+        event: "email.held_for_review",
+        payload: {
+          job_id: job.id,
+          subject: gen.subject.slice(0, 80),
+          lifetime_sends: ctx.lifetimeSends,
+          review_mode: reviewMode,
+          template: gen.claims.length === 0,
+        },
+      });
+      return "held";
+    }
+    }
 
     // Generate tracking ID BEFORE send so we can reference it in the pixel.
     const trackingId = crypto.randomUUID();
@@ -804,7 +940,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
       // Mark our queue job as sent (idempotent — the other worker is handling it).
       if (String(pendingErr.message ?? "").includes("duplicate key")) {
         await db.from("send_queue").update({ status: "sent", lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
-        return true;
+        return "sent";
       }
       throw new Error(`pending_insert_failed:${pendingErr.message?.slice(0, 120)}`);
     }
@@ -852,8 +988,8 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     }
 
     ctx.sentToday++;
-    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), opener_key: gen.openerKey, opener_source: openerHint?.key ? "campaign_learning" : "hash", followup_initialized: campCheck?.followups_enabled !== false }, ...attribution });
-    return true;
+    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), opener_key: gen.openerKey, opener_source: openerSource, reviewed: Boolean(stored), followup_initialized: campCheck?.followups_enabled !== false }, ...attribution });
+    return "sent";
   }
 
   // ------------------------------------------------------------------

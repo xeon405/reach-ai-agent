@@ -685,6 +685,27 @@ export type Database = {
         }
         Relationships: []
       }
+      demo_rate_limit: {
+        Row: {
+          action: string
+          created_at: string
+          id: number
+          ip: string
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          id?: number
+          ip: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: number
+          ip?: string
+        }
+        Relationships: []
+      }
       domains: {
         Row: {
           created_at: string
@@ -1508,6 +1529,7 @@ export type Database = {
           referral_reward_plan: string | null
           referral_reward_until: string | null
           referred_by: string | null
+          review_mode: string
           signature: string | null
           target_customer: string | null
           website_url: string | null
@@ -1552,6 +1574,7 @@ export type Database = {
           referral_reward_plan?: string | null
           referral_reward_until?: string | null
           referred_by?: string | null
+          review_mode?: string
           signature?: string | null
           target_customer?: string | null
           website_url?: string | null
@@ -1596,6 +1619,7 @@ export type Database = {
           referral_reward_plan?: string | null
           referral_reward_until?: string | null
           referred_by?: string | null
+          review_mode?: string
           signature?: string | null
           target_customer?: string | null
           website_url?: string | null
@@ -1802,12 +1826,16 @@ export type Database = {
           attempts: number
           campaign_id: string
           created_at: string
+          draft_body: string | null
+          draft_meta: Json | null
+          draft_subject: string | null
           id: string
           last_error: string | null
           lead_id: string
           lease_until: string | null
           next_retry_at: string | null
           priority: number
+          review_state: string | null
           status: string
           updated_at: string | null
           user_id: string
@@ -1817,12 +1845,16 @@ export type Database = {
           attempts?: number
           campaign_id: string
           created_at?: string
+          draft_body?: string | null
+          draft_meta?: Json | null
+          draft_subject?: string | null
           id?: string
           last_error?: string | null
           lead_id: string
           lease_until?: string | null
           next_retry_at?: string | null
           priority?: number
+          review_state?: string | null
           status?: string
           updated_at?: string | null
           user_id: string
@@ -1832,12 +1864,16 @@ export type Database = {
           attempts?: number
           campaign_id?: string
           created_at?: string
+          draft_body?: string | null
+          draft_meta?: Json | null
+          draft_subject?: string | null
           id?: string
           last_error?: string | null
           lead_id?: string
           lease_until?: string | null
           next_retry_at?: string | null
           priority?: number
+          review_state?: string | null
           status?: string
           updated_at?: string | null
           user_id?: string
@@ -2312,12 +2348,16 @@ export type Database = {
           attempts: number
           campaign_id: string
           created_at: string
+          draft_body: string | null
+          draft_meta: Json | null
+          draft_subject: string | null
           id: string
           last_error: string | null
           lead_id: string
           lease_until: string | null
           next_retry_at: string | null
           priority: number
+          review_state: string | null
           status: string
           updated_at: string | null
           user_id: string

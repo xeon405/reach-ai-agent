@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SendingHealthCard } from "@/components/sending-health";
+import { ReviewWaitingCard } from "@/components/review-waiting";
 import {
   Users,
   Send,
@@ -734,6 +735,7 @@ function Dashboard() {
       </div>
 
       <SendingHealthCard />
+      <ReviewWaitingCard />
 
       {/* Reply Trend — the single graph */}
       <Section title="Reply Trend" icon={<TrendingUp className="h-4 w-4" />}>

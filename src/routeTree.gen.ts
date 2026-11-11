@@ -29,6 +29,7 @@ import { Route as GmailCallbackRouteImport } from './routes/gmail.callback'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthenticatedVerifyDomainRouteImport } from './routes/_authenticated/verify-domain'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedLeadFinderRouteImport } from './routes/_authenticated/lead-finder'
@@ -143,6 +144,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedReviewRoute = AuthenticatedReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -237,6 +243,7 @@ export interface FileRoutesByFullPath {
   '/lead-finder': typeof AuthenticatedLeadFinderRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-domain': typeof AuthenticatedVerifyDomainRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -271,6 +278,7 @@ export interface FileRoutesByTo {
   '/lead-finder': typeof AuthenticatedLeadFinderRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-domain': typeof AuthenticatedVerifyDomainRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -307,6 +315,7 @@ export interface FileRoutesById {
   '/_authenticated/lead-finder': typeof AuthenticatedLeadFinderRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/verify-domain': typeof AuthenticatedVerifyDomainRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -343,6 +352,7 @@ export interface FileRouteTypes {
     | '/lead-finder'
     | '/leads'
     | '/onboarding'
+    | '/review'
     | '/settings'
     | '/verify-domain'
     | '/auth/callback'
@@ -377,6 +387,7 @@ export interface FileRouteTypes {
     | '/lead-finder'
     | '/leads'
     | '/onboarding'
+    | '/review'
     | '/settings'
     | '/verify-domain'
     | '/auth/callback'
@@ -412,6 +423,7 @@ export interface FileRouteTypes {
     | '/_authenticated/lead-finder'
     | '/_authenticated/leads'
     | '/_authenticated/onboarding'
+    | '/_authenticated/review'
     | '/_authenticated/settings'
     | '/_authenticated/verify-domain'
     | '/auth/callback'
@@ -584,6 +596,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/review': {
+      id: '/_authenticated/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof AuthenticatedReviewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/onboarding': {
       id: '/_authenticated/onboarding'
       path: '/onboarding'
@@ -688,6 +707,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLeadFinderRoute: typeof AuthenticatedLeadFinderRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
+  AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedVerifyDomainRoute: typeof AuthenticatedVerifyDomainRoute
   AuthenticatedCampaignEditCampaignIdRoute: typeof AuthenticatedCampaignEditCampaignIdRoute
@@ -705,6 +725,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLeadFinderRoute: AuthenticatedLeadFinderRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
+  AuthenticatedReviewRoute: AuthenticatedReviewRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedVerifyDomainRoute: AuthenticatedVerifyDomainRoute,
   AuthenticatedCampaignEditCampaignIdRoute:
