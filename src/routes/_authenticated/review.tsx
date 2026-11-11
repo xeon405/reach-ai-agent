@@ -5,9 +5,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ReviewModeCard } from "@/components/review-mode-card";
 import { WhyThisEmail, type ProofBlocked, type ProofClaim, type ProofFact } from "@/components/why-this-email";
-import { Check, Clock, Loader2, MailQuestion, ShieldCheck, X } from "lucide-react";
+import { Check, Clock, Loader2, MailQuestion, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/review")({
@@ -16,8 +16,6 @@ export const Route = createFileRoute("/_authenticated/review")({
   }),
   component: ReviewPage,
 });
-
-type ReviewMode = "first_20" | "always" | "off";
 
 type DraftMeta = {
   facts?: ProofFact[];
@@ -45,21 +43,6 @@ type QueueRow = {
   campaign: { name: string | null } | null;
 };
 
-const MODE_COPY: Record<ReviewMode, { label: string; body: string }> = {
-  first_20: {
-    label: "First 20 emails (default)",
-    body: "Hold my first 20 emails so I can read each one. After that, send automatically.",
-  },
-  always: {
-    label: "Every email",
-    body: "Hold every new first-touch email until I approve it.",
-  },
-  off: {
-    label: "No review",
-    body: "Send automatically. I can still preview an email from the campaign page.",
-  },
-};
-
 function relative(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(ms) || ms < 0) return "just now";
@@ -74,27 +57,20 @@ function ReviewPage() {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<QueueRow[]>([]);
-  const [mode, setMode] = useState<ReviewMode>("first_20");
-  const [savedMode, setSavedMode] = useState<ReviewMode>("first_20");
-  const [lifetimeSends, setLifetimeSends] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [queueRes, profileRes, sentRes] = await Promise.all([
-        supabase
-          .from("send_queue")
-          .select(
-            "id, created_at, draft_subject, draft_body, draft_meta, campaign_id, lead_id, lead:leads(id, name, company, email, city), campaign:campaigns(name)",
-          )
-          .eq("user_id", user.id)
-          .eq("status", "awaiting_review")
-          .order("created_at", { ascending: true }),
-        supabase.from("profiles").select("review_mode").eq("id", user.id).maybeSingle(),
-        supabase.from("emails_sent").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-      ]);
+      const queueRes = await supabase
+        .from("send_queue")
+        .select(
+          "id, created_at, draft_subject, draft_body, draft_meta, campaign_id, lead_id, lead:leads(id, name, company, email, city), campaign:campaigns(name)",
+        )
+        .eq("user_id", user.id)
+        .eq("status", "awaiting_review")
+        .order("created_at", { ascending: true });
 
       if (queueRes.error) throw queueRes.error;
       const queue = ((queueRes.data ?? []) as unknown as QueueRow[]).map((r) => ({
@@ -103,11 +79,6 @@ function ReviewPage() {
         campaign: Array.isArray(r.campaign) ? r.campaign[0] ?? null : r.campaign,
       }));
       setRows(queue);
-
-      const current = (profileRes.data?.review_mode ?? "first_20") as ReviewMode;
-      setMode(current);
-      setSavedMode(current);
-      setLifetimeSends(sentRes.count ?? 0);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load drafts waiting for review.");
     } finally {
@@ -118,26 +89,6 @@ function ReviewPage() {
   useEffect(() => {
     if (!authLoading) void load();
   }, [authLoading, load]);
-
-  async function chooseMode(next: ReviewMode) {
-    if (!user) return;
-    const previous = mode;
-    setMode(next);
-    const { error } = await supabase.from("profiles").update({ review_mode: next }).eq("id", user.id);
-    if (error) {
-      setMode(previous);
-      toast.error("Could not save that setting.");
-      return;
-    }
-    setSavedMode(next);
-    toast.success("Review setting saved.");
-    // Turning review off does not release drafts already held: the owner still
-    // decides each one, because a draft they have not read should never send
-    // itself just because a setting changed.
-    if (next === "off" && rows.length > 0) {
-      toast.message("Your held drafts are still here. Approve or skip each one.");
-    }
-  }
 
   async function decide(id: string, action: "approve" | "skip") {
     setBusy(id);
@@ -161,8 +112,6 @@ function ReviewPage() {
     }
   }
 
-  const firstRun = savedMode === "first_20" && (lifetimeSends ?? 0) < 20;
-
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -173,7 +122,8 @@ function ReviewPage() {
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             A new account is the unknown-sender period. Each email is written in full, then held here until you read
-            it. Approving sends exactly the text you see — nothing is rewritten after approval.
+            it. After 5 approved emails it sends on its own. Approving sends exactly the text you see — nothing is
+            rewritten after approval.
           </p>
         </div>
         <Badge variant="secondary" className="shrink-0">
@@ -181,36 +131,8 @@ function ReviewPage() {
         </Badge>
       </div>
 
-      {/* Mode selector */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">Review setting</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{MODE_COPY[mode].body}</p>
-          </div>
-          <Select value={mode} onValueChange={(v) => void chooseMode(v as ReviewMode)}>
-            <SelectTrigger className="w-[210px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(MODE_COPY) as ReviewMode[]).map((key) => (
-                <SelectItem key={key} value={key}>
-                  {MODE_COPY[key].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {firstRun && (
-          <p className="mt-3 flex items-start gap-1.5 text-[11px] text-muted-foreground">
-            <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
-            <span>
-              You have sent {lifetimeSends ?? 0} of your first 20. Review turns itself off after 20 approved sends
-              unless you keep it on.
-            </span>
-          </p>
-        )}
-      </div>
+      {/* The same card as Settings, so the rule is stated once. */}
+      <ReviewModeCard onSaved={() => void load()} />
 
       {loading ? (
         <div className="space-y-4">

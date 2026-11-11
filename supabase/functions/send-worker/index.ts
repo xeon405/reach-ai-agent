@@ -33,7 +33,7 @@ import {
   parseWriterJson,
 } from "../_shared/fact-writer.ts";
 import { type Claim, type Fact, factsToPromptBlock } from "../_shared/fact-layer.ts";
-import { shouldHoldForReview } from "../_shared/review-mode.ts";
+import { shouldHoldJob } from "../_shared/review-mode.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +52,7 @@ const PLAN_LIMITS: Record<string, { dailyEmails: number }> = {
   agency: { dailyEmails: 500 },
 };
 
-/** The unknown-sender period: a new account's first 20 emails are held for
+/** The unknown-sender period: a new account's first 5 emails are held for
  *  review by default. The rule itself lives in _shared/review-mode.ts so it is
  *  testable without a mailbox. */
 
@@ -871,8 +871,12 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     // stored exactly as it would leave, so approving sends this email and not a
     // new one. Nothing is counted as sent and the daily slot is released by the
     // caller, so a held draft never spends volume.
-    const reviewMode = String(ctx.profile.review_mode ?? "first_20");
-    if (shouldHoldForReview(reviewMode, ctx.lifetimeSends)) {
+    //
+    // An approved job is never held again: the owner already read this exact
+    // text, and re-holding it would make approval do nothing during the first
+    // five sends.
+    const reviewMode = String(ctx.profile.review_mode ?? "first_5");
+    if (shouldHoldJob(reviewMode, ctx.lifetimeSends, job.review_state, Boolean(stored))) {
       await db.from("send_queue").update({
         status: "awaiting_review",
         review_state: "awaiting",
@@ -988,6 +992,10 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     }
 
     ctx.sentToday++;
+    // Keep the review-period count in step inside this run. Without this, an
+    // account that crosses its fifth send mid-run would have its next new draft
+    // held even though the review period is over.
+    ctx.lifetimeSends++;
     await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), opener_key: gen.openerKey, opener_source: openerSource, reviewed: Boolean(stored), followup_initialized: campCheck?.followups_enabled !== false }, ...attribution });
     return "sent";
   }

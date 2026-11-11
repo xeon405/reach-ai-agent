@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ReviewModeCard } from "@/components/review-mode-card";
 import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { AlertTriangle, Check } from "lucide-react";
@@ -364,6 +365,8 @@ function SettingsPage() {
             placeholder="e.g. Never promise specific revenue numbers." />
         </div>
       </Section>
+
+      <ReviewModeCard />
 
       <Section title="Connected accounts">
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
