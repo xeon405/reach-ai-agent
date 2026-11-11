@@ -338,8 +338,16 @@ function Dashboard() {
     const verifiedLeads = fLeads.filter((l) => l.email_status === "verified").length;
     const totalSent = fEmails.length;
     const sentSuccess = fEmails.filter((e) => !!e.gmail_message_id).length;
-    const opens =
-      fTracking.filter((t) => t.event === "open").length + fEmails.filter((e) => e.opened).length;
+    // Count opened emails, not open events. track-open also flips
+    // emails_sent.opened, so adding both counted one open twice and could push
+    // the open rate over 100%. The set keeps it at most one per sent email.
+    const sentIds = new Set(fEmails.map((e) => e.id));
+    const openedEmails = new Set<string>();
+    for (const e of fEmails) if (e.opened) openedEmails.add(e.id);
+    for (const t of fTracking) {
+      if (t.event === "open" && t.email_id && sentIds.has(t.email_id)) openedEmails.add(t.email_id);
+    }
+    const opens = openedEmails.size;
     const clicks = fTracking.filter((t) => t.event === "click").length;
     const replies = fEmails.filter((e) => e.replied).length;
     // One definition of "interested" across the whole page: an email whose
