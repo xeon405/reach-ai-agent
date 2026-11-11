@@ -37,7 +37,7 @@ import {
   Globe,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ReplyTrendChart, type ReplyTrendPoint } from "@/components/dashboard-charts";
+import { ReplyTrendChart, TREND_METRICS, trendTotals, type ReplyTrendPoint, type TrendMetric } from "@/components/dashboard-charts";
 import { SendGate } from "@/components/send-gate";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -207,6 +207,7 @@ function Dashboard() {
   const [dateRange, setDateRange] = useState<number>(3650);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>("all");
 
   useEffect(() => {
     loadAll();
@@ -552,6 +553,10 @@ function Dashboard() {
     return [...buckets.values()].sort((a, b) => a.ts - b.ts);
   }, [fEmails, dateRange]);
 
+  // Totals straight from the plotted buckets, so the headline numbers and the
+  // graph speak from the same data. No separate query, no second definition.
+  const trendTotalsData = useMemo(() => trendTotals(replyTrendData), [replyTrendData]);
+
   const replyStats = useMemo(() => {
     const rate = (list: EmailRow[]) =>
       list.length ? list.filter((e) => e.replied).length / list.length : 0;
@@ -737,47 +742,85 @@ function Dashboard() {
       <SendingHealthCard />
       <ReviewWaitingCard />
 
-      {/* Reply Trend — the single graph */}
-      <Section title="Reply Trend" icon={<TrendingUp className="h-4 w-4" />}>
+      {/* Totals first, trend second: a graph alone hides the answer. */}
+      <Section title="Outreach totals" icon={<TrendingUp className="h-4 w-4" />}>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <TrendTotal
+            label="Emails sent"
+            value={trendTotalsData.sends}
+            hint="in this period"
+            color="var(--muted-foreground)"
+            active={trendMetric === "sends"}
+            onClick={() => setTrendMetric(trendMetric === "sends" ? "all" : "sends")}
+          />
+          <TrendTotal
+            label="Replied"
+            value={trendTotalsData.replies}
+            hint={`${share(trendTotalsData.replies, trendTotalsData.sends)}% of sent`}
+            color="var(--primary)"
+            active={trendMetric === "replies"}
+            onClick={() => setTrendMetric(trendMetric === "replies" ? "all" : "replies")}
+          />
+          <TrendTotal
+            label="Interested"
+            value={trendTotalsData.interested}
+            hint={`${share(trendTotalsData.interested, trendTotalsData.sends)}% of sent`}
+            color="var(--success)"
+            active={trendMetric === "interested"}
+            onClick={() => setTrendMetric(trendMetric === "interested" ? "all" : "interested")}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
+            {TREND_METRICS.map((m) => (
+              <button
+                key={m.value}
+                onClick={() => setTrendMetric(m.value)}
+                aria-pressed={trendMetric === m.value}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  trendMetric === m.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {m.color && <span className="h-1.5 w-1.5 rounded-full" style={{ background: m.color }} />}
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Reply rate{" "}
+            <span className="font-semibold text-foreground">
+              {(replyStats.rate * 100).toFixed(1)}%
+            </span>
+            {replyStats.delta != null && (
+              <span
+                className={
+                  replyStats.delta >= 0
+                    ? "ml-1.5 text-emerald-600 dark:text-emerald-400"
+                    : "ml-1.5 text-red-600 dark:text-red-400"
+                }
+              >
+                {replyStats.delta >= 0 ? "▲" : "▼"} {Math.abs(replyStats.delta).toFixed(1)} pts vs
+                prev
+              </span>
+            )}
+          </div>
+        </div>
+
         {replyTrendData.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground">
-            No emails sent in this period yet.
+          <p className="mt-4 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No emails sent in this period yet. These are real zeros, not a loading state.
           </p>
         ) : (
-          <>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-muted-foreground" /> Sent
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-foreground" /> Replies
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Interested
-                </span>
-              </div>
-              <div>
-                Reply rate{" "}
-                <span className="font-semibold text-foreground">
-                  {(replyStats.rate * 100).toFixed(1)}%
-                </span>
-                {replyStats.delta != null && (
-                  <span
-                    className={
-                      replyStats.delta >= 0
-                        ? "ml-1.5 text-emerald-600 dark:text-emerald-400"
-                        : "ml-1.5 text-red-600 dark:text-red-400"
-                    }
-                  >
-                    {replyStats.delta >= 0 ? "▲" : "▼"} {Math.abs(replyStats.delta).toFixed(1)} pts
-                    vs prev
-                  </span>
-                )}
-              </div>
-            </div>
-            <ReplyTrendChart data={replyTrendData} />
-          </>
+          <div className="mt-2">
+            <ReplyTrendChart data={replyTrendData} metric={trendMetric} />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Each point counts emails by the day they were sent. Interested means the first reply
+              was classified as interested.
+            </p>
+          </div>
         )}
       </Section>
 
@@ -1208,6 +1251,46 @@ function Section({
       </h2>
       {children}
     </div>
+  );
+}
+
+function share(part: number, whole: number): string {
+  return whole > 0 ? ((part / whole) * 100).toFixed(1) : "0.0";
+}
+
+function TrendTotal({
+  label,
+  value,
+  hint,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  color: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-lg border p-3 text-left transition-colors ${
+        active
+          ? "border-primary/60 bg-primary/5"
+          : "border-border bg-card hover:border-primary/30 hover:bg-muted/40"
+      }`}
+    >
+      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+        {label}
+      </span>
+      <span className="mt-1 block text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="block text-[11px] text-muted-foreground">{hint}</span>
+    </button>
   );
 }
 
