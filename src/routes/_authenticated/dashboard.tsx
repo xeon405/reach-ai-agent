@@ -37,7 +37,7 @@ import {
   Globe,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ReplyTrendChart } from "@/components/dashboard-charts";
+import { ReplyTrendChart, TREND_COLORS } from "@/components/dashboard-charts";
 import { buildReplyTrend, trendTotals, type ReplyTrendPoint } from "@/lib/trend";
 import { SendGate } from "@/components/send-gate";
 
@@ -337,7 +337,14 @@ function Dashboard() {
       fTracking.filter((t) => t.event === "open").length + fEmails.filter((e) => e.opened).length;
     const clicks = fTracking.filter((t) => t.event === "click").length;
     const replies = fEmails.filter((e) => e.replied).length;
-    const positiveReplies = fCls.filter((c) => c.interested || c.booking_intent).length;
+    // One definition of "interested" across the whole page: an email whose
+    // first reply was classified interested. The old count used raw
+    // classification rows, which grow with every conversation turn (11 rows for
+    // 2 emails), so the KPI and the graph disagreed and the funnel showed more
+    // interested replies than emails sent.
+    const positiveReplies = fEmails.filter(
+      (e) => (e.reply_sentiment ?? "").toUpperCase() === "INTERESTED",
+    ).length;
     const bookingIntents = fCls.filter((c) => c.booking_intent).length;
     const confirmedBookings = fMeetings.filter((m) => m.status === "scheduled").length;
     const bounces = fAudit.filter((a) => a.event === "email.bounced").length;
@@ -436,7 +443,9 @@ function Dashboard() {
     const clicked = fTracking.filter((t) => t.event === "click").length;
     const replied = fEmails.filter((e) => e.replied).length;
     const bounced = kpis.bounces;
-    const positive = fCls.filter((c) => c.interested || c.booking_intent).length;
+    const positive = fEmails.filter(
+      (e) => (e.reply_sentiment ?? "").toUpperCase() === "INTERESTED",
+    ).length;
     const booking = kpis.confirmedBookings;
     const r = (n: number) => (sent > 0 ? ((n / sent) * 100).toFixed(1) : "0.0");
     return {
@@ -448,7 +457,7 @@ function Dashboard() {
       positiveRate: r(positive),
       bookingRate: r(booking),
     };
-  }, [fEmails, fCls, kpis, fTracking]);
+  }, [fEmails, kpis, fTracking]);
 
   const campaignPerf = useMemo(() => {
     return campaigns.map((c) => {
@@ -457,10 +466,9 @@ function Dashboard() {
       const sent = cEmails.length;
       const opens = cEmails.filter((e) => e.opened).length;
       const replies = cEmails.filter((e) => e.replied).length;
-      const positives = fCls.filter((cl) => {
-        const leadInCampaign = fLeads.some((l) => l.id === cl.lead_id && l.campaign_id === c.id);
-        return leadInCampaign && (cl.interested || cl.booking_intent);
-      }).length;
+      const positives = cEmails.filter(
+        (e) => (e.reply_sentiment ?? "").toUpperCase() === "INTERESTED",
+      ).length;
       const bounces = fAudit.filter(
         (a) => a.campaign_id === c.id && a.event === "email.bounced",
       ).length;
@@ -482,7 +490,7 @@ function Dashboard() {
         bookingRate: br,
       };
     });
-  }, [campaigns, fLeads, fEmails, fCls, fAudit, fMeetings]);
+  }, [campaigns, fLeads, fEmails, fAudit, fMeetings]);
 
   const aiPerf = useMemo(() => {
     const totalCls = fCls.length;
@@ -748,19 +756,19 @@ function Dashboard() {
             label="Emails sent"
             value={trendTotalsData.sends}
             hint={rangeHint}
-            color="var(--muted-foreground)"
+            color={TREND_COLORS.sends}
           />
           <TrendTotal
             label="Replied"
             value={trendTotalsData.replies}
             hint={`${share(trendTotalsData.replies, trendTotalsData.sends)}% of sent`}
-            color="var(--primary)"
+            color={TREND_COLORS.replies}
           />
           <TrendTotal
             label="Interested"
             value={trendTotalsData.interested}
             hint={`${share(trendTotalsData.interested, trendTotalsData.sends)}% of sent`}
-            color="var(--success)"
+            color={TREND_COLORS.interested}
           />
         </div>
 
@@ -770,12 +778,25 @@ function Dashboard() {
           </p>
         ) : (
           <div className="mt-3">
+            <div className="mb-2 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
+              {[
+                { label: "Sent", color: TREND_COLORS.sends },
+                { label: "Replied", color: TREND_COLORS.replies },
+                { label: "Interested", color: TREND_COLORS.interested },
+              ].map((item) => (
+                <span key={item.label} className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ background: item.color }} />
+                  {item.label}
+                </span>
+              ))}
+              <span className="ml-auto">Bars are counts. Hover a day for exact numbers.</span>
+            </div>
             <ReplyTrendChart data={replyTrendData} />
             <p className="mt-1 text-[11px] text-muted-foreground">
               {replyTrendData.filter((p) => p.sends > 0).length === 1
-                ? "Only one period has sends so far, so the line has a single peak. "
+                ? "Only one period has sends so far, so there is a single group of bars. "
                 : ""}
-              Each point counts emails by the day they were sent. Interested means the first reply
+              Each group counts emails by the day they were sent. Interested means the first reply
               was classified as interested.
             </p>
           </div>

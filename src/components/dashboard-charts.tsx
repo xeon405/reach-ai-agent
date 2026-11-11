@@ -1,4 +1,4 @@
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
   ChartContainer,
@@ -8,65 +8,52 @@ import {
 } from "@/components/ui/chart";
 import type { ReplyTrendPoint } from "@/lib/trend";
 
+/** One palette for the bars and the totals above them, so a colour always means
+ *  the same series. Sent/Replied/Interested are separate colours on purpose:
+ *  when every email is replied and interested the three values are identical,
+ *  and overlaid areas hid two of them behind the last one drawn. */
+export const TREND_COLORS = {
+  sends: "#94a3b8",
+  replies: "#3b82f6",
+  interested: "#10b981",
+} as const;
+
 export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
   const config = {
-    sends: { label: "Sent", color: "var(--muted-foreground)" },
-    replies: { label: "Replies", color: "var(--primary)" },
-    interested: { label: "Interested", color: "var(--success)" },
+    sends: { label: "Sent", color: TREND_COLORS.sends },
+    replies: { label: "Replies", color: TREND_COLORS.replies },
+    interested: { label: "Interested", color: TREND_COLORS.interested },
   } satisfies ChartConfig;
-
-  // Dots help a sparse first month; with a full month of days they become noise.
-  const showDots = data.length <= 14;
 
   return (
     <ChartContainer config={config} className="aspect-auto h-[260px] w-full">
-      <AreaChart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
-        <defs>
-          <linearGradient id="fillSends" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-sends)" stopOpacity={0.18} />
-            <stop offset="95%" stopColor="var(--color-sends)" stopOpacity={0.02} />
-          </linearGradient>
-          <linearGradient id="fillReplies" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-replies)" stopOpacity={0.35} />
-            <stop offset="95%" stopColor="var(--color-replies)" stopOpacity={0.02} />
-          </linearGradient>
-          <linearGradient id="fillInterested" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--color-interested)" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="var(--color-interested)" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
+      <BarChart
+        data={data}
+        margin={{ left: 0, right: 8, top: 8, bottom: 0 }}
+        barGap={2}
+        barCategoryGap="18%"
+      >
         <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.3} />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
-        <YAxis hide allowDecimals={false} />
+        {/* Counts, so the scale must be readable. A hidden axis made a bar of 1
+            look like the same shape as a bar of 100. */}
+        <YAxis
+          allowDecimals={false}
+          width={28}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fontSize: 10 }}
+        />
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-        <Area
-          dataKey="sends"
-          type="monotone"
-          stroke="var(--color-sends)"
-          strokeWidth={2}
-          fill="url(#fillSends)"
-          dot={showDots ? { r: 2.5, strokeWidth: 0, fillOpacity: 0.7 } : false}
-          activeDot={{ r: 4 }}
-        />
-        <Area
-          dataKey="replies"
-          type="monotone"
-          stroke="var(--color-replies)"
-          strokeWidth={3}
-          fill="url(#fillReplies)"
-          dot={showDots ? { r: 3, strokeWidth: 0, fillOpacity: 0.9 } : false}
-          activeDot={{ r: 5 }}
-        />
-        <Area
+        <Bar dataKey="sends" fill="var(--color-sends)" radius={[2, 2, 0, 0]} maxBarSize={16} />
+        <Bar dataKey="replies" fill="var(--color-replies)" radius={[2, 2, 0, 0]} maxBarSize={16} />
+        <Bar
           dataKey="interested"
-          type="monotone"
-          stroke="var(--color-interested)"
-          strokeWidth={2}
-          fill="url(#fillInterested)"
-          dot={showDots ? { r: 2.5, strokeWidth: 0, fillOpacity: 0.85 } : false}
-          activeDot={{ r: 5 }}
+          fill="var(--color-interested)"
+          radius={[2, 2, 0, 0]}
+          maxBarSize={16}
         />
-      </AreaChart>
+      </BarChart>
     </ChartContainer>
   );
 }
