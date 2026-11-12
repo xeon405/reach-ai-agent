@@ -45,11 +45,12 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           tick={{ fontSize: 10 }}
         />
         <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-        {/* Sent is the shaded area, so its volume is readable at a glance. Sent,
-            replied and interested are often the same number (every sent email
-            answered, and answered with interest). Separate solid, dashed and
-            dotted strokes keep all three visible instead of one hiding the
-            others, and only one fill is used so the fills cannot stack. */}
+        {/* Sent is the shaded area, so its volume is readable at a glance.
+            Interested is a normal solid line (as asked). Sent, replied and
+            interested are often the same number, so the interested line is
+            drawn first and the dashed replied line sits on top of it: the green
+            line shows through the gaps in the dashes, and neither line hides
+            the other. Only one fill is used, so fills cannot stack. */}
         <Area
           dataKey="sends"
           type="monotone"
@@ -60,21 +61,20 @@ export function ReplyTrendChart({ data }: { data: ReplyTrendPoint[] }) {
           activeDot={{ r: 4 }}
         />
         <Line
+          dataKey="interested"
+          type="monotone"
+          stroke={TREND_COLORS.interested}
+          strokeWidth={2.5}
+          dot={showDots ? { r: 2, strokeWidth: 0, fill: TREND_COLORS.interested } : false}
+          activeDot={{ r: 4 }}
+        />
+        <Line
           dataKey="replies"
           type="monotone"
           stroke={TREND_COLORS.replies}
           strokeWidth={2.5}
           strokeDasharray="8 4"
           dot={showDots ? { r: 2.2, strokeWidth: 0, fill: TREND_COLORS.replies } : false}
-          activeDot={{ r: 4 }}
-        />
-        <Line
-          dataKey="interested"
-          type="monotone"
-          stroke={TREND_COLORS.interested}
-          strokeWidth={2.5}
-          strokeDasharray="2 4"
-          dot={showDots ? { r: 2, strokeWidth: 0, fill: TREND_COLORS.interested } : false}
           activeDot={{ r: 4 }}
         />
       </ComposedChart>
