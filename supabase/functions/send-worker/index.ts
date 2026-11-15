@@ -34,6 +34,13 @@ import {
 } from "../_shared/fact-writer.ts";
 import { type Claim, type Fact, factsToPromptBlock } from "../_shared/fact-layer.ts";
 import { shouldHoldJob } from "../_shared/review-mode.ts";
+import {
+  DEFAULT_RULES,
+  getUserRules,
+  inQuietHours,
+  isNeverEmail,
+  type UserRules,
+} from "../_shared/developer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -161,6 +168,22 @@ function toBase64Url(str: string): string {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Campaign tone, allowlisted so a stored value can never inject prompt text. */
+function toneInstruction(tone: string): string {
+  switch (tone) {
+    case "warm":
+      return "Warm and friendly, like a helpful neighbour. No hype, no flattery.";
+    case "direct":
+      return "Direct and brisk. Short sentences, no small talk, one clear ask.";
+    case "formal":
+      return "Formal and professional. No slang, no exclamation marks.";
+    case "neutral":
+      return "Neutral and professional.";
+    default:
+      return "";
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -305,6 +328,7 @@ async function generateEmail(
   sequenceSuffix = "",
   gate?: AiCallHandle,
   openerOverride: string | null = null,
+  tone = "",
 ): Promise<GeneratedEmail> {
   if (gate && gate.mode !== "ai") {
     return {
@@ -341,6 +365,7 @@ LANGUAGE REQUIREMENT — WRITE IN ARABIC:
   });
   const promptContent = `${biContext}${factsToPromptBlock(facts)}Write a short, PERSONALIZED cold email from ${sanitizeForPrompt(senderName, 60)} ("the sender") to ${leadName}, ${leadJobTitle} at ${leadCompany}.
 Our offer: ${sanitizeForPrompt(userOffer)}
+${tone ? `\nTONE: ${tone}\n` : ""}
 A booking link is added automatically AFTER your text — do NOT type any URL yourself.
 ${avoidHint ? `\nIMPORTANT — your previous draft scored poorly on spam analysis. ${avoidHint}\n` : ""}
 ${sequenceSuffix}
@@ -493,10 +518,12 @@ type QueueJob = {
   draft_subject: string | null;
   draft_body: string | null;
   draft_meta: Record<string, any> | null;
+  last_error: string | null;
 };
 
 interface UserCtx {
   profile: Record<string, any>;
+  rules: UserRules;
   dailyCap: number;
   today: string;
   sentToday: number;
@@ -599,6 +626,36 @@ Deno.serve(async (req) => {
             continue;
           }
 
+          // Quiet hours: hold the job, never cancel it. The user said "do not
+          // send between these hours"; the job simply waits.
+          if (inQuietHours(ctx.rules, new Date())) {
+            const retryAt = new Date(Date.now() + 15 * 60_000).toISOString();
+            await supabase.from("send_queue").update({
+              status: "pending",
+              lease_until: null,
+              last_error: "quiet_hours",
+              next_retry_at: retryAt,
+              updated_at: new Date().toISOString(),
+            }).eq("id", job.id);
+            if (job.last_error !== "quiet_hours") {
+              await insertAudit(supabase, {
+                user_id: job.user_id,
+                campaign_id: job.campaign_id,
+                lead_id: job.lead_id,
+                event: "email.deferred",
+                payload: {
+                  job_id: job.id,
+                  reason: "quiet_hours",
+                  timezone: ctx.rules.timezone,
+                  window: [ctx.rules.quiet_start, ctx.rules.quiet_end],
+                  retry_at: retryAt,
+                },
+              });
+            }
+            retried++;
+            continue;
+          }
+
           // ATOMIC daily-cap reservation — no read/then/write race across workers.
           const { data: reserved } = await supabase.rpc("reserve_send_slot", { p_user: job.user_id, p_cap: ctx.dailyCap });
           if (!reserved) {
@@ -657,7 +714,10 @@ Deno.serve(async (req) => {
     if (!tok) return null;
     const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
     const ceil = profile.gmail_account_type === "workspace" ? 2000 : 500;
-    const dailyCap = await resolveDailyCap(db, profile, limits.dailyEmails, ceil);
+    const rules = await getUserRules(db, uid);
+    const healthCap = await resolveDailyCap(db, profile, limits.dailyEmails, ceil);
+    // A user-set cap can only lower the plan/health cap, never raise it.
+    const dailyCap = rules.daily_cap ? Math.min(healthCap, rules.daily_cap) : healthCap;
     const today = new Date().toISOString().split("T")[0];
     // One count per user per worker run, not per job. This decides review mode
     // only; the daily cap stays owned by reserve_send_slot.
@@ -667,6 +727,7 @@ Deno.serve(async (req) => {
       .eq("user_id", uid);
     return {
       profile,
+      rules,
       dailyCap,
       today,
       sentToday: profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0,
@@ -692,7 +753,7 @@ Deno.serve(async (req) => {
   }
 
   /** THE 13-point eligibility gate. Returns null when eligible, else reason. */
-  async function eligibilityBlock(db: ReturnType<typeof createClient<any>>, job: QueueJob, profile: Record<string, any>): Promise<string | null> {
+  async function eligibilityBlock(db: ReturnType<typeof createClient<any>>, job: QueueJob, profile: Record<string, any>, rules: UserRules): Promise<string | null> {
     const { data: campaign } = await db.from("campaigns").select("id,status,autopilot").eq("id", job.campaign_id).maybeSingle();
     if (!campaign) return "campaign_missing";
     if (campaign.status !== "active") return "campaign_not_active";                       // 3
@@ -702,6 +763,7 @@ Deno.serve(async (req) => {
     if (lead.unsubscribed || lead.status === "unsubscribed" || lead.lifecycle === "UNSUBSCRIBED") return "lead_unsubscribed"; // 6
     if (lead.status === "bounced" || lead.lifecycle === "BOUNCED") return "lead_bounced";  // 7b
     if ((lead.conv_mode ?? "AI_AUTOPILOT") === "HUMAN") return "human_takeover";           // 8
+    if (isNeverEmail(lead.email ?? "", rules.never_emails)) return "never_email";          // user rule
     const { data: sup } = await db.from("suppressions").select("id")
       .eq("user_id", job.user_id).ilike("email", lead.email).limit(1).maybeSingle();
     if (sup) return "lead_suppressed_db";                                                  // 5/7 (DB truth)
@@ -717,7 +779,7 @@ Deno.serve(async (req) => {
   type JobOutcome = "sent" | "held" | "skipped";
 
   async function processJob(db: ReturnType<typeof createClient<any>>, job: QueueJob, ctx: UserCtx, _start: number): Promise<JobOutcome> {
-    const blockReason = await eligibilityBlock(db, job, ctx.profile);
+    const blockReason = await eligibilityBlock(db, job, ctx.profile, ctx.rules);
     if (blockReason) {
       await db.from("send_queue").update({ status: "cancelled", last_error: blockReason, lease_until: null, updated_at: new Date().toISOString() }).eq("id", job.id);
       await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: job.lead_id, event: "email.cancelled", payload: { reason: blockReason } });
@@ -774,6 +836,7 @@ Deno.serve(async (req) => {
     let openerSource = String(meta.opener_source ?? "hash");
     let destLink2 = String(ctx.profile.website_url || ctx.profile.booking_link || "");
     let bodyText: string;
+    let toneText = "";
 
     if (stored) {
       gen = { subject: stored.subject, body: "", openerKey: stored.openerKey, facts: [], claims: [], blocked: [] };
@@ -782,6 +845,14 @@ Deno.serve(async (req) => {
     } else {
 
     const biCtx = buildBIContext(ctx.profile);
+    // Tone is a campaign rule, not a model guess. Empty means the prompt is
+    // byte-identical to before this setting existed.
+    const { data: campTone } = await db
+      .from("campaigns")
+      .select("tone")
+      .eq("id", job.campaign_id)
+      .maybeSingle();
+    toneText = toneInstruction(String(campTone?.tone ?? ""));
 
     // Stage 6: campaign-tracked next-step advice (36h fresh, kill-switch gated).
     // Advisory-only: null => prompts byte-identical to today. Applied => the
@@ -841,7 +912,8 @@ Deno.serve(async (req) => {
           "",
           seqSuffix,
           aiGate,
-          openerHint?.key ?? null
+          openerHint?.key ?? null,
+          toneText
         )
       : {
           ...templateEmail(String(ctx.profile.name ?? "Best regards"), lead, String(ctx.profile.offer ?? "our service"), leadLang === "ar", seqSuffix),
@@ -856,7 +928,7 @@ Deno.serve(async (req) => {
     let check = localSpamScore(gen.subject, gen.body);
     if (check.score < 60 && check.hint && aiGate.mode === "ai") {
       try {
-        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint, seqSuffix, aiGate, openerHint?.key ?? null);
+        const retry = await generateEmail(String(ctx.profile.name ?? ""), lead, String(ctx.profile.offer ?? "our service"), destLink, biCtx, leadLang === "ar", check.hint, seqSuffix, aiGate, openerHint?.key ?? null, toneText);
         if (localSpamScore(retry.subject, retry.body).score > check.score) gen = retry;
       } catch { /* keep original */ }
     }
@@ -996,7 +1068,7 @@ Reply UNSUBSCRIBE anytime to opt out.${Deno.env.get("SENDER_ADDRESS") ? `\n${Den
     // account that crosses its fifth send mid-run would have its next new draft
     // held even though the review period is over.
     ctx.lifetimeSends++;
-    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), opener_key: gen.openerKey, opener_source: openerSource, reviewed: Boolean(stored), followup_initialized: campCheck?.followups_enabled !== false }, ...attribution });
+    await insertAudit(db, { user_id: job.user_id, campaign_id: job.campaign_id, lead_id: lead.id, event: "email.sent", payload: { email_id: trackingId, gmail_message_id: ids.id, thread_id: ids.threadId, variant, subject: gen.subject.slice(0, 80), opener_key: gen.openerKey, opener_source: openerSource, reviewed: Boolean(stored), followup_initialized: campCheck?.followups_enabled !== false, tone: toneText || null, facts_used: gen.facts.length, claims: gen.claims.length, blocked: gen.blocked.length, template: gen.claims.length === 0, blocked_reasons: gen.blocked.slice(0, 5).map((b) => b.reason) }, ...attribution });
     return "sent";
   }
 
@@ -1106,6 +1178,21 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
       : { data: [] };
     const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
 
+    // Rules travel with the profile so follow-ups obey the same quiet hours,
+    // never-email list and custom cap as first-touch sends.
+    const { data: ruleRows } = userIds.length
+      ? await db.from("user_rules").select("user_id, daily_cap, quiet_start, quiet_end, timezone, never_emails").in("user_id", userIds)
+      : { data: [] };
+    const rulesMap = new Map<string, UserRules>(
+      (ruleRows ?? []).map((r: any) => [r.user_id, {
+        daily_cap: r.daily_cap ?? null,
+        quiet_start: r.quiet_start ?? null,
+        quiet_end: r.quiet_end ?? null,
+        timezone: r.timezone || "UTC",
+        never_emails: Array.isArray(r.never_emails) ? r.never_emails : [],
+      }]),
+    );
+
     // Batch-fetch follow-up sequences
     const campIds = [...new Set(dueLeads.map((l) => l.campaign?.id).filter(Boolean))];
     const { data: seqRows } = campIds.length
@@ -1128,12 +1215,26 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         if (!campaign) { followupsCancelled++; continue; }
         const profile = profileMap[campaign.user_id];
         if (!profile || !lead.email) { followupsCancelled++; continue; }
+        const rules = rulesMap.get(campaign.user_id) ?? DEFAULT_RULES;
+
+        // Quiet hours hold the follow-up; they never cancel it.
+        if (inQuietHours(rules, new Date())) {
+          if (dry) {
+            dryDecisions.push({ lead_id: lead.id, email: lead.email, decision: "deferred_quiet_hours", step: (lead.followup_step ?? 0) + 1 });
+          } else {
+            await db.from("leads")
+              .update({ next_followup_at: new Date(Date.now() + 3600_000).toISOString() })
+              .eq("id", lead.id);
+          }
+          continue;
+        }
 
         // ── SAFETY RE-CHECK: every blocking condition ──
         const reasons: string[] = [];
         if (lead.unsubscribed || ["unsubscribed", "bounced", "suppressed"].includes(lead.status)) reasons.push("lead_state");
         if (["UNSUBSCRIBED", "BOUNCED", "SUPPRESSED"].includes(lead.lifecycle ?? "")) reasons.push("lifecycle");
         if ((lead.conv_mode ?? "AI_AUTOPILOT") === "HUMAN") reasons.push("human_takeover");
+        if (isNeverEmail(lead.email, rules.never_emails)) reasons.push("never_email");
         if (campaign.status !== "active") reasons.push("campaign_inactive");
         if (!campaign.followups_enabled) reasons.push("followups_disabled");
 
@@ -1215,7 +1316,8 @@ The body must use \\n between paragraphs.${arabic ? "\n\nLANGUAGE REQUIREMENT �
         // ── DAILY CAP CHECK ──
         const limits = PLAN_LIMITS[effectivePlan(profile)] ?? PLAN_LIMITS.starter;
         const baseCap = profile.gmail_account_type === "workspace" ? 2000 : 500;
-        const cap = await resolveDailyCap(db, profile, limits.dailyEmails, baseCap);
+        const healthCap = await resolveDailyCap(db, profile, limits.dailyEmails, baseCap);
+        const cap = rules.daily_cap ? Math.min(healthCap, rules.daily_cap) : healthCap;
         const reserved = dry ? true : (await db.rpc("reserve_send_slot", { p_user: campaign.user_id, p_cap: cap })).data;
         if (!reserved) {
           // Defer 1 hour — restore to 'active' so next worker picks it up

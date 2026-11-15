@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       admin_actions: {
@@ -521,6 +496,65 @@ export type Database = {
           },
         ]
       }
+      api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          key_hash: string
+          last_used_at: string | null
+          name: string
+          prefix: string
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key_hash: string
+          last_used_at?: string | null
+          name: string
+          prefix: string
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key_hash?: string
+          last_used_at?: string | null
+          name?: string
+          prefix?: string
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      api_rate_limit: {
+        Row: {
+          count: number
+          key_id: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key_id: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          key_id?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_rate_limit_key_id_fkey"
+            columns: ["key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_events: {
         Row: {
           campaign_id: string | null
@@ -655,6 +689,7 @@ export type Database = {
           name: string
           status: string
           target_icp: Json | null
+          tone: string | null
           user_id: string
         }
         Insert: {
@@ -668,6 +703,7 @@ export type Database = {
           name: string
           status?: string
           target_icp?: Json | null
+          tone?: string | null
           user_id: string
         }
         Update: {
@@ -681,6 +717,7 @@ export type Database = {
           name?: string
           status?: string
           target_icp?: Json | null
+          tone?: string | null
           user_id?: string
         }
         Relationships: []
@@ -2263,6 +2300,125 @@ export type Database = {
         }
         Relationships: []
       }
+      user_rules: {
+        Row: {
+          daily_cap: number | null
+          never_emails: string[]
+          quiet_end: string | null
+          quiet_start: string | null
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          daily_cap?: number | null
+          never_emails?: string[]
+          quiet_end?: string | null
+          quiet_start?: string | null
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          daily_cap?: number | null
+          never_emails?: string[]
+          quiet_end?: string | null
+          quiet_start?: string | null
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_endpoints: {
+        Row: {
+          active: boolean
+          created_at: string
+          events: string[]
+          failure_count: number
+          id: string
+          last_attempt_at: string | null
+          last_status: number | null
+          secret: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          events?: string[]
+          failure_count?: number
+          id?: string
+          last_attempt_at?: string | null
+          last_status?: number | null
+          secret: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          events?: string[]
+          failure_count?: number
+          id?: string
+          last_attempt_at?: string | null
+          last_status?: number | null
+          secret?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          endpoint_id: string
+          event: string
+          id: number
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          status: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          endpoint_id: string
+          event: string
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          delivered_at?: string | null
+          endpoint_id?: string
+          event?: string
+          id?: never
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_outbox_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "webhook_endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       opener_performance: {
@@ -2337,6 +2493,10 @@ export type Database = {
         Args: { p_delta: number; p_profile_id: string }
         Returns: Json
       }
+      bump_api_rate: {
+        Args: { p_key: string; p_limit: number }
+        Returns: boolean
+      }
       bump_google_search_usage: { Args: { p_cost: number }; Returns: number }
       cancel_lead_followup: {
         Args: { p_lead_id: string; p_reason?: string }
@@ -2366,6 +2526,28 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "send_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_webhook_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          delivered_at: string | null
+          endpoint_id: string
+          event: string
+          id: number
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          status: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "webhook_outbox"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -2574,9 +2756,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ReviewModeCard } from "@/components/review-mode-card";
+import { DeveloperSettings } from "@/components/developer-settings";
 import { toast } from "sonner";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { AlertTriangle, Check } from "lucide-react";
@@ -81,6 +82,7 @@ function SettingsPage() {
   const [referral, setReferral] = useState<string | null>(null);
   const [invited, setInvited] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [userId, setUserId] = useState("");
   const [company, setCompany] = useState("");
   const [businessAddress, setBusinessAddress] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
@@ -106,12 +108,13 @@ function SettingsPage() {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
       const uid = u.user.id;
-      const [profile, campaigns, leads, emails, referrals] = await Promise.all([
+      const [profile, campaigns, leads, emails, referrals, rules] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", uid),
         supabase.from("campaigns").select("*").eq("user_id", uid),
         supabase.from("leads").select("*").eq("user_id", uid),
         supabase.from("emails_sent").select("*").eq("user_id", uid),
         supabase.from("referrals").select("*").eq("referrer_id", uid),
+        supabase.from("user_rules").select("*").eq("user_id", uid),
       ]);
       const bundle = {
         exported_at: new Date().toISOString(),
@@ -121,6 +124,8 @@ function SettingsPage() {
         leads: leads.data ?? [],
         emails_sent: emails.data ?? [],
         referrals: referrals.data ?? [],
+        sending_rules: rules.data ?? [],
+        note_rules: "Sending rules are included above. API keys and webhook secrets are excluded; revoke them in Settings.",
       };
       const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
@@ -140,6 +145,7 @@ function SettingsPage() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       setEmail(data.user.email ?? "");
+      setUserId(data.user.id);
       const { data: p } = await supabase
         .from("profiles")
         .select("*")
@@ -606,6 +612,8 @@ function SettingsPage() {
           Works on desktop browsers, Android, and the installed app (iOS needs the app icon on your home screen).
         </p>
       </Section>
+
+      {userId && <DeveloperSettings userId={userId} />}
 
       <Section title="Your data">
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">

@@ -23,6 +23,7 @@ function CampaignEditPage() {
     ab_test: false,
     autopilot: false,
     followups_enabled: true,
+    tone: "",
   });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -37,6 +38,7 @@ function CampaignEditPage() {
           ab_test: data.ab_test ?? false,
           autopilot: data.autopilot ?? false,
           followups_enabled: data.followups_enabled ?? true,
+          tone: data.tone ?? "",
         });
         setImageUrl(data.campaign_image_url ?? null);
       }
@@ -132,6 +134,22 @@ function CampaignEditPage() {
             <label className="mb-1.5 block text-sm font-medium">Campaign Name *</label>
             <Input placeholder="Campaign name" value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Tone</label>
+            <Select value={form.tone || "default"} onValueChange={(v) => setForm({ ...form, tone: v === "default" ? "" : v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default (no tone instruction)</SelectItem>
+                <SelectItem value="neutral">Neutral and professional</SelectItem>
+                <SelectItem value="warm">Warm and friendly</SelectItem>
+                <SelectItem value="direct">Direct and brisk</SelectItem>
+                <SelectItem value="formal">Formal and professional</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Used by the writer for new drafts. Approved drafts are never rewritten.
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium">Status</label>

@@ -19,6 +19,7 @@ import { Route as RefundsRouteImport } from './routes/refunds'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PreviewHeroNodesRouteImport } from './routes/preview-hero-nodes'
 import { Route as HonestyRouteImport } from './routes/honesty'
+import { Route as DevelopersRouteImport } from './routes/developers'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AgencyRouteImport } from './routes/agency'
@@ -39,6 +40,7 @@ import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedBillingRouteImport } from './routes/_authenticated/billing'
 import { Route as AuthenticatedAgentRouteImport } from './routes/_authenticated/agent'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
 import { Route as AuthenticatedLeadEditLeadIdRouteImport } from './routes/_authenticated/lead-edit.$leadId'
 import { Route as AuthenticatedCampaignReviewCampaignIdRouteImport } from './routes/_authenticated/campaign-review.$campaignId'
@@ -92,6 +94,11 @@ const PreviewHeroNodesRoute = PreviewHeroNodesRouteImport.update({
 const HonestyRoute = HonestyRouteImport.update({
   id: '/honesty',
   path: '/honesty',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopersRoute = DevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoRoute = DemoRouteImport.update({
@@ -194,6 +201,11 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
   id: '/google/callback',
   path: '/google/callback',
@@ -224,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/demo': typeof DemoRoute
+  '/developers': typeof DevelopersRoute
   '/honesty': typeof HonestyRoute
   '/preview-hero-nodes': typeof PreviewHeroNodesRoute
   '/privacy': typeof PrivacyRoute
@@ -234,6 +247,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/activity': typeof AuthenticatedActivityRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/agent': typeof AuthenticatedAgentRoute
   '/billing': typeof AuthenticatedBillingRoute
@@ -259,6 +273,7 @@ export interface FileRoutesByTo {
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/demo': typeof DemoRoute
+  '/developers': typeof DevelopersRoute
   '/honesty': typeof HonestyRoute
   '/preview-hero-nodes': typeof PreviewHeroNodesRoute
   '/privacy': typeof PrivacyRoute
@@ -269,6 +284,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/activity': typeof AuthenticatedActivityRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/agent': typeof AuthenticatedAgentRoute
   '/billing': typeof AuthenticatedBillingRoute
@@ -296,6 +312,7 @@ export interface FileRoutesById {
   '/agency': typeof AgencyRoute
   '/auth': typeof AuthRouteWithChildren
   '/demo': typeof DemoRoute
+  '/developers': typeof DevelopersRoute
   '/honesty': typeof HonestyRoute
   '/preview-hero-nodes': typeof PreviewHeroNodesRoute
   '/privacy': typeof PrivacyRoute
@@ -306,6 +323,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/tools': typeof ToolsRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/agent': typeof AuthenticatedAgentRoute
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
@@ -333,6 +351,7 @@ export interface FileRouteTypes {
     | '/agency'
     | '/auth'
     | '/demo'
+    | '/developers'
     | '/honesty'
     | '/preview-hero-nodes'
     | '/privacy'
@@ -343,6 +362,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/tools'
     | '/unsubscribe'
+    | '/activity'
     | '/admin'
     | '/agent'
     | '/billing'
@@ -368,6 +388,7 @@ export interface FileRouteTypes {
     | '/agency'
     | '/auth'
     | '/demo'
+    | '/developers'
     | '/honesty'
     | '/preview-hero-nodes'
     | '/privacy'
@@ -378,6 +399,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/tools'
     | '/unsubscribe'
+    | '/activity'
     | '/admin'
     | '/agent'
     | '/billing'
@@ -404,6 +426,7 @@ export interface FileRouteTypes {
     | '/agency'
     | '/auth'
     | '/demo'
+    | '/developers'
     | '/honesty'
     | '/preview-hero-nodes'
     | '/privacy'
@@ -414,6 +437,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/tools'
     | '/unsubscribe'
+    | '/_authenticated/activity'
     | '/_authenticated/admin'
     | '/_authenticated/agent'
     | '/_authenticated/billing'
@@ -441,6 +465,7 @@ export interface RootRouteChildren {
   AgencyRoute: typeof AgencyRoute
   AuthRoute: typeof AuthRouteWithChildren
   DemoRoute: typeof DemoRoute
+  DevelopersRoute: typeof DevelopersRoute
   HonestyRoute: typeof HonestyRoute
   PreviewHeroNodesRoute: typeof PreviewHeroNodesRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -524,6 +549,13 @@ declare module '@tanstack/react-router' {
       path: '/honesty'
       fullPath: '/honesty'
       preLoaderRoute: typeof HonestyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers': {
+      id: '/developers'
+      path: '/developers'
+      fullPath: '/developers'
+      preLoaderRoute: typeof DevelopersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo': {
@@ -666,6 +698,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/activity': {
+      id: '/_authenticated/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AuthenticatedActivityRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/auth/google/callback': {
       id: '/auth/google/callback'
       path: '/google/callback'
@@ -698,6 +737,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedAgentRoute: typeof AuthenticatedAgentRoute
   AuthenticatedBillingRoute: typeof AuthenticatedBillingRoute
@@ -716,6 +756,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedAgentRoute: AuthenticatedAgentRoute,
   AuthenticatedBillingRoute: AuthenticatedBillingRoute,
@@ -758,6 +799,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgencyRoute: AgencyRoute,
   AuthRoute: AuthRouteWithChildren,
   DemoRoute: DemoRoute,
+  DevelopersRoute: DevelopersRoute,
   HonestyRoute: HonestyRoute,
   PreviewHeroNodesRoute: PreviewHeroNodesRoute,
   PrivacyRoute: PrivacyRoute,
