@@ -8,7 +8,6 @@ import {
   Megaphone,
   Mail,
   MailQuestion,
-  FileText,
   CreditCard,
   Settings,
   LogOut,
@@ -41,7 +40,6 @@ const nav = [
   { tKey: "app_campaigns", url: "/campaigns", icon: Megaphone },
   { tKey: "app_review", url: "/review", icon: MailQuestion },
   { tKey: "app_emails", url: "/emails", icon: Mail },
-  { tKey: "app_activity", url: "/activity", icon: FileText },
   { tKey: "app_billing", url: "/billing", icon: CreditCard },
   { tKey: "app_settings", url: "/settings", icon: Settings },
 ] as const;
@@ -57,7 +55,6 @@ const pageTitles: Array<[string, string]> = [
   ["/campaigns", "Campaigns"],
   ["/review", "Review"],
   ["/emails", "Emails"],
-  ["/activity", "Email log"],
   ["/billing", "Billing"],
   ["/settings", "Settings"],
   ["/admin", "Admin"],
