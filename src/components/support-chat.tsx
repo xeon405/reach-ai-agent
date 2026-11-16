@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; fast?: boolean };
 
 const SUGGESTIONS = [
   "How do I start sending?",
@@ -71,6 +71,7 @@ export function SupportChat() {
   const [messages, setMessages] = useState<Msg[]>(loadMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const gidRef = useRef<string | null>(null);
 
@@ -111,7 +112,11 @@ export function SupportChat() {
         );
         const data = await res.json();
         if (res.ok && data.messages?.length) {
-          setMessages(data.messages.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })));
+          setMessages(data.messages.map((m: { role: string; content: string; fast?: boolean }) => ({
+            role: m.role,
+            content: m.content,
+            fast: !!m.fast,
+          })));
         }
       } catch { /* keep local copy */ }
     })();
@@ -121,6 +126,7 @@ export function SupportChat() {
     const q = (text ?? input).trim();
     if (!q || loading) return;
     setInput("");
+    setRetryError(null);
     const next = [...messages, { role: "user" as const, content: q }];
     setMessages(next);
     setLoading(true);
@@ -141,7 +147,7 @@ export function SupportChat() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
       storeThreadId(data.thread_id ?? null);
-      setMessages([...next, { role: "assistant", content: data.reply }]);
+      setMessages([...next, { role: "assistant", content: data.reply, fast: !!data.fast }]);
     } catch (e) {
       setMessages([
         ...next,
@@ -151,6 +157,49 @@ export function SupportChat() {
             e instanceof Error ? e.message : "Hmm, something went wrong. Try again?",
         },
       ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // A fast answer is a known answer, not a guess. If it is still not what the
+  // person meant, this asks the full model and replaces the bubble in place —
+  // one question, one answer, no duplicate turn.
+  async function retryFast() {
+    if (loading) return;
+    const threadId = loadThreadId();
+    const last = messages[messages.length - 1];
+    if (!threadId || last?.role !== "assistant" || !last.fast) return;
+    const original = [...messages].reverse().find((m) => m.role === "user");
+    if (!original) return;
+    setRetryError(null);
+    setLoading(true);
+    try {
+      const headers = await authHeaders();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/support-chat`,
+        {
+          method: "POST",
+          headers: {
+            ...headers,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ thread_id: threadId, action: "retry", text: original.content }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not get a new answer");
+      setMessages((prev) => {
+        const copy = [...prev];
+        const i = copy.length - 1;
+        if (i >= 0 && copy[i].role === "assistant") {
+          copy[i] = { role: "assistant", content: data.reply, fast: false };
+        }
+        return copy;
+      });
+    } catch (e) {
+      setRetryError(e instanceof Error ? e.message : "Could not get a new answer. Try again?");
     } finally {
       setLoading(false);
     }
@@ -242,18 +291,36 @@ export function SupportChat() {
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm ${
-                  m.role === "user"
-                    ? "ml-auto rounded-br-md bg-primary text-primary-foreground"
-                    : "rounded-bl-md bg-muted"
-                }`}
-              >
-                {m.content}
-              </div>
-            ))}
+            {messages.map((m, i) => {
+              const isLast = i === messages.length - 1;
+              return (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className="flex max-w-[85%] flex-col items-start gap-1">
+                    <div
+                      className={`whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm ${
+                        m.role === "user"
+                          ? "rounded-br-md bg-primary text-primary-foreground"
+                          : "rounded-bl-md bg-muted"
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+                    {m.role === "assistant" && m.fast && isLast && !loading && (
+                      <button
+                        type="button"
+                        onClick={retryFast}
+                        className="text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+                      >
+                        Not what I meant
+                      </button>
+                    )}
+                    {m.role === "assistant" && isLast && retryError && (
+                      <div className="text-[11px] text-destructive">{retryError}</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             {loading && (
               <div className="w-16 rounded-2xl rounded-bl-md bg-muted px-3.5 py-3">
                 <div className="flex gap-1">

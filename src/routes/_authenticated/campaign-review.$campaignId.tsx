@@ -289,13 +289,13 @@ function CampaignReviewPage() {
             <span className="text-xs text-muted-foreground">Follow-ups</span>
             <p className="text-sm font-medium flex items-center gap-1.5">
               {campaign.followups_enabled !== false ? (
-                <><Clock className="h-3.5 w-3.5 text-success" /> Enabled (14-step sequence)</>
+                <><Clock className="h-3.5 w-3.5 text-success" /> Enabled (four follow-ups: day 3, 7, 14, 21)</>
               ) : (
                 <><Pause className="h-3.5 w-3.5 text-muted-foreground" /> Disabled</>
               )}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {["Initial", "+3d", "+5d", "+10d", "+15d", "+25d", "+30d", "+2mo", "+4mo", "+5mo", "+6mo", "+8mo", "+10mo", "+12mo"].map((step, i) => (
+              {["Initial", "+3d", "+7d", "+14d", "+21d"].map((step, i) => (
                 <span key={i} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                   i === 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                 }`}>

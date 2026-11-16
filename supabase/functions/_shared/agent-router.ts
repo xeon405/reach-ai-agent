@@ -15,6 +15,7 @@
 // list: two sources of truth for "is this a write?" is how a safety property
 // quietly stops being true.
 import { GOALS, type AgentIntent, type AgentParams, isWriteIntent } from "./agent-capabilities.ts";
+import { fixTypos } from "./typos.ts";
 export { isWriteIntent };
 export type { AgentIntent, AgentParams };
 
@@ -31,9 +32,11 @@ export const WRITE_INTENTS: readonly AgentIntent[] = GOALS.filter((g) => g.write
   (g) => g.intent,
 );
 
-/** Lowercase, strip accents/punctuation, collapse whitespace. */
+/** Fix known product-word typos, then lowercase, strip accents/punctuation
+ *  and collapse whitespace. The typo pass runs first so a corrected word is
+ *  matched exactly like the spelling the user meant. */
 function norm(s: unknown): string {
-  return String(s ?? "")
+  return fixTypos(String(s ?? ""))
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -423,5 +426,5 @@ export const INTENT_DESCRIPTIONS: Record<AgentIntent, string> = {
     "Create a new campaign in DRAFT status, ready for the user to review and launch",
   pause_campaign: "Pause an active campaign so it stops sending",
   compliance_check: "Report who has unsubscribed and is blocked from future sends",
-  sender_health: "Report sending reputation, bounce rate, and mailbox warm-up state",
+  sender_health: "Report sending reputation, bounce rate, and gradual send ramp state",
 };

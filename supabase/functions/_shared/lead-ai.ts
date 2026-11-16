@@ -26,6 +26,8 @@ export async function planSearchQueries(input: {
   country: string;
   location?: string;
   limit: number;
+  /** Owner for spend attribution. Required so no call lands as "unknown". */
+  userId: string;
 }): Promise<QueryPlan | null> {
   try {
     const raw = await groqChat(
@@ -49,7 +51,7 @@ Respond ONLY valid JSON:
 {"variants": [...], "areas": [{"query":"City, Region"}], "note": "..."}`,
         },
       ],
-      { maxTokens: 700, temperature: 0.3 },
+      { maxTokens: 700, temperature: 0.3, context: { fn: "lead-ai", kind: "plan", user_id: input.userId } },
     );
     const parsed = extractJson<QueryPlan>(raw);
     if (!parsed || !Array.isArray(parsed.variants)) return null;
@@ -85,6 +87,8 @@ export async function curateLeads(input: {
   location?: string;
   leads: Array<Record<string, unknown>>;
   limit: number;
+  /** Owner for spend attribution. Required so no call lands as "unknown". */
+  userId: string;
 }): Promise<CuratedResult | null> {
   try {
     const pool = input.leads.slice(0, 60);
@@ -121,7 +125,7 @@ Respond ONLY as valid JSON:
 {"order":[indices in priority order, up to ${Math.max(1, Number(input.limit) || 25)}], "summary":"one short human sentence for the UI, e.g. why this set was chosen and what was dropped"}`,
         },
       ],
-      { maxTokens: 600, temperature: 0.2 },
+      { maxTokens: 600, temperature: 0.2, context: { fn: "lead-ai", kind: "curate", user_id: input.userId } },
     );
     const parsed = extractJson<CuratedResult>(raw);
     if (!parsed || !Array.isArray(parsed.order)) return null;

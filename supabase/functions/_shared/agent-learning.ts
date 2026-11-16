@@ -11,6 +11,7 @@
 // ============================================================================
 
 import type { AgentIntent, AgentParams } from "./agent-capabilities.ts";
+import { fixTypos } from "./typos.ts";
 
 type Db = { from: (t: string) => any };
 
@@ -29,7 +30,10 @@ export type LearnedRow = {
 
 /** Canonical form so punctuation, case and extra spaces never cause a miss. */
 export function phraseKey(msg: string): string {
-  return msg
+  // Same typo pass as the router, so a phrase learned from "pase my campain"
+  // is stored and looked up as "pause my campaign" instead of needing a second
+  // model call for every spelling.
+  return fixTypos(msg)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")

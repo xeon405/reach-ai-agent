@@ -557,7 +557,7 @@ function LeadsPage() {
                 <td className="px-4 py-3">
                   {l.followup_status === "active" ? (
                     <span className="inline-block rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400" title={l.next_followup_at ? `Next: ${new Date(l.next_followup_at).toLocaleDateString()}` : ""}>
-                      Step {l.followup_step ?? 0} / 14
+                      Step {l.followup_step ?? 0}
                     </span>
                   ) : l.followup_status === "completed" ? (
                     <span className="inline-block rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">

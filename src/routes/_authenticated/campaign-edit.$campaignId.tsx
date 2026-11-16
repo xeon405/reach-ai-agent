@@ -187,7 +187,7 @@ function CampaignEditPage() {
                 onChange={(e) => setForm({ ...form, followups_enabled: e.target.checked })}
                 className="h-4 w-4 rounded border-input accent-primary"
               />
-              Enable follow-ups (14-step sequence)
+              Enable follow-ups (day 3, 7, 14, 21)
             </label>
           </div>
           <div>

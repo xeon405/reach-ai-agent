@@ -52,6 +52,24 @@ for (const verb of ["find", "search for", "look for", "get me", "show me", "i ne
   check(h?.params.limit === 20, "written number understood", String(h?.params.limit));
 }
 
+// ---- typo cleanup: the same command, one model call cheaper --------------
+{
+  const h = r("pase my campain");
+  check(h?.intent === "pause_campaign" && isWriteIntent(h.intent), "a misspelled pause still routes as a WRITE");
+  const l = r("show my campains");
+  check(l?.intent === "list_campaigns", "a misspelled campaign list still routes");
+  const s = r("how many emials have i sent");
+  check(s?.intent === "campaign_stats", "a misspelled emails question still routes to stats");
+}
+{
+  // The important negative: "leeds" is a real city. A typo table that turned
+  // it into "leads" would silently search the wrong place, which is exactly the
+  // kind of "free" answer we must never ship.
+  const h = r("find dentists in leeds");
+  check(h?.intent === "find_contacts", "a city that looks like a typo still routes");
+  check(h?.params.city === "leeds", "the city is left exactly as typed", String(h?.params.city));
+}
+
 // ---- the commands that change things are writes and need a confirm -------
 {
   const pause = r("pause campaign called spring sale");

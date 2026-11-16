@@ -184,6 +184,7 @@ serve(async (req) => {
           jobTitle: String(jobTitle),
           country: country ?? "United States",
           limit: cappedLimit,
+          userId,
         }).catch(() => null)
       : null;
 
@@ -370,6 +371,7 @@ serve(async (req) => {
         location,
         leads: verifiedLeads,
         limit: cappedLimit,
+        userId,
       }).catch(() => null);
       if (curated && curated.order.length > 0) {
         const ordered = curated.order.map((i) => verifiedLeads[i]).filter(Boolean);

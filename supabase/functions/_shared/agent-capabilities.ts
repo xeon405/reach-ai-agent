@@ -193,7 +193,7 @@ export const GOALS: Goal[] = [
   {
     intent: "sender_health",
     goal:
-      "Sending reputation, daily sending limit, and warm-up progress. Can also be asked whether the current rate is safe.",
+      "Sending reputation, daily sending limit, and gradual send ramp progress. Can also be asked whether the current rate is safe.",
     needs: [],
     examples: [
       "how much can I send today",

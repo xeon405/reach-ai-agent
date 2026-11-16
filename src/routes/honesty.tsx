@@ -84,7 +84,7 @@ const LIMITATIONS = [
   "Find Leads works — it pulls real businesses from public directories like Google Maps — but most of those listings do not publish an email address. Our system automatically re-visits every saved business's website in the background to pull a contact email when one is published there, so coverage keeps improving over time; even so, many businesses only offer a contact form. The fastest way to reach people today is to import your own contacts (CSV) — that takes seconds.",
   "AI-written drafts are strong but not perfect — we recommend reading the one-click AI replies before sending them.",
   "Open tracking uses a standard invisible pixel, so opens are approximate: contacts using strict privacy tools or text-only inboxes may not be counted. Replies, bounces and sentiment are tracked accurately.",
-  "Inbox placement depends partly on your own domain reputation. Our warm-up ramp protects you, but no tool can guarantee 100% inbox delivery.",
+  "Inbox placement depends partly on your own domain reputation. Our gradual send ramp with automatic brakes protects you, but no tool can guarantee 100% inbox delivery.",
   "The Arabic experience currently covers the marketing site and emails to Arab customers; parts of the app interior remain English-only for now.",
   "Support is handled by our team — we respond within 24 hours, occasionally slightly slower across time zones.",
   "Scheduled sending delivers into each customer's local morning; exact minute-level timing cannot be controlled.",

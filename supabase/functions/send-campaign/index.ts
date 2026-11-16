@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     const sentTodayBase = profile.emails_sent_date === today ? (profile.emails_sent_today ?? 0) : 0;
     const remainingToday = dailyCap - sentTodayBase;
     if (remainingToday <= 0) {
-      return json({ queued: 0, error: `Daily limit reached (warm-up cap: ${dailyCap}/day while your sender builds reputation).` }, 429);
+      return json({ queued: 0, error: `Daily limit reached (gradual send ramp cap: ${dailyCap}/day while your sender builds reputation).` }, 429);
     }
 
     const { data: leads } = await supabase
