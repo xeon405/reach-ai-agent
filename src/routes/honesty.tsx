@@ -48,7 +48,7 @@ const CHARTER = [
   {
     rule: "We give exact measures",
     detail:
-      "Every plan states its exact daily and monthly email caps. Your agent hard-stops at the limit — you will never be silently throttled or surprised with overage charges.",
+      "Every plan states its exact daily email cap; the free plan also states its 50-email lifetime cap. Your agent hard-stops at the limit — you will never be silently throttled or surprised with overage charges.",
   },
   {
     rule: "Our pricing is fully upfront",

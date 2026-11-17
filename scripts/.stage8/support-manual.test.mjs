@@ -94,6 +94,7 @@ const STALE = [
   "period you paid for",
   "added to all outgoing emails",
   "Danger Zone → Delete Account",
+  "Get Starter — $37/mo",
 ];
 for (const phrase of STALE) {
   check(!SUPPORT_MANUAL.includes(phrase), `manual has no stale text: ${phrase}`);
@@ -106,6 +107,7 @@ for (const fact of [
   "Review → Preview",
   "gradual send ramp with automatic brakes",
   "outshipai@gmail.com",
+  "Paid checkout is currently closed",
 ]) {
   check(SUPPORT_MANUAL.includes(fact), `manual states the real fact: ${fact}`);
 }

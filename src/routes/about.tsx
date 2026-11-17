@@ -156,13 +156,14 @@ function AboutPage() {
         <div className="rounded-2xl border border-border bg-card p-7 shadow-card">
           <h2 className="font-semibold">How we make money</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            One subscription, per account, covering one connected email address. There are no
+            One account, covering one connected email address. There are no
             per-contact, per-lead or per-email charges, no "credits" that quietly expire, and no
             setup fee. Self-serve plans are{" "}
             <Link to="/" hash="pricing" className="text-primary underline underline-offset-4">
-              $37, $79 or $149 per month
+              $37, $79 or $149 one-time
             </Link>{" "}
-            depending on volume, and you can cancel at any time. If we run it for you as a service,
+            depending on volume. There is no auto-renewal and nothing to cancel; your plan stays
+            active until you change it or a refund is processed. If we run it for you as a service,
             that's priced separately and stated plainly on the{" "}
             <Link to="/agency" className="text-primary underline underline-offset-4">
               agency page

@@ -55,7 +55,7 @@ const FAQ = [
   },
   {
     q: "How is this different from the app?",
-    a: "The app is self-serve and starts at $37/month if you run it yourself. This service means our team runs it for you.",
+    a: "The app is self-serve and starts at $37 one-time if you run it yourself. This service means our team runs it for you.",
   },
 ];
 
@@ -90,7 +90,7 @@ function AgencyPage() {
         <p className="mt-4 text-xs text-muted-foreground">Setup in 48 hours · No lock-in, cancel anytime · Your data stays yours</p>
         <p className="mt-3 text-sm text-muted-foreground">
           <a href="/#pricing" className="font-medium underline underline-offset-4 hover:text-foreground">
-            Rather run it yourself? Self-serve plans start at $37/month →
+            Rather run it yourself? Self-serve plans start at $37 one-time →
           </a>
         </p>
       </section>

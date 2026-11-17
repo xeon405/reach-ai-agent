@@ -17,6 +17,15 @@ export const Route = createFileRoute("/_authenticated/billing")({
   component: BillingPage,
 });
 
+/**
+ * Paid checkout stays hidden until BOTH have been proven live, end to end:
+ *   1. a real Razorpay payment is captured and the plan is granted, and
+ *   2. a real refund is processed and the plan is revoked.
+ * Razorpay is currently returning 401, so a visible buy button would only
+ * fail customers. Flip this to true only after that live proof exists.
+ */
+const CHECKOUT_LIVE = false;
+
 const PLANS = [
   {
     id: "starter",
@@ -99,12 +108,14 @@ function BillingPage() {
         .limit(24);
       setPayments(rows ?? []);
     });
-    const s = document.createElement("script");
-    s.src = "https://checkout.razorpay.com/v1/checkout.js";
-    s.async = true;
-    document.body.appendChild(s);
+    const s = CHECKOUT_LIVE ? document.createElement("script") : null;
+    if (s) {
+      s.src = "https://checkout.razorpay.com/v1/checkout.js";
+      s.async = true;
+      document.body.appendChild(s);
+    }
     return () => {
-      s.remove();
+      s?.remove();
     };
   }, []);
 
@@ -167,7 +178,7 @@ function BillingPage() {
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Billing</h1>
         <p className="text-sm text-muted-foreground">
-          Simple pricing. No hidden fees. Cancel anytime.
+          Simple pricing. No hidden fees. One-time payment. No auto-renewal.
         </p>
       </div>
 
@@ -225,7 +236,7 @@ function BillingPage() {
                 <h3 className="text-lg font-semibold">{p.name}</h3>
                 <div className="mt-2 flex items-end gap-1">
                   <span className="text-4xl font-bold">${p.price}</span>
-                  <span className="text-base text-muted-foreground mb-1">/mo</span>
+                  <span className="text-base text-muted-foreground mb-1">one-time</span>
                 </div>
                 <p className="mt-1 text-sm text-primary font-medium">
                   {planSummary(p.id as PlanId)}
@@ -241,26 +252,31 @@ function BillingPage() {
                 ))}
               </ul>
 
-              <Button
-                className={`mt-6 w-full ${!isCurrent ? "bg-primary" : ""}`}
-                variant={isCurrent ? "outline" : "default"}
-                disabled={isCurrent || paying !== null}
-                onClick={() => startCheckout(p.id, p.name)}
-              >
-                {isCurrent ? (
-                  <>
-                    <Check className="mr-2 h-4 w-4" /> Current plan
-                  </>
-                ) : paying === p.id ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening checkout…
-                  </>
-                ) : (
-                  <>
-                    <Zap className="mr-2 h-4 w-4" /> Get {p.name} — ${p.price}/mo
-                  </>
-                )}
-              </Button>
+              {isCurrent ? (
+                <Button className="mt-6 w-full" variant="outline" disabled>
+                  <Check className="mr-2 h-4 w-4" /> Current plan
+                </Button>
+              ) : CHECKOUT_LIVE ? (
+                <Button
+                  className="mt-6 w-full bg-primary"
+                  disabled={paying !== null}
+                  onClick={() => startCheckout(p.id, p.name)}
+                >
+                  {paying === p.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening checkout…
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-4 w-4" /> Get {p.name} — ${p.price} one-time
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <div className="mt-6 rounded-lg border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground">
+                  Paid checkout is temporarily closed. Start free — no card needed.
+                </div>
+              )}
             </div>
           );
         })}
@@ -270,8 +286,8 @@ function BillingPage() {
       <div className="rounded-lg border border-border bg-card p-4 text-center">
         <p className="text-sm text-muted-foreground">
           <strong>14-day money-back guarantee</strong> on your first purchase — no forms, no reason
-          needed. Payments are one-time — you are never auto-charged, and your plan runs until the end
-          of the period you paid for.
+          needed. Payments are one-time — you are never auto-charged, and your plan stays active
+          until you change it or a refund is processed.
         </p>
       </div>
 

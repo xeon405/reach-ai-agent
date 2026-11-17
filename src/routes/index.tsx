@@ -104,7 +104,7 @@ export const Route = createFileRoute("/")({
                   name: "How much does it cost?",
                   acceptedAnswer: {
                     "@type": "Answer",
-                    text: "It's free to start. Paid plans are $37, $79, or $149 per month depending on volume, and you can cancel anytime.",
+                    text: "It's free to start. Paid plans are $37, $79, or $149 one-time depending on volume; there is no auto-renewal.",
                   },
                 },
               ],
@@ -167,7 +167,7 @@ const faqs = [
   },
   {
     q: "How much does it cost?",
-    a: "Free gives you 50 emails in total — no card, no expiry, up to 10 a day. Paid plans are $37, $79, or $149 per month depending on volume. One subscription covers one connected email address. Cancel anytime.",
+    a: "Free gives you 50 emails in total — no card, no expiry, up to 10 a day. Paid plans are $37, $79, or $149 one-time depending on volume. One account connects one Gmail address. There is no auto-renewal and nothing to cancel; your plan stays active until you change it or a refund is processed.",
   },
   {
     q: "Why is the free plan 50 emails instead of unlimited?",

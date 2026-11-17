@@ -52,7 +52,7 @@ function RefundsPage() {
             If a flaw exists that we failed to disclose — a feature that doesn't work as described,
             a limitation not listed on our{" "}
             <Link to="/honesty" className="text-primary underline underline-offset-4">Honesty Charter</Link> —
-            you are entitled to a <strong>full refund at any point during your subscription</strong>,
+            you are entitled to a <strong>full refund of your most recent payment at any point</strong>,
             even beyond the 14-day window. What we know, you know; what we missed, we pay for.
           </p>
         </div>
@@ -66,7 +66,7 @@ function RefundsPage() {
             <li>• <strong>Request:</strong> email <a href="mailto:outshipai@gmail.com?subject=Refund%20request" className="text-primary underline underline-offset-4">outshipai@gmail.com</a> with the subject "Refund request"</li>
             <li>• <strong>Response:</strong> within 24 hours with confirmation</li>
             <li>• <strong>Processing:</strong> refunds are issued to your original payment method within 5–10 business days </li>
-            <li>• <strong>Your data:</strong> refunding never locks you out early — your plan stays active until the period you paid for ends, and you can export or delete your data anytime</li>
+            <li>• <strong>Your data:</strong> a processed refund sets your account back to the free plan immediately; you can export or delete your data anytime</li>
           </ul>
         </div>
 
@@ -74,8 +74,7 @@ function RefundsPage() {
           <h2 className="font-semibold">Nothing to cancel</h2>
           <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
             Your plan is a <strong>one-time payment</strong> — we never auto-charge you, so there is
-            nothing to cancel. Your access runs until the end of the period you paid for; when it ends,
-            just buy again if you want to continue.
+            nothing to cancel. Your plan stays active until you change it or a refund is processed.
           </p>
         </div>
 

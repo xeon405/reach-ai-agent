@@ -78,10 +78,12 @@ function Terms() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">6. Subscriptions &amp; billing</h2>
+            <h2 className="text-lg font-semibold">6. Payments &amp; billing</h2>
             <p className="mt-2">
-              Paid plans renew monthly until cancelled. You can cancel at any time from the Billing
-              page. Payments are processed securely by our payment provider; we never see or store your full card details.
+              Paid plans are one-time payments. You are never auto-charged and there is no
+              auto-renewal. Your plan stays active until you change it or a refund is processed.
+              Payments are processed securely by our payment provider; we never see or store your
+              full card details.
             </p>
           </section>
 
@@ -103,12 +105,12 @@ function Terms() {
 
           <section>
             <h2 className="text-lg font-semibold">9. Refund Policy (Right of Return)</h2>
-            <p className="mt-2">Every paid plan includes a <strong>14-day money-back guarantee on your first payment</strong> — no forms and no reason needed. To request a refund, email support within 14 days of your payment and it will be processed in full on an account in good standing (not suspended for spam or abuse). Additionally, if a hidden defect is discovered that we cannot fix promptly, you are entitled to a full refund at any point during your subscription.</p>
+            <p className="mt-2">Every paid plan includes a <strong>14-day money-back guarantee on your first payment</strong> — no forms and no reason needed. To request a refund, email support within 14 days of your payment and it will be processed in full on an account in good standing (not suspended for spam or abuse). Additionally, if a hidden defect is discovered that we cannot fix promptly, you are entitled to a full refund of your most recent payment at any point.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold">10. Honest Pricing &amp; Exact Limits</h2>
-            <p className="mt-2">The price displayed for each plan is the complete price — there are no hidden fees, no overage charges, and no automatic surprise renewals beyond the stated subscription. Each plan states its exact daily and monthly email caps; the sending agent hard-stops at those limits. We do not use artificial scarcity, fake discounts, or invented urgency in any of our marketing.</p>
+            <p className="mt-2">The price displayed for each plan is the complete one-time price — there are no hidden fees, no overage charges, and no automatic renewal. Each plan states its exact daily email caps; the free plan also has a 50-email lifetime cap. The sending agent hard-stops at those limits. We do not use artificial scarcity, fake discounts, or invented urgency in any of our marketing.</p>
           </section>
 
           <section>

@@ -27,11 +27,11 @@ const DICT: Record<string, { en: string; ar: string }> = {
   sec_pricing_sub: { en: "Start on the free plan — upgrade when you are booking meetings.", ar: "ابدأ بالخطة المجانية — رقِّ حسابك عندما تبدأ بحجز الاجتماعات." },
   pricing_anchor: { en: "An AI salesperson that works 24/7 — for less than 2% of a hire", ar: "مندوب مبيعات ذكي يعمل ٢٤/٧ — بأقل من ٢٪ من تكلفة توظيف شخص" },
   badge_guarantee: { en: "✅ 14-day money-back guarantee", ar: "✅ ضمان استرداد الأموال لمدة 14 يوماً" },
-  badge_cancel: { en: "✅ Cancel anytime, keep your data", ar: "✅ ألغِ في أي وقت واحتفظ ببياناتك" },
+  badge_cancel: { en: "✅ No auto-renewal, keep your data", ar: "✅ بدون تجديد تلقائي، واحتفظ ببياناتك" },
   badge_support: { en: "✅ Human support within 24h", ar: "✅ دعم بشري خلال 24 ساعة" },
   security_link: { en: "🔒 See exactly how we protect your Gmail account", ar: "🔒 تعرّف على كيف نحمي حساب Gmail الخاص بك" },
   plan_popular: { en: "Most popular", ar: "الأكثر شيوعاً" },
-  per_month: { en: "/mo", ar: "/شهرياً" },
+  per_month: { en: "one-time", ar: "دفعة واحدة" },
   start_free: { en: "Start free", ar: "ابدأ مجاناً" },
   // Founder note
   founder_quote: {
