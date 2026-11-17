@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js";
 import { groqChat, sanitizeForPrompt } from "../_shared/groq.ts";
 import { buildSupportUserContext, containsArabic, routeSupportTopic, supportTopicHits, isPersonalContactRequest, personalContactAnswer, SUPPORT_SELF_FACTS, SUPPORT_CONTROLS, SUPPORT_FEWSHOTS } from "../_shared/ai-lib.ts";
 import { buildSupportManual } from "../_shared/support-manual.ts";
+import { ensureBillingFacts } from "../_shared/support-topics.ts";
 import { fastSupportAnswer, fastTopicForReply } from "../_shared/support-fast.ts";
 import { getCorsHeaders, jsonCors, corsResponse } from "../_shared/cors.ts";
 import { openAiCall, openGuestAiCall } from "../_shared/ai-cost-gate.ts";
@@ -343,7 +344,13 @@ ${history
       }
     }
 
-    const finalAnswer = redactLegacyProcessor(answer ?? BUSY_LINE);
+    const baseAnswer = redactLegacyProcessor(answer ?? BUSY_LINE);
+    // A pricing answer must never imply that online payment works today. If
+    // the model dropped one of the two facts, add only the missing sentence;
+    // outage lines stay untouched.
+    const finalAnswer = answer && answer !== BUSY_LINE && answer !== DAILY_LIMIT_LINE
+      ? ensureBillingFacts(baseAnswer, topics, arabic)
+      : baseAnswer;
 
     if (isRetry) {
       // Replace the fast answer in place: one question, one answer, no

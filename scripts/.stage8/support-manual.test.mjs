@@ -5,7 +5,7 @@
 //
 // Run: node scripts/.stage8/support-manual.test.mjs
 import { SUPPORT_MANUAL, buildSupportManual } from "../../supabase/functions/_shared/support-manual.ts";
-import { supportTopicHits } from "../../supabase/functions/_shared/support-topics.ts";
+import { supportTopicHits, ensureBillingFacts } from "../../supabase/functions/_shared/support-topics.ts";
 import { fastSupportAnswer } from "../../supabase/functions/_shared/support-fast.ts";
 
 let passed = 0;
@@ -42,11 +42,16 @@ for (const [text, want] of [
   ["how to get leads", "LEAD_FINDING"],
   ["how do follow ups work", "FOLLOWUPS"],
   ["how much is starter plan", "BILLING"],
+  ["how much does growth cost", "BILLING"],
+  ["how much is agency", "BILLING"],
+  ["كم سعر خطة جروث", "BILLING"],
   ["where do i see replies", "REPLIES"],
   ["email going to spam", "EMAILS"],
   ["how do i start", "GETTING_STARTED"],
   ["delete my account", "DATA_PRIVACY"],
   ["recommend a school name", "OFF_TOPIC"],
+  ["how much time does it take", "UNKNOWN"],
+  ["what is the capital of france", "UNKNOWN"],
 ]) {
   const h = hits(text);
   check(h.length === 1 && h[0] === want, `routes: ${text}`, h.join(","));
@@ -75,7 +80,7 @@ for (const topic of KNOWN) {
 }
 
 // ---- unknown topics, off-topic and personal data get the FULL manual ----
-for (const topic of ["OFF_TOPIC", "PERSONAL_DATA", "NOT_A_REAL_TOPIC"]) {
+for (const topic of ["OFF_TOPIC", "PERSONAL_DATA", "UNKNOWN", "NOT_A_REAL_TOPIC"]) {
   check(buildSupportManual([topic]) === SUPPORT_MANUAL, `${topic} falls back to the full manual`);
 }
 check(buildSupportManual([]) !== SUPPORT_MANUAL, "no topic still builds the always-on blocks");
@@ -119,6 +124,35 @@ for (const q of [
 ]) {
   const a = fastSupportAnswer(q);
   check(!!a && a.reply.length < 600, `fast answer is short: ${q}`, a ? String(a.reply.length) : "null");
+}
+
+// ---- a pricing answer can never omit one-time or closed checkout ---------
+{
+  const both = "Growth is $79 one-time. Paid checkout is currently closed.";
+  check(ensureBillingFacts(both, ["BILLING"], false) === both, "billing facts: a complete answer is untouched");
+
+  const noClosed = "Growth is $79 one\u2011time and includes 200 emails a day.";
+  const fixedClosed = ensureBillingFacts(noClosed, ["BILLING"], false);
+  check(fixedClosed.includes("Paid checkout is currently closed"), "billing facts: missing closed checkout is added");
+  check(fixedClosed.startsWith(noClosed), "billing facts: the model's words are not rewritten");
+
+  const noOneTime = "Growth is $79. Checkout is currently closed while payments are verified.";
+  const fixedOneTime = ensureBillingFacts(noOneTime, ["BILLING"], false);
+  check(/one-time and never auto-renews/.test(fixedOneTime), "billing facts: missing one-time is added");
+  check(fixedOneTime.includes("Checkout is currently closed"), "billing facts: existing closed fact is kept");
+
+  const neither = "Growth is $79 with 200 emails a day.";
+  const fixedBoth = ensureBillingFacts(neither, ["BILLING"], false);
+  check(fixedBoth.includes("one-time and never auto-renews") && fixedBoth.includes("Paid checkout is currently closed"), "billing facts: both missing facts are added");
+
+  check(ensureBillingFacts(fixedBoth, ["BILLING"], false) === fixedBoth, "billing facts: a second pass adds nothing");
+
+  const other = "Connect Gmail from Settings.";
+  check(ensureBillingFacts(other, ["GMAIL"], false) === other, "billing facts: other topics are untouched");
+
+  const arabic = "خطة جروث 79 دولاراً.";
+  const fixedArabic = ensureBillingFacts(arabic, ["BILLING"], true);
+  check(fixedArabic.includes("مرة واحدة") && fixedArabic.includes("مغلق"), "billing facts: Arabic answer gets Arabic facts");
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
