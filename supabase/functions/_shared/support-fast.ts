@@ -112,12 +112,13 @@ const PHRASES: Record<string, string[]> = {
   SEE_REPLIES: [
     "where do i see replies", "where can i see replies", "where are my replies",
     "where do i find replies", "how do i see replies", "where do i see responses",
-    "where are the replies",
+    "where are the replies", "how do i handle replies", "how to handle replies",
   ],
   START: [
     "how do i start", "how to start", "how do i get started", "how to get started",
     "getting started", "what do i do first", "how do i begin", "where do i start",
     "how to signup", "how to sign up", "how do i signup", "how do i sign up",
+    "how do i start sending", "how to start sending", "how do i start sending emails",
   ],
   BOOKING_LINK: [
     "how do i add a booking link", "how to add a booking link",

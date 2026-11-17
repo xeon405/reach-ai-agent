@@ -42,6 +42,26 @@ for (const [text, want] of [
   check(topic(text) === want, `answers: ${text}`, topic(text) ?? "null");
 }
 
+// ---- the widget's own suggestions: safe ones must not cost a model call -
+// The first suggestion used to spend an AI call even though the exact answer
+// already exists. These are the safe, repeatable ones.
+for (const [text, want] of [
+  ["How do I start sending?", "START"],
+  ["How do I handle replies?", "SEE_REPLIES"],
+]) {
+  check(topic(text) === want, `widget suggestion is fast: ${text}`, topic(text) ?? "null");
+}
+// Pricing is money. Troubleshooting depends on the account. "Is my Gmail
+// safe?" deserves the full safety answer, not the setup checklist. All three
+// must reach the model.
+for (const text of [
+  "What are the pricing plans?",
+  "Why aren't my emails sending?",
+  "Is my Gmail safe?",
+]) {
+  refuses(text);
+}
+
 // ---- polite shells and typos are handled, not guessed -------------------
 for (const [text, want] of [
   ["hi, how to get leads", "LEAD_FINDING"],
