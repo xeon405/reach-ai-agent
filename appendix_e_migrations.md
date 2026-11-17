@@ -1,18 +1,18 @@
-# Appendix E — Migration map (84 forward migrations + 17 rollback files)
+# Appendix E — Migration map (88 forward migrations + 17 rollback files)
 
 Two numbers matter and they are usually conflated.
 
 | Count | Meaning |
 |---|---|
-| **84** | Forward migrations that create or change production objects |
-| **17** | Paired rollback files, kept beside their forward migration and **never applied in production** |
-| **101** | Total `.sql` files in `supabase/migrations/` |
+| **88** | Forward migrations that create or change production objects |
+| **17** | Paired rollback files, kept in `supabase/rollbacks/` and **never applied in production** |
+| **105** | Total forward + rollback `.sql` files |
 
 ### Provenance note
 
-Only **46** rows appear in `supabase_migrations.schema_migrations`, and the ledger stops on 29 August 2026. Everything after that (September–November: learning, cost gate, health, agent, plan limits, anti-abuse, admin console) was applied through the **Management API** (`POST /v1/projects/{ref}/database/query`) without CLI tracking.
+The ledger was repaired on **17 November 2026**. All **88** forward migrations are now recorded in `supabase_migrations.schema_migrations`, and `supabase db push --dry-run` reports the remote database is up to date.
 
-That is a real operational gap: the repo is the source of truth for what ran, not the CLI ledger. Restoring the ledger is listed in Section VIII.
+Before the repair, only **49** rows were recorded and the ledger stopped on 29 August 2026; migrations after that (September–November: learning, cost gate, health, agent, plan limits, anti-abuse, admin console, developer API) had been applied through the **Management API** (`POST /v1/projects/{ref}/database/query`) without CLI tracking. Every missing migration's objects were verified against the live schema before its version was marked applied.
 
 ### Forward migrations
 
@@ -102,6 +102,10 @@ That is a real operational gap: the repo is the source of truth for what ran, no
 | 82 | `20261101000006_compat_block_reason.sql` | ============================================================ ANTI-ABUSE MVP — part 6: keep the reason string compatible The database change in part 5 shipped before the frontend did (Vercel deploys on… |
 | 83 | `20261101000007_restore_address_reason.sql` | ============================================================ ANTI-ABUSE MVP — part 7: restore the specific address reason Part 6 deliberately reported 'business_identity_required' for a bad address be… |
 | 84 | `20261103000001_admin_console.sql` | ============================================================ ADMIN CONSOLE — part 1 of 2: who is an admin, and the read model Until now the anti-abuse tables (signup_signals, admin-free) had no reader… |
+| 85 | `20261110000001_demo_rate_limit.sql` | Public demo rate limiting: one row per demo request, service-role only, RLS with no client policy. |
+| 86 | `20261110000002_review_mode.sql` | Review-each-email mode: a new account drafts its first emails and holds them before anything leaves the mailbox. |
+| 87 | `20261111000001_review_first5.sql` | The review period is the first 5 emails, not 20; moves stored values and the default without adding a constraint. |
+| 88 | `20261112000001_developer_api.sql` | Developer surface: API keys, webhook endpoints, durable delivery outbox, per-account rules and per-campaign tone. |
 
 ### Rollback files (kept, not applied)
 

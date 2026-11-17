@@ -9,7 +9,7 @@
 | First commit | 22 Aug 2026 |
 | Last commit | 3 Nov 2026 |
 | Commits | **324** |
-| Migrations | **84 forward** (+17 rollback files = 101 SQL files) |
+| Migrations | **88 forward** (+17 rollback files = 105 SQL files) |
 | Edge Functions | **36** |
 | Tables / columns | **51 / 499** |
 | SQL functions | **43** |
@@ -43,7 +43,7 @@
 | B | Appendix: all 36 Edge Functions |
 | C | Appendix: all 51 tables / 499 columns |
 | D | Appendix: all 43 SQL functions |
-| E | Appendix: all 84 forward migrations (+17 rollback files) |
+| E | Appendix: all 88 forward migrations (+17 rollback files) |
 | F | Appendix: all 33 routes |
 | G | Appendix: all 39 shared modules |
 
@@ -63,7 +63,7 @@ This manual has two halves.
 | B | All 36 Edge Functions, with purpose and auth class |
 | C | All 51 tables and 499 columns, with constraints |
 | D | All 43 SQL functions and 2 views |
-| E | All 84 forward migrations and what each introduced |
+| E | All 88 forward migrations and what each introduced |
 | F | All 33 frontend routes |
 | G | All 40 shared modules |
 
@@ -208,8 +208,8 @@ This is the architectural centre of the product.
 
 Two provenance facts belong here, because they affect how the history can be audited:
 
-1. **84 forward migrations and 17 rollback files.** The 101 `.sql` files in `supabase/migrations/` are not 101 schema versions. The rollback files sit beside their forward migration and were never applied to production.
-2. **The CLI ledger stops on 29 August 2026.** `supabase_migrations.schema_migrations` holds only 46 rows. Every migration after that date was applied through the Management API, so the repository — not the ledger — is the record of what ran. Appendix E states this in full.
+1. **88 forward migrations and 17 rollback files.** The forward migrations are in `supabase/migrations/`; the rollback files are in `supabase/rollbacks/` so the Supabase CLI does not read them as duplicate migration versions. The rollback files were never applied to production.
+2. **The CLI ledger stops on 29 August 2026.** `supabase_migrations.schema_migrations` holds only 49 rows. Every migration after that date was applied through the Management API, so the repository — not the ledger — is the record of what ran. Appendix E states this in full.
 
 The full commit list is **Appendix A**. The full migration list is **Appendix E**.
 
@@ -905,7 +905,7 @@ What is **not** covered: no browser E2E suite, no load test, no chaos test, and 
 11. **Single-region Supabase project.** No disaster-recovery drill has been run.
 12. **Secrets rotation** is manual; there is no automated rotation or expiry alert.
 13. **No status-page automation** beyond `public_stats` / `health-check`.
-14. **The migration ledger is incomplete.** `schema_migrations` stops on 29 August 2026 (46 rows) while the repo has 84 forward migrations. Reconstruct it by inserting the missing versions, so a fresh environment can be built by replay rather than by reading the repo by hand.
+14. **Migration history is repaired.** `schema_migrations` now records all 88 forward migrations, and `supabase db push --dry-run` reports the remote database is up to date. Rollback files moved to `supabase/rollbacks/` so the CLI no longer sees duplicate versions.
 
 ### What I would fix first, in order
 
@@ -913,8 +913,7 @@ What is **not** covered: no browser E2E suite, no load test, no chaos test, and 
 2. Run one real campaign with 50–100 leads in a single campaign — the only way the learning layer produces anything.
 3. Add the reservation lease, so a crash cannot consume a customer's quota.
 4. Add auth tests for `domain-verify`, `admin_clear_flag`, and the Razorpay webhook.
-5. Reconstruct the migration ledger, so a clean environment can be rebuilt by replaying the CLI history.
-6. Partition `audit_events` before growth, not after.
+5. Partition `audit_events` before growth, not after.
 
 ---
 
@@ -947,7 +946,8 @@ What is **not** covered: no browser E2E suite, no load test, no chaos test, and 
 | `src/integrations/supabase/` | Generated DB types and client |
 | `src/lib/` | Address rules, shared client utilities |
 | `supabase/functions/` | 36 Edge Functions + 40 shared modules |
-| `supabase/migrations/` | 84 forward migrations + 17 rollback files, append-only |
+| `supabase/migrations/` | 88 forward migrations, append-only |
+| `supabase/rollbacks/` | 17 rollback files, never applied to production |
 | `scripts/.ops/` | Live probes, preflight checks, deno check config |
 | `scripts/.stage8/` | Agent and erasure proofs |
 | `scripts/stage4-simulation.mjs` | Learning-gate simulation |
@@ -2439,21 +2439,21 @@ All live in `public`. `SECURITY DEFINER` functions set `search_path = public` an
 
 ---
 
-# Appendix E — Migration map (84 forward migrations + 17 rollback files)
+# Appendix E — Migration map (88 forward migrations + 17 rollback files)
 
 Two numbers matter and they are usually conflated.
 
 | Count | Meaning |
 |---|---|
-| **84** | Forward migrations that create or change production objects |
-| **17** | Paired rollback files, kept beside their forward migration and **never applied in production** |
-| **101** | Total `.sql` files in `supabase/migrations/` |
+| **88** | Forward migrations that create or change production objects |
+| **17** | Paired rollback files, kept in `supabase/rollbacks/` and **never applied in production** |
+| **105** | Total forward + rollback `.sql` files |
 
 ### Provenance note
 
-Only **46** rows appear in `supabase_migrations.schema_migrations`, and the ledger stops on 29 August 2026. Everything after that (September–November: learning, cost gate, health, agent, plan limits, anti-abuse, admin console) was applied through the **Management API** (`POST /v1/projects/{ref}/database/query`) without CLI tracking.
+The ledger was repaired on **17 November 2026**. All **88** forward migrations are now recorded in `supabase_migrations.schema_migrations`, and `supabase db push --dry-run` reports the remote database is up to date.
 
-That is a real operational gap: the repo is the source of truth for what ran, not the CLI ledger. Restoring the ledger is listed in Section VIII.
+Before the repair, only **49** rows were recorded and the ledger stopped on 29 August 2026; migrations after that had been applied through the **Management API** (`POST /v1/projects/{ref}/database/query`) without CLI tracking. Every missing migration's objects were verified against the live schema before its version was marked applied.
 
 ### Forward migrations
 

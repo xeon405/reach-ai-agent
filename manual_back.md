@@ -93,7 +93,7 @@ What is **not** covered: no browser E2E suite, no load test, no chaos test, and 
 11. **Single-region Supabase project.** No disaster-recovery drill has been run.
 12. **Secrets rotation** is manual; there is no automated rotation or expiry alert.
 13. **No status-page automation** beyond `public_stats` / `health-check`.
-14. **The migration ledger is incomplete.** `schema_migrations` stops on 29 August 2026 (46 rows) while the repo has 84 forward migrations. Reconstruct it by inserting the missing versions, so a fresh environment can be built by replay rather than by reading the repo by hand.
+14. **Migration history is repaired.** `schema_migrations` now records all 88 forward migrations, and `supabase db push --dry-run` reports the remote database is up to date. Rollback files moved to `supabase/rollbacks/` so the CLI no longer sees duplicate versions.
 
 ### What I would fix first, in order
 
@@ -101,8 +101,7 @@ What is **not** covered: no browser E2E suite, no load test, no chaos test, and 
 2. Run one real campaign with 50–100 leads in a single campaign — the only way the learning layer produces anything.
 3. Add the reservation lease, so a crash cannot consume a customer's quota.
 4. Add auth tests for `domain-verify`, `admin_clear_flag`, and the Razorpay webhook.
-5. Reconstruct the migration ledger, so a clean environment can be rebuilt by replaying the CLI history.
-6. Partition `audit_events` before growth, not after.
+5. Partition `audit_events` before growth, not after.
 
 ---
 
@@ -135,7 +134,8 @@ What is **not** covered: no browser E2E suite, no load test, no chaos test, and 
 | `src/integrations/supabase/` | Generated DB types and client |
 | `src/lib/` | Address rules, shared client utilities |
 | `supabase/functions/` | 36 Edge Functions + 40 shared modules |
-| `supabase/migrations/` | 84 forward migrations + 17 rollback files, append-only |
+| `supabase/migrations/` | 88 forward migrations, append-only |
+| `supabase/rollbacks/` | 17 rollback files, never applied to production |
 | `scripts/.ops/` | Live probes, preflight checks, deno check config |
 | `scripts/.stage8/` | Agent and erasure proofs |
 | `scripts/stage4-simulation.mjs` | Learning-gate simulation |

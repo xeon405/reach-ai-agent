@@ -9,7 +9,7 @@
 | First commit | 22 Aug 2026 |
 | Last commit | 3 Nov 2026 |
 | Commits | **324** |
-| Migrations | **84 forward** (+17 rollback files = 101 SQL files) |
+| Migrations | **88 forward** (+17 rollback files = 105 SQL files) |
 | Edge Functions | **36** |
 | Tables / columns | **51 / 499** |
 | SQL functions | **43** |
@@ -43,7 +43,7 @@
 | B | Appendix: all 36 Edge Functions |
 | C | Appendix: all 51 tables / 499 columns |
 | D | Appendix: all 43 SQL functions |
-| E | Appendix: all 84 forward migrations (+17 rollback files) |
+| E | Appendix: all 88 forward migrations (+17 rollback files) |
 | F | Appendix: all 33 routes |
 | G | Appendix: all 39 shared modules |
 
@@ -63,7 +63,7 @@ This manual has two halves.
 | B | All 36 Edge Functions, with purpose and auth class |
 | C | All 51 tables and 499 columns, with constraints |
 | D | All 43 SQL functions and 2 views |
-| E | All 84 forward migrations and what each introduced |
+| E | All 88 forward migrations and what each introduced |
 | F | All 33 frontend routes |
 | G | All 40 shared modules |
 
@@ -208,7 +208,7 @@ This is the architectural centre of the product.
 
 Two provenance facts belong here, because they affect how the history can be audited:
 
-1. **84 forward migrations and 17 rollback files.** The 101 `.sql` files in `supabase/migrations/` are not 101 schema versions. The rollback files sit beside their forward migration and were never applied to production.
-2. **The CLI ledger stops on 29 August 2026.** `supabase_migrations.schema_migrations` holds only 46 rows. Every migration after that date was applied through the Management API, so the repository — not the ledger — is the record of what ran. Appendix E states this in full.
+1. **88 forward migrations and 17 rollback files.** The forward migrations are in `supabase/migrations/`; the rollback files are in `supabase/rollbacks/` so the Supabase CLI does not read them as duplicate migration versions, and they were never applied to production.
+2. **The CLI ledger stops on 29 August 2026.** `supabase_migrations.schema_migrations` holds only 49 rows. Every migration after that date was applied through the Management API, so the repository — not the ledger — is the record of what ran. Appendix E states this in full.
 
 The full commit list is **Appendix A**. The full migration list is **Appendix E**.

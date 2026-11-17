@@ -64,8 +64,9 @@
 ## Review gates (per project plan)
 - Each stage: implement code-first → present diff → unit proof → live production proof,
   and wait for explicit sign-off before deploying/applying. No deploy without a review.
-- Migration hygiene: one forward migration + one `.rollback.sql` per schema change;
-  rollback notes shipped with the migration, and rollback scripts dry-run before shipping.
+- Migration hygiene: one forward migration in `supabase/migrations/` + one `.rollback.sql` in
+  `supabase/rollbacks/` per schema change; the separate folder keeps rollback notes out of the
+  CLI's migration list. Rollback scripts dry-run before shipping.
 - Every real production verification gets a teardown of any throwaway fixtures.
 
 ## Secrets
