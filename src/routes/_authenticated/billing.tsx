@@ -1,30 +1,37 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Zap, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { planSummary, type PlanId } from "@/lib/plan-limits";
+
+interface PayPalButtonsOptions {
+  style?: Record<string, string | number | boolean>;
+  createOrder: () => Promise<string>;
+  onApprove: (data: { orderID: string }) => Promise<void> | void;
+  onCancel?: () => void;
+  onError?: (err: unknown) => void;
+}
 
 declare global {
   interface Window {
-    Razorpay?: new (opts: Record<string, unknown>) => { open: () => void };
+    paypal?: {
+      Buttons: (opts: PayPalButtonsOptions) => {
+        render: (target: HTMLElement | string) => Promise<void>;
+      };
+    };
   }
 }
 
-export const Route = createFileRoute("/_authenticated/billing")({
-  component: BillingPage,
-});
-
 /**
- * Paid checkout stays hidden until BOTH have been proven live, end to end:
- *   1. a real Razorpay payment is captured and the plan is granted, and
- *   2. a real refund is processed and the plan is revoked.
- * Razorpay is currently returning 401, so a visible buy button would only
- * fail customers. Flip this to true only after that live proof exists.
+ * Paid checkout is gated twice: this build-time flag (is a PayPal client id
+ * configured?) and the server's PAYPAL_CHECKOUT_ENABLED secret. A visible
+ * button therefore never fires against an unconfigured backend.
  */
-const CHECKOUT_LIVE = false;
+const PAYPAL_CLIENT_ID = (import.meta.env.VITE_PAYPAL_CLIENT_ID as string | undefined) ?? "";
+const CHECKOUT_LIVE = PAYPAL_CLIENT_ID.length > 0;
 
 const PLANS = [
   {
@@ -72,10 +79,34 @@ const PLANS = [
   },
 ];
 
+/**
+ * supabase-js collapses a non-2xx edge-function response into a generic
+ * message. Our functions return a helpful `error` string, so pull it out of
+ * the response body before falling back.
+ */
+async function invokeJson<T>(fn: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(fn, { body });
+  if (error) {
+    let message = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === "function") {
+        const parsed = await ctx.json();
+        if (parsed?.error) message = String(parsed.error);
+      }
+    } catch {
+      // Keep the generic message when the body is not JSON.
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(String(data.error));
+  return data as T;
+}
+
 function BillingPage() {
   const [plan, setPlan] = useState("starter");
   const [userId, setUserId] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
+  const [sdkReady, setSdkReady] = useState(false);
   const [paying, setPaying] = useState<string | null>(null);
   const [payments, setPayments] = useState<
     Array<{
@@ -92,7 +123,6 @@ function BillingPage() {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       setUserId(data.user.id);
-      setEmail(data.user.email ?? "");
       const { data: p } = await supabase
         .from("profiles")
         .select("plan")
@@ -108,70 +138,123 @@ function BillingPage() {
         .limit(24);
       setPayments(rows ?? []);
     });
-    const s = CHECKOUT_LIVE ? document.createElement("script") : null;
-    if (s) {
-      s.src = "https://checkout.razorpay.com/v1/checkout.js";
-      s.async = true;
-      document.body.appendChild(s);
+  }, []);
+
+  // Load the PayPal SDK once. The client id decides sandbox vs live, so the
+  // same host serves both.
+  useEffect(() => {
+    if (!CHECKOUT_LIVE) return;
+    if (window.paypal) {
+      setSdkReady(true);
+      return;
     }
-    return () => {
-      s?.remove();
-    };
+    const existing = document.querySelector<HTMLScriptElement>('script[data-paypal-sdk="1"]');
+    if (existing) {
+      existing.addEventListener("load", () => setSdkReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.dataset.paypalSdk = "1";
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(
+      PAYPAL_CLIENT_ID,
+    )}&currency=USD&intent=capture&components=buttons`;
+    script.async = true;
+    script.onload = () => setSdkReady(true);
+    script.onerror = () =>
+      toast.error("PayPal checkout failed to load. Check your connection and try again.");
+    document.body.appendChild(script);
   }, []);
 
   /**
-   * The amount is decided on the server: we send a plan id, Razorpay
-   * charges what our catalog says. The browser never states a price.
-   * On success we show the plan immediately — the webhook is the
-   * durable record and will agree, but waiting for it would look
-   * broken to a paying customer.
+   * The amount is decided on the server: we send a plan id, PayPal charges
+   * what our catalog says. The browser never states a price.
    */
-  async function startCheckout(planId: string, planName: string) {
-    if (!userId) return toast.error("Please sign in first.");
-    setPaying(planId);
-    try {
-      const { data, error } = await supabase.functions.invoke("razorpay-create-order", {
-        body: { plan: planId, idempotency_key: `${userId}:${planId}:${Date.now()}` },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.order_id) throw new Error(data?.error ?? "Could not start checkout");
-
-      if (!window.Razorpay) {
-        // Script still loading (or blocked) — retry once after a tick.
-        await new Promise((r) => setTimeout(r, 1200));
+  const startCheckout = useCallback(
+    async (planId: string): Promise<string | null> => {
+      if (!userId) {
+        toast.error("Please sign in first.");
+        return null;
       }
-      if (!window.Razorpay)
-        throw new Error("Payment window failed to load. Check your connection and try again.");
+      setPaying(planId);
+      try {
+        const data = await invokeJson<{ order_id?: string }>("paypal-create-order", {
+          plan: planId,
+          idempotency_key: `${userId}:${planId}:${Math.floor(Date.now() / 60000)}`,
+        });
+        if (!data?.order_id) throw new Error("Could not start checkout");
+        return data.order_id;
+      } catch (e) {
+        setPaying(null);
+        toast.error(e instanceof Error ? e.message : "Checkout failed");
+        return null;
+      }
+    },
+    [userId],
+  );
 
-      const rz = new window.Razorpay({
-        key: data.key_id,
-        order_id: data.order_id,
-        amount: data.amount,
-        currency: data.currency,
-        name: "OutshipAi",
-        description: `${planName} plan`,
-        // Prefill the signed-in email and let a declined card try another
-        // method. International cards are declined more often than domestic
-        // ones, so a dead-end failure wastes a sale; retry keeps it alive.
-        prefill: { email },
-        retry: { enabled: true },
-        handler: async (response: Record<string, string>) => {
-          setPlan(planId);
-          setPaying(null);
-          toast.success(`You're on the ${planName} plan. Welcome aboard!`);
-          void response;
-        },
-        modal: {
-          ondismiss: () => setPaying(null),
-        },
-        theme: { color: "#6366f1" },
-      });
-      rz.open();
-    } catch (e) {
-      setPaying(null);
-      toast.error(e instanceof Error ? e.message : "Checkout failed");
+  /** Capture server-side. The webhook is the durable record, this is the UX. */
+  const completeCheckout = useCallback(
+    async (planId: string, planName: string, orderId: string) => {
+      try {
+        const data = await invokeJson<{ ok?: boolean; plan?: string }>("paypal-capture-order", {
+          order_id: orderId,
+        });
+        if (!data?.ok) throw new Error("Payment could not be confirmed");
+        setPlan(planId);
+        toast.success(`You're on the ${planName} plan. Welcome aboard!`);
+        const { data: rows } = await supabase
+          .from("payments")
+          .select("id, plan, amount_cents, currency, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(24);
+        setPayments(rows ?? []);
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : "Payment could not be confirmed. Contact support if you were charged.",
+        );
+      } finally {
+        setPaying(null);
+      }
+    },
+    [],
+  );
+
+  // Render one PayPal button per upgradable plan. Re-renders on plan change so
+  // the card the customer just bought stops offering a button.
+  useEffect(() => {
+    if (!CHECKOUT_LIVE || !sdkReady || !userId || !window.paypal) return;
+    for (const p of PLANS) {
+      if (p.id === plan) continue;
+      const container = document.getElementById(`paypal-btn-${p.id}`);
+      if (!container) continue;
+      container.innerHTML = "";
+      void window.paypal
+        .Buttons({
+          style: { layout: "vertical", shape: "rect", label: "paypal", height: 40, tagline: false },
+          createOrder: async () => {
+            const orderId = await startCheckout(p.id);
+            // Throwing aborts the PayPal flow; onError stays quiet for this.
+            if (!orderId) throw new Error("checkout aborted");
+            return orderId;
+          },
+          onApprove: async (data) => {
+            await completeCheckout(p.id, p.name, data.orderID);
+          },
+          onCancel: () => setPaying(null),
+          onError: (err) => {
+            setPaying(null);
+            if (String(err instanceof Error ? err.message : err).includes("aborted")) return;
+            toast.error("PayPal checkout failed. Please try again.");
+          },
+        })
+        .render(container)
+        .catch((err: unknown) => {
+          console.error("[billing] paypal render failed:", err);
+        });
     }
-  }
+  }, [sdkReady, userId, plan, startCheckout, completeCheckout]);
 
   return (
     <div className="space-y-8">
@@ -257,21 +340,22 @@ function BillingPage() {
                   <Check className="mr-2 h-4 w-4" /> Current plan
                 </Button>
               ) : CHECKOUT_LIVE ? (
-                <Button
-                  className="mt-6 w-full bg-primary"
-                  disabled={paying !== null}
-                  onClick={() => startCheckout(p.id, p.name)}
-                >
-                  {paying === p.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Opening checkout…
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="mr-2 h-4 w-4" /> Get {p.name} — ${p.price} one-time
-                    </>
+                <div className="mt-6 space-y-2">
+                  <div id={`paypal-btn-${p.id}`} />
+                  {!sdkReady && (
+                    <Button className="w-full" disabled>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading checkout…
+                    </Button>
                   )}
-                </Button>
+                  {paying === p.id && (
+                    <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Opening PayPal…
+                    </p>
+                  )}
+                  <p className="text-center text-[11px] text-muted-foreground">
+                    Secure checkout by PayPal · one-time payment
+                  </p>
+                </div>
               ) : (
                 <div className="mt-6 rounded-lg border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground">
                   Paid checkout is temporarily closed. Start free — no card needed.
@@ -344,3 +428,7 @@ function BillingPage() {
     </div>
   );
 }
+
+export const Route = createFileRoute("/_authenticated/billing")({
+  component: BillingPage,
+});

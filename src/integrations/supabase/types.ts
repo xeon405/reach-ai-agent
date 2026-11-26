@@ -1445,6 +1445,9 @@ export type Database = {
           notes: Json
           paid_at: string | null
           plan: string
+          provider: string
+          provider_order_id: string | null
+          provider_payment_id: string | null
           razorpay_order_id: string | null
           razorpay_payment_id: string | null
           razorpay_signature: string | null
@@ -1464,6 +1467,9 @@ export type Database = {
           notes?: Json
           paid_at?: string | null
           plan: string
+          provider?: string
+          provider_order_id?: string | null
+          provider_payment_id?: string | null
           razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           razorpay_signature?: string | null
@@ -1483,6 +1489,9 @@ export type Database = {
           notes?: Json
           paid_at?: string | null
           plan?: string
+          provider?: string
+          provider_order_id?: string | null
+          provider_payment_id?: string | null
           razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
           razorpay_signature?: string | null

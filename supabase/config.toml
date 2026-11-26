@@ -13,3 +13,12 @@ verify_jwt = false
 # Order creation is called from the signed-in app and must stay gated.
 [functions.razorpay-create-order]
 verify_jwt = true
+# PayPal cannot send a Supabase JWT; the signature check against
+# PAYPAL_WEBHOOK_ID inside the function is the auth gate.
+[functions.paypal-webhook]
+verify_jwt = false
+# Both buyer-facing PayPal functions are called from the signed-in app.
+[functions.paypal-create-order]
+verify_jwt = true
+[functions.paypal-capture-order]
+verify_jwt = true
